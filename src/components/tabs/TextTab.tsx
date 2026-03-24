@@ -41,11 +41,15 @@ export default function TextTab({ tabId, groupId, filePath, isActive }: TextTabP
     if (!filePath) return
     setIsLoading(true)
     setError(null)
-    const result = await window.electronAPI.readFile(filePath)
-    if (result.success) {
-      setContent(result.content)
-    } else {
-      setError(result.error || 'Failed to load file')
+    try {
+      const result = await window.electronAPI.readFile(filePath)
+      if (result.success) {
+        setContent(result.content || '')
+      } else {
+        setError(result.error || 'Failed to load file')
+      }
+    } catch (err) {
+      setError(`Error loading file: ${String(err)}`)
     }
     setIsLoading(false)
   }
