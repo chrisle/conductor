@@ -176,6 +176,11 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     setNewTabMenuOpen(false)
   }
 
+  function openBrowser() {
+    addTab(groupId, { type: 'browser', title: 'Browser', url: 'https://google.com' })
+    setNewTabMenuOpen(false)
+  }
+
   function openClaude() {
     addTab(groupId, { type: 'claude', title: 'Claude', filePath: rootPath || undefined })
     setNewTabMenuOpen(false)
@@ -309,6 +314,10 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                   </span>
                 )}
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={openBrowser} className="gap-2 font-mono text-xs cursor-pointer">
+                <Globe className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span>Browser</span>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={openClaude} className="gap-2 font-mono text-xs cursor-pointer">
                 <ClaudeIcon className="w-5 h-5 text-[#D97757] shrink-0" />
@@ -425,6 +434,10 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                     {rootPath.split('/').pop()}
                   </span>
                 )}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={openBrowser} className="gap-2 font-mono text-xs cursor-pointer">
+                <Globe className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <span>Browser</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={openClaude} className="gap-2 font-mono text-xs cursor-pointer">
