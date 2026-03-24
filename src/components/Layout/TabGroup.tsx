@@ -59,7 +59,8 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 't') {
         e.preventDefault()
-        setCursorMenuOpen(true)
+        const cwd = useSidebarStore.getState().rootPath || undefined
+        addTab(groupId, { type: 'terminal', title: 'Terminal', filePath: cwd })
       }
     }
     document.addEventListener('keydown', onKeyDown)
