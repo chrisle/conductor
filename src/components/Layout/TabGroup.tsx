@@ -269,7 +269,8 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                 tab.id === group.activeTabId
                   ? 'bg-zinc-950 text-zinc-100 border-b-2 border-b-blue-500'
                   : 'bg-zinc-900 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300',
-                dragOverTabIndex === index && 'border-l-2 border-l-blue-500'
+                dragOverTabIndex === index && 'border-l-2 border-l-blue-500',
+                tab.id === group.activeTabId && tab.isThinking && 'tab-thinking-bar'
               )}
             >
               <TabIcon type={tab.type} />

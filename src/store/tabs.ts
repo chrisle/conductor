@@ -10,6 +10,7 @@ export interface Tab {
   filePath?: string
   url?: string
   isDirty?: boolean
+  isThinking?: boolean
   content?: string
   initialCommand?: string
 }

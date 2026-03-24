@@ -114,3 +114,37 @@ webview {
 .dragging * {
   user-select: none !important;
 }
+
+/* Thinking tab indicator — trailing light sweeps across the blue bar */
+@keyframes thinking-sweep {
+  0% {
+    background-position: -100% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.tab-thinking-bar {
+  position: relative;
+  border-bottom: 2px solid transparent !important;
+}
+
+.tab-thinking-bar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    #3b82f6 0%,
+    #3b82f6 25%,
+    #bfdbfe 50%,
+    #3b82f6 75%,
+    #3b82f6 100%
+  );
+  background-size: 200% 100%;
+  animation: thinking-sweep 1.5s ease-in-out infinite;
+}

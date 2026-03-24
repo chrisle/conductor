@@ -32,9 +32,13 @@ export interface TerminalTabProps {
   cwd?: string
   initialCommand?: string
   autoPilot?: boolean
+  onThinkingChange?: (thinking: boolean) => void
 }
 
-export default function TerminalTab({ tabId, isActive, cwd, initialCommand, autoPilot = false }: TerminalTabProps): React.ReactElement {
+// Regex to detect Claude "thinking" status lines: e.g. "✳ Zigzagging… (4m 35s · ↓ 611 tokens)"
+const THINKING_RE = /…\s*\(/
+
+export default function TerminalTab({ tabId, isActive, cwd, initialCommand, autoPilot = false, onThinkingChange }: TerminalTabProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -43,8 +47,11 @@ export default function TerminalTab({ tabId, isActive, cwd, initialCommand, auto
   const autoPilotRef = useRef(autoPilot)
   const respondedBufRef = useRef('')
   const userScrolledUpRef = useRef(false)
+  const onThinkingChangeRef = useRef(onThinkingChange)
+  const wasThinkingRef = useRef(false)
 
   useEffect(() => { autoPilotRef.current = autoPilot }, [autoPilot])
+  useEffect(() => { onThinkingChangeRef.current = onThinkingChange }, [onThinkingChange])
 
   useEffect(() => {
     if (!containerRef.current || isCreatedRef.current) return
@@ -139,6 +146,22 @@ export default function TerminalTab({ tabId, isActive, cwd, initialCommand, auto
       // Auto-scroll to bottom unless user scrolled up
       if (!userScrolledUpRef.current) {
         term.scrollToBottom()
+      }
+
+      // Detect Claude thinking state from the last few screen lines
+      if (onThinkingChangeRef.current) {
+        const buf = term.buffer.active
+        let tail = ''
+        const linesToCheck = Math.min(5, term.rows)
+        for (let i = term.rows - linesToCheck; i < term.rows; i++) {
+          const line = buf.getLine(buf.baseY + i)
+          if (line) tail += line.translateToString(true) + '\n'
+        }
+        const isThinking = THINKING_RE.test(stripAnsi(tail))
+        if (isThinking !== wasThinkingRef.current) {
+          wasThinkingRef.current = isThinking
+          onThinkingChangeRef.current(isThinking)
+        }
       }
 
       if (!autoPilotRef.current) return

@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
 import { Switch } from '@/components/ui/switch'
+import { useTabsStore } from '@/store/tabs'
 import TerminalTab from './TerminalTab'
 
 interface ClaudeTabProps {
@@ -12,6 +13,11 @@ interface ClaudeTabProps {
 
 export default function ClaudeTab({ tabId, groupId, isActive, cwd, initialCommand }: ClaudeTabProps): React.ReactElement {
   const [autoPilot, setAutoPilot] = useState(false)
+  const updateTab = useTabsStore(s => s.updateTab)
+
+  const handleThinkingChange = useCallback((thinking: boolean) => {
+    updateTab(groupId, tabId, { isThinking: thinking })
+  }, [groupId, tabId, updateTab])
 
   return (
     <div className="flex flex-col h-full w-full bg-zinc-950">
@@ -23,6 +29,7 @@ export default function ClaudeTab({ tabId, groupId, isActive, cwd, initialComman
           cwd={cwd}
           initialCommand={initialCommand || "claude\n"}
           autoPilot={autoPilot}
+          onThinkingChange={handleThinkingChange}
         />
       </div>
 
