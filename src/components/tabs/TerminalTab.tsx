@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import { WebLinksAddon } from 'xterm-addon-web-links'
+import { SearchAddon } from 'xterm-addon-search'
 import 'xterm/css/xterm.css'
 import { AUTOPILOT_RULES, stripAnsi, isThinking } from '@/lib/terminal-detection'
 
@@ -19,6 +20,7 @@ export default function TerminalTab({ tabId, isActive, cwd, initialCommand, auto
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
+  const searchAddonRef = useRef<SearchAddon | null>(null)
   const isCreatedRef = useRef(false)
   const initCmdSentRef = useRef(false)
   const autoPilotRef = useRef(autoPilot)
@@ -26,6 +28,9 @@ export default function TerminalTab({ tabId, isActive, cwd, initialCommand, auto
   const userScrolledUpRef = useRef(false)
   const onThinkingChangeRef = useRef(onThinkingChange)
   const wasThinkingRef = useRef(false)
+  const [showSearch, setShowSearch] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { autoPilotRef.current = autoPilot }, [autoPilot])
   useEffect(() => { onThinkingChangeRef.current = onThinkingChange }, [onThinkingChange])
@@ -68,11 +73,14 @@ export default function TerminalTab({ tabId, isActive, cwd, initialCommand, auto
     })
 
     const fitAddon = new FitAddon()
+    const searchAddon = new SearchAddon()
     term.loadAddon(fitAddon)
     term.loadAddon(new WebLinksAddon())
+    term.loadAddon(searchAddon)
 
     terminalRef.current = term
     fitAddonRef.current = fitAddon
+    searchAddonRef.current = searchAddon
 
     term.open(containerRef.current)
 
@@ -153,12 +161,21 @@ export default function TerminalTab({ tabId, isActive, cwd, initialCommand, auto
           if (line) screenText += line.translateToString(true) + '\n'
         }
 
+        const stripped = stripAnsi(screenText)
+        console.debug('[autopilot] screen text (last 200 chars):', JSON.stringify(stripped.trim().slice(-200)))
+
         for (const rule of AUTOPILOT_RULES) {
-          if (!rule.pattern.test(screenText)) continue
+          const matched = rule.pattern.test(screenText)
+          if (!matched) continue
+          console.debug('[autopilot] matched rule:', rule.pattern.toString(), '→', JSON.stringify(rule.response))
           // Don't respond to the same screen twice
           const screenKey = screenText.trim().slice(-120)
-          if (respondedBufRef.current === screenKey) continue
+          if (respondedBufRef.current === screenKey) {
+            console.debug('[autopilot] skipping — already responded to this screen')
+            continue
+          }
           respondedBufRef.current = screenKey
+          console.debug('[autopilot] sending response:', JSON.stringify(rule.response))
           setTimeout(() => window.electronAPI.writeTerminal(tabId, rule.response), 150)
           break
         }
@@ -217,12 +234,76 @@ export default function TerminalTab({ tabId, isActive, cwd, initialCommand, auto
     }
   }, [isActive])
 
+  useEffect(() => {
+    if (showSearch) {
+      searchInputRef.current?.focus()
+      searchInputRef.current?.select()
+    }
+  }, [showSearch])
+
+  function handleSearchKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Escape') {
+      setShowSearch(false)
+      searchAddonRef.current?.clearDecorations()
+      terminalRef.current?.focus()
+    } else if (e.key === 'Enter') {
+      if (e.shiftKey) {
+        searchAddonRef.current?.findPrevious(searchQuery)
+      } else {
+        searchAddonRef.current?.findNext(searchQuery)
+      }
+    }
+  }
+
+  function handleSearchChange(value: string) {
+    setSearchQuery(value)
+    if (value) {
+      searchAddonRef.current?.findNext(value)
+    } else {
+      searchAddonRef.current?.clearDecorations()
+    }
+  }
+
   return (
     <div
-      ref={containerRef}
-      className="h-full w-full bg-zinc-950"
-      style={{ padding: '4px' }}
-      onClick={() => terminalRef.current?.focus()}
-    />
+      className="h-full w-full bg-zinc-950 relative"
+      onKeyDown={e => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+          e.preventDefault()
+          setShowSearch(true)
+        }
+      }}
+    >
+      {showSearch && (
+        <div className="absolute top-1 right-2 z-10 flex items-center gap-1 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 shadow-lg">
+          <input
+            ref={searchInputRef}
+            className="bg-transparent text-xs text-zinc-200 outline-none w-48 placeholder-zinc-500"
+            placeholder="Find..."
+            value={searchQuery}
+            onChange={e => handleSearchChange(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+          />
+          <button
+            className="text-zinc-400 hover:text-zinc-200 text-xs px-1"
+            onClick={() => searchAddonRef.current?.findPrevious(searchQuery)}
+          >&#9650;</button>
+          <button
+            className="text-zinc-400 hover:text-zinc-200 text-xs px-1"
+            onClick={() => searchAddonRef.current?.findNext(searchQuery)}
+          >&#9660;</button>
+          <button
+            className="text-zinc-400 hover:text-zinc-200 text-xs px-1"
+            onClick={() => { setShowSearch(false); searchAddonRef.current?.clearDecorations(); terminalRef.current?.focus() }}
+          >&#10005;</button>
+        </div>
+      )}
+      <div
+        ref={containerRef}
+        className="h-full w-full"
+        style={{ padding: '4px' }}
+        onClick={() => terminalRef.current?.focus()}
+      />
+    </div>
   )
 }
