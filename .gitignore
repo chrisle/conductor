@@ -3,3 +3,4 @@ out/
 dist/
 *.tsbuildinfo
 node_modules
+test-results/
