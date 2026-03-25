@@ -70,7 +70,7 @@ export default function TextTab({ tabId, groupId, filePath, isActive }: TextTabP
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full text-zinc-500 text-sm font-mono">
+      <div className="flex items-center justify-center h-full text-zinc-500 text-sm">
         Loading...
       </div>
     )
@@ -78,7 +78,7 @@ export default function TextTab({ tabId, groupId, filePath, isActive }: TextTabP
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full text-red-400 text-sm font-mono p-4">
+      <div className="flex items-center justify-center h-full text-red-400 text-sm p-4">
         {error}
       </div>
     )

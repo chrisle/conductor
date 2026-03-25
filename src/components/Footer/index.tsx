@@ -35,7 +35,7 @@ export default function Footer(): React.ReactElement {
   const splitCount = allGroups.length
 
   return (
-    <div className="flex items-center h-6 bg-zinc-900 border-t border-zinc-800 shrink-0 text-[11px] font-mono select-none overflow-hidden">
+    <div className="flex items-center h-6 bg-zinc-900 border-t border-zinc-800 shrink-0 text-[11px] select-none overflow-hidden">
       <Item><span className="text-zinc-600">v0.1.0</span></Item>
       <Separator orientation="vertical" className="h-3 bg-zinc-800" />
       {activeTab && (

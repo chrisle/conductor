@@ -101,7 +101,7 @@ export default function TitleBar(): React.ReactElement {
             <div className="no-drag">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="text-xs text-zinc-400 hover:text-zinc-200 font-mono truncate transition-colors cursor-pointer">
+                  <button className="text-xs text-zinc-400 hover:text-zinc-200 truncate transition-colors cursor-pointer">
                     {rootPath.replace(/^\/Users\/[^/]+/, '~')}
                   </button>
                 </DropdownMenuTrigger>
@@ -111,7 +111,7 @@ export default function TitleBar(): React.ReactElement {
                       {favorites.map(fav => (
                         <DropdownMenuItem
                           key={fav}
-                          className="gap-2 font-mono text-xs cursor-pointer justify-between group"
+                          className="gap-2 text-xs cursor-pointer justify-between group"
                           onClick={() => setRootPath(fav)}
                         >
                           <div className="flex items-center gap-2 truncate">
@@ -128,7 +128,7 @@ export default function TitleBar(): React.ReactElement {
                       ))}
                     </>
                   ) : (
-                    <div className="px-3 py-2 text-xs text-zinc-600 font-mono">
+                    <div className="px-3 py-2 text-xs text-zinc-600">
                       No favorites yet. Right-click a folder to add one.
                     </div>
                   )}
@@ -137,7 +137,7 @@ export default function TitleBar(): React.ReactElement {
             </div>
           )}
           {gitBranch && (
-            <Badge variant="outline" className="h-4 px-1.5 gap-1 text-[10px] font-mono text-fuchsia-400 border-fuchsia-900 bg-fuchsia-950/30 shrink-0">
+            <Badge variant="outline" className="h-4 px-1.5 gap-1 text-[10px] text-fuchsia-400 border-fuchsia-900 bg-fuchsia-950/30 shrink-0">
               <GitBranch className="w-2.5 h-2.5" />
               {gitBranch}
             </Badge>

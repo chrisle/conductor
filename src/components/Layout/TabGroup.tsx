@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { X, Plus, Terminal, Globe, FileText } from 'lucide-react'
+import { X, Plus, Terminal, Globe, FileText, BookOpen, FileSpreadsheet } from 'lucide-react'
 import ClaudeIcon from '../ui/ClaudeIcon'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,9 @@ import TextTab from '../tabs/TextTab'
 import BrowserTab from '../tabs/BrowserTab'
 import TerminalTab from '../tabs/TerminalTab'
 import ClaudeTab from '../tabs/ClaudeTab'
+import MarkdownTab from '../tabs/MarkdownTab'
+import WordTab from '../tabs/WordTab'
+import ExcelTab from '../tabs/ExcelTab'
 
 interface TabGroupProps {
   groupId: string
@@ -25,6 +28,9 @@ function TabIcon({ type }: { type: Tab['type'] }) {
   if (type === 'terminal') return <Terminal className="w-3 h-3" />
   if (type === 'browser') return <Globe className="w-3 h-3" />
   if (type === 'claude') return <ClaudeIcon className="w-5 h-5 text-[#D97757] -mr-1" />
+  if (type === 'markdown') return <BookOpen className="w-3 h-3" />
+  if (type === 'word') return <FileText className="w-3 h-3 text-blue-400" />
+  if (type === 'excel') return <FileSpreadsheet className="w-3 h-3 text-green-400" />
   return <FileText className="w-3 h-3" />
 }
 
@@ -305,7 +311,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-44 bg-zinc-900 border-zinc-700">
-              <DropdownMenuItem onClick={openTerminal} className="gap-2 font-mono text-xs cursor-pointer">
+              <DropdownMenuItem onClick={openTerminal} className="gap-2 text-xs cursor-pointer">
                 <Terminal className="w-3.5 h-3.5 text-green-400 shrink-0" />
                 <span>Terminal</span>
                 {rootPath && (
@@ -314,20 +320,20 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                   </span>
                 )}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={openBrowser} className="gap-2 font-mono text-xs cursor-pointer">
+              <DropdownMenuItem onClick={openBrowser} className="gap-2 text-xs cursor-pointer">
                 <Globe className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                 <span>Browser</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={openClaude} className="gap-2 font-mono text-xs cursor-pointer">
+              <DropdownMenuItem onClick={openClaude} className="gap-2 text-xs cursor-pointer">
                 <ClaudeIcon className="w-5 h-5 text-[#D97757] shrink-0" />
                 <span>Claude</span>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={openClaudeContinue} className="gap-2 font-mono text-xs cursor-pointer">
+              <DropdownMenuItem onClick={openClaudeContinue} className="gap-2 text-xs cursor-pointer">
                 <ClaudeIcon className="w-5 h-5 text-[#D97757] shrink-0" />
                 <span>Claude (continue)</span>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={openClaudeResume} className="gap-2 font-mono text-xs cursor-pointer">
+              <DropdownMenuItem onClick={openClaudeResume} className="gap-2 text-xs cursor-pointer">
                 <ClaudeIcon className="w-5 h-5 text-[#D97757] shrink-0" />
                 <span>Claude (resume)</span>
               </DropdownMenuItem>
@@ -397,6 +403,30 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                   initialCommand={tab.initialCommand}
                 />
               )}
+              {tab.type === 'markdown' && (
+                <MarkdownTab
+                  tabId={tab.id}
+                  groupId={groupId}
+                  filePath={tab.filePath}
+                  isActive={tab.id === group.activeTabId}
+                />
+              )}
+              {tab.type === 'word' && (
+                <WordTab
+                  tabId={tab.id}
+                  groupId={groupId}
+                  filePath={tab.filePath}
+                  isActive={tab.id === group.activeTabId}
+                />
+              )}
+              {tab.type === 'excel' && (
+                <ExcelTab
+                  tabId={tab.id}
+                  groupId={groupId}
+                  filePath={tab.filePath}
+                  isActive={tab.id === group.activeTabId}
+                />
+              )}
             </div>
           ))
         )}
@@ -426,7 +456,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
               <div className="fixed" style={{ top: cursorPos.y, left: cursorPos.x, width: 1, height: 1 }} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-44 bg-zinc-900 border-zinc-700">
-              <DropdownMenuItem onClick={openTerminal} className="gap-2 font-mono text-xs cursor-pointer">
+              <DropdownMenuItem onClick={openTerminal} className="gap-2 text-xs cursor-pointer">
                 <Terminal className="w-3.5 h-3.5 text-green-400 shrink-0" />
                 <span>Terminal</span>
                 {rootPath && (
@@ -435,20 +465,20 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                   </span>
                 )}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={openBrowser} className="gap-2 font-mono text-xs cursor-pointer">
+              <DropdownMenuItem onClick={openBrowser} className="gap-2 text-xs cursor-pointer">
                 <Globe className="w-3.5 h-3.5 text-blue-400 shrink-0" />
                 <span>Browser</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={openClaude} className="gap-2 font-mono text-xs cursor-pointer">
+              <DropdownMenuItem onClick={openClaude} className="gap-2 text-xs cursor-pointer">
                 <ClaudeIcon className="w-5 h-5 text-[#D97757] shrink-0" />
                 <span>Claude</span>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={openClaudeContinue} className="gap-2 font-mono text-xs cursor-pointer">
+              <DropdownMenuItem onClick={openClaudeContinue} className="gap-2 text-xs cursor-pointer">
                 <ClaudeIcon className="w-5 h-5 text-[#D97757] shrink-0" />
                 <span>Claude (continue)</span>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={openClaudeResume} className="gap-2 font-mono text-xs cursor-pointer">
+              <DropdownMenuItem onClick={openClaudeResume} className="gap-2 text-xs cursor-pointer">
                 <ClaudeIcon className="w-5 h-5 text-[#D97757] shrink-0" />
                 <span>Claude (resume)</span>
               </DropdownMenuItem>

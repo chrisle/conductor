@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { nanoid } from '../lib/nanoid'
 
-export type TabType = 'text' | 'browser' | 'terminal' | 'claude'
+export type TabType = 'text' | 'browser' | 'terminal' | 'claude' | 'markdown' | 'word' | 'excel'
 
 export interface Tab {
   id: string

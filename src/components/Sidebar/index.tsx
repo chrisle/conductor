@@ -64,7 +64,7 @@ export default function Sidebar({ defaultGroupId }: SidebarProps): React.ReactEl
         <div className="flex flex-col flex-1 h-full bg-zinc-900 border-r border-zinc-800 overflow-hidden min-w-0">
           {/* Header */}
           <div className="flex items-center justify-between px-2 h-8 border-b border-zinc-800 shrink-0">
-            <span className="text-xs text-zinc-500 uppercase tracking-wider font-mono">Explorer</span>
+            <span />
             <div className="flex items-center">
               <Tooltip>
                 <TooltipTrigger asChild>

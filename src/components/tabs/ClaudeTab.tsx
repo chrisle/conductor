@@ -42,7 +42,7 @@ export default function ClaudeTab({ tabId, groupId, isActive, cwd, initialComman
         />
         <label
           htmlFor="autopilot"
-          className="text-xs font-mono cursor-pointer select-none"
+          className="text-xs cursor-pointer select-none"
           style={{ color: autoPilot ? '#eab308' : '#71717a' }}
         >
           Auto-pilot

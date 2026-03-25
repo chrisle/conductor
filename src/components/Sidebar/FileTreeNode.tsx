@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
 import { useSidebarStore, type FileEntry } from '@/store/sidebar'
-import { useTabsStore } from '@/store/tabs'
+import { useTabsStore, type TabType } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 
 interface FileTreeNodeProps {
@@ -33,13 +33,14 @@ function getFileIcon(filename: string): LucideIcon {
   if (['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'py', 'rs', 'go', 'java',
        'c', 'cpp', 'cs', 'php', 'rb', 'swift', 'kt', 'vue', 'svelte'].includes(ext)) return FileCode
   if (['json', 'jsonc', 'yaml', 'yml', 'toml', 'xml'].includes(ext)) return FileJson
-  if (['md', 'mdx', 'txt', 'rst'].includes(ext)) return FileText
+  if (['md', 'mdx', 'txt', 'rst', 'docx', 'doc'].includes(ext)) return FileText
   if (['html', 'astro'].includes(ext)) return Globe
   if (['css', 'scss', 'sass', 'less'].includes(ext)) return Palette
   if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'bmp', 'tiff'].includes(ext)) return FileImage
   if (['svg'].includes(ext)) return FileImage
   if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext)) return Film
   if (['mp3', 'wav', 'ogg', 'flac', 'm4a'].includes(ext)) return Music
+  if (['xlsx', 'xls', 'csv'].includes(ext)) return FileJson
   if (['zip', 'tar', 'gz', 'bz2', 'rar', '7z'].includes(ext)) return FileArchive
   if (['sh', 'bash', 'zsh', 'fish', 'ps1'].includes(ext)) return Terminal
   if (['sql', 'db', 'sqlite'].includes(ext)) return Database
@@ -60,6 +61,8 @@ function getFileColor(filename: string): string {
   if (['rs'].includes(ext)) return 'text-orange-500'
   if (['go'].includes(ext)) return 'text-cyan-400'
   if (['md', 'mdx'].includes(ext)) return 'text-zinc-300'
+  if (['docx', 'doc'].includes(ext)) return 'text-blue-400'
+  if (['xlsx', 'xls'].includes(ext)) return 'text-green-400'
   if (['sh', 'bash', 'zsh'].includes(ext)) return 'text-green-500'
   if (['env', 'env.local', 'env.example'].includes(filename.replace(/^\./, '')) || ext === 'env') return 'text-red-400'
   if (['lock'].includes(ext) || filename.endsWith('.lock')) return 'text-zinc-600'
@@ -132,10 +135,18 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
     }
   }
 
+  function getTabTypeForFile(filename: string): TabType {
+    const ext = filename.split('.').pop()?.toLowerCase() || ''
+    if (['md', 'mdx'].includes(ext)) return 'markdown'
+    if (['docx'].includes(ext)) return 'word'
+    if (['xlsx', 'xls'].includes(ext)) return 'excel'
+    return 'text'
+  }
+
   function openFile() {
     const targetGroupId = focusedGroupId || groupId
     addTab(targetGroupId, {
-      type: 'text',
+      type: getTabTypeForFile(entry.name),
       title: entry.name,
       filePath: entry.path
     })
@@ -171,7 +182,7 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
           <div
             className={cn(
               'flex items-center gap-1 px-2 py-[3px] cursor-pointer select-none text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors group',
-              'font-mono text-xs'
+              'text-[13px]'
             )}
             style={{ paddingLeft: `${8 + indent}px` }}
             onClick={handleClick}
@@ -203,7 +214,7 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
 
             {isRenaming ? (
               <input
-                className="flex-1 bg-zinc-700 text-zinc-100 px-1 text-xs font-mono outline-none border border-blue-500"
+                className="flex-1 bg-zinc-700 text-zinc-100 px-1 text-xs outline-none border border-blue-500"
                 value={renameValue}
                 onChange={e => setRenameValue(e.target.value)}
                 onBlur={handleRename}
@@ -252,7 +263,7 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
         <div>
           {isLoading && (
             <div
-              className="text-zinc-600 text-xs font-mono py-[3px]"
+              className="text-zinc-600 text-xs py-[3px]"
               style={{ paddingLeft: `${8 + indent + 20}px` }}
             >
               Loading...
