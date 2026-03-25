@@ -4,6 +4,7 @@ import path from 'path'
 import os from 'os'
 import { execFile } from 'child_process'
 import { createTerminal, writeTerminal, resizeTerminal, killTerminal, killAllTerminals } from './terminal'
+import { readDir, readFile, readFileBinary, writeFile, mkdirRecursive, deleteEntry } from './fs-handlers'
 
 export function registerIpcHandlers(): void {
   // Window controls
@@ -37,44 +38,13 @@ export function registerIpcHandlers(): void {
     return os.homedir()
   })
 
-  ipcMain.handle('fs:readDir', async (_event, dirPath: string) => {
-    try {
-      const entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
-      return entries
-        .filter(entry => !entry.name.startsWith('.') || entry.name === '.env')
-        .map(entry => ({
-          name: entry.name,
-          path: path.join(dirPath, entry.name),
-          isDirectory: entry.isDirectory(),
-          isFile: entry.isFile()
-        }))
-        .sort((a, b) => {
-          if (a.isDirectory && !b.isDirectory) return -1
-          if (!a.isDirectory && b.isDirectory) return 1
-          return a.name.localeCompare(b.name)
-        })
-    } catch (err) {
-      return []
-    }
-  })
+  ipcMain.handle('fs:readDir', async (_event, dirPath: string) => readDir(dirPath))
 
-  ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
-    try {
-      const content = await fs.promises.readFile(filePath, 'utf-8')
-      return { success: true, content }
-    } catch (err) {
-      return { success: false, error: String(err) }
-    }
-  })
+  ipcMain.handle('fs:readFile', async (_event, filePath: string) => readFile(filePath))
 
-  ipcMain.handle('fs:writeFile', async (_event, filePath: string, content: string) => {
-    try {
-      await fs.promises.writeFile(filePath, content, 'utf-8')
-      return { success: true }
-    } catch (err) {
-      return { success: false, error: String(err) }
-    }
-  })
+  ipcMain.handle('fs:readFileBinary', async (_event, filePath: string) => readFileBinary(filePath))
+
+  ipcMain.handle('fs:writeFile', async (_event, filePath: string, content: string) => writeFile(filePath, content))
 
   ipcMain.handle('fs:rename', async (_event, oldPath: string, newPath: string) => {
     try {
@@ -85,28 +55,9 @@ export function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('fs:mkdir', async (_event, dirPath: string) => {
-    try {
-      await fs.promises.mkdir(dirPath, { recursive: true })
-      return { success: true }
-    } catch (err) {
-      return { success: false, error: String(err) }
-    }
-  })
+  ipcMain.handle('fs:mkdir', async (_event, dirPath: string) => mkdirRecursive(dirPath))
 
-  ipcMain.handle('fs:delete', async (_event, filePath: string) => {
-    try {
-      const stat = await fs.promises.stat(filePath)
-      if (stat.isDirectory()) {
-        await fs.promises.rmdir(filePath, { recursive: true })
-      } else {
-        await fs.promises.unlink(filePath)
-      }
-      return { success: true }
-    } catch (err) {
-      return { success: false, error: String(err) }
-    }
-  })
+  ipcMain.handle('fs:delete', async (_event, filePath: string) => deleteEntry(filePath))
 
   ipcMain.handle('fs:autocomplete', async (_event, partial: string) => {
     try {

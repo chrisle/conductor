@@ -17,6 +17,7 @@ interface ElectronAPI {
     isFile: boolean
   }>>
   readFile: (path: string) => Promise<{ success: boolean; content?: string; error?: string }>
+  readFileBinary: (path: string) => Promise<{ success: boolean; data?: ArrayBuffer; error?: string }>
   writeFile: (path: string, content: string) => Promise<{ success: boolean; error?: string }>
   rename: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>
   deleteFile: (path: string) => Promise<{ success: boolean; error?: string }>

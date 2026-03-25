@@ -11,6 +11,7 @@ const electronAPI = {
   // File system
   readDir: (path: string) => ipcRenderer.invoke('fs:readDir', path),
   readFile: (path: string) => ipcRenderer.invoke('fs:readFile', path),
+  readFileBinary: (path: string) => ipcRenderer.invoke('fs:readFileBinary', path),
   writeFile: (path: string, content: string) => ipcRenderer.invoke('fs:writeFile', path, content),
   mkdir: (path: string) => ipcRenderer.invoke('fs:mkdir', path),
   gitBranch: (path: string) => ipcRenderer.invoke('git:branch', path),
