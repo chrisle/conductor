@@ -180,6 +180,9 @@ export default function TerminalTab({ tabId, isActive, cwd, initialCommand, auto
           const el = containerRef.current
           if (!el || el.offsetWidth === 0 || el.offsetHeight === 0) return
           fitAddon.fit()
+          if (!userScrolledUpRef.current) {
+            terminalRef.current?.scrollToBottom()
+          }
         } catch {}
       }, 100)
     })
@@ -206,6 +209,9 @@ export default function TerminalTab({ tabId, isActive, cwd, initialCommand, auto
         const el = containerRef.current
         if (el && el.offsetWidth > 0 && el.offsetHeight > 0) {
           fitAddonRef.current?.fit()
+          if (!userScrolledUpRef.current) {
+            terminalRef.current?.scrollToBottom()
+          }
         }
       }, 50)
     }
