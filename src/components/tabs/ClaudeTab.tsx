@@ -1,5 +1,4 @@
 import React, { useState, useCallback } from 'react'
-import { Switch } from '@/components/ui/switch'
 import { useTabsStore } from '@/store/tabs'
 import TerminalTab from './TerminalTab'
 
@@ -33,17 +32,21 @@ export default function ClaudeTab({ tabId, groupId, isActive, cwd, initialComman
         />
       </div>
 
-      <div className="flex items-center gap-2 px-3 h-7 border-t border-zinc-800 shrink-0">
-        <Switch
-          id="autopilot"
-          checked={autoPilot}
-          onCheckedChange={setAutoPilot}
-          className="h-4 w-7 data-[state=checked]:bg-yellow-500"
-        />
+      <div className="flex items-center gap-1.5 px-2 h-5 border-t border-zinc-800 shrink-0">
+        <button
+          onClick={() => setAutoPilot(!autoPilot)}
+          className="relative inline-flex h-3 w-5 shrink-0 cursor-pointer items-center rounded-full transition-colors"
+          style={{ backgroundColor: autoPilot ? '#eab308' : '#3f3f46' }}
+        >
+          <span
+            className="block h-2 w-2 rounded-full bg-white shadow transition-transform"
+            style={{ transform: autoPilot ? 'translateX(10px)' : 'translateX(2px)' }}
+          />
+        </button>
         <label
-          htmlFor="autopilot"
-          className="text-xs cursor-pointer select-none"
-          style={{ color: autoPilot ? '#eab308' : '#71717a' }}
+          onClick={() => setAutoPilot(!autoPilot)}
+          className="text-[10px] cursor-pointer select-none leading-none"
+          style={{ color: autoPilot ? '#eab308' : '#52525b' }}
         >
           Auto-pilot
         </label>
