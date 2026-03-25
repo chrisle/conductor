@@ -3,27 +3,7 @@ import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import { WebLinksAddon } from 'xterm-addon-web-links'
 import 'xterm/css/xterm.css'
-
-export const AUTOPILOT_RULES: { pattern: RegExp; response: string }[] = [
-  // y/n prompts
-  { pattern: /\(Y\/n\)\s*$/i,           response: 'y\r' },
-  { pattern: /\(y\/N\)\s*$/i,           response: 'y\r' },
-  { pattern: /\[y\/n\]\s*$/i,           response: 'y\r' },
-  { pattern: /\[Y\/n\]\s*$/i,           response: 'y\r' },
-  { pattern: /confirm\? \(y\/n\)/i,     response: 'y\r' },
-  { pattern: /press enter to continue/i, response: '\r' },
-  { pattern: /continue\? \[y\/n\]/i,    response: 'y\r' },
-  { pattern: /Do you want to proceed/i, response: 'y\r' },
-  { pattern: /Allow.*\(y\/n\)/i,        response: 'y\r' },
-
-  // Claude Code interactive menus — "Do you want to X?" with numbered options
-  // The cursor ❯ is on option 1 by default, just press Enter to accept
-  // Note: 's' flag makes . match newlines (prompt and options are on separate lines)
-  { pattern: /Do you want to .+\?.*1\.\s*Yes/s,  response: '\r' },
-]
-
-export const ANSI_RE = /\x1b\[[0-9;]*[a-zA-Z]|\x1b[()][AB012]|\r/g
-export function stripAnsi(s: string): string { return s.replace(ANSI_RE, '') }
+import { AUTOPILOT_RULES, stripAnsi, isThinking } from '@/lib/terminal-detection'
 
 export interface TerminalTabProps {
   tabId: string
@@ -34,9 +14,6 @@ export interface TerminalTabProps {
   autoPilot?: boolean
   onThinkingChange?: (thinking: boolean) => void
 }
-
-// Regex to detect Claude "thinking" status lines: e.g. "✳ Zigzagging… (4m 35s · ↓ 611 tokens)"
-const THINKING_RE = /…\s*\(/
 
 export default function TerminalTab({ tabId, isActive, cwd, initialCommand, autoPilot = false, onThinkingChange }: TerminalTabProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -157,10 +134,10 @@ export default function TerminalTab({ tabId, isActive, cwd, initialCommand, auto
           const line = buf.getLine(buf.baseY + i)
           if (line) tail += line.translateToString(true) + '\n'
         }
-        const isThinking = THINKING_RE.test(stripAnsi(tail))
-        if (isThinking !== wasThinkingRef.current) {
-          wasThinkingRef.current = isThinking
-          onThinkingChangeRef.current(isThinking)
+        const thinking = isThinking(tail)
+        if (thinking !== wasThinkingRef.current) {
+          wasThinkingRef.current = thinking
+          onThinkingChangeRef.current(thinking)
         }
       }
 
