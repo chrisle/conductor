@@ -6,7 +6,12 @@ const electronAPI = {
   minimize: () => ipcRenderer.invoke('window:minimize'),
   maximize: () => ipcRenderer.invoke('window:maximize'),
   close: () => ipcRenderer.invoke('window:close'),
+  forceClose: () => ipcRenderer.invoke('window:forceClose'),
   isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+  onCloseRequested: (callback: () => void) =>
+    ipcRenderer.on('window:closeRequested', callback),
+  offCloseRequested: (callback: () => void) =>
+    ipcRenderer.removeListener('window:closeRequested', callback),
 
   // File system
   readDir: (path: string) => ipcRenderer.invoke('fs:readDir', path),
@@ -44,6 +49,10 @@ const electronAPI = {
   // Claude
   getCwd: () => ipcRenderer.invoke('app:getCwd'),
   listClaudeSessions: (projectPath: string) => ipcRenderer.invoke('claude:listSessions', projectPath),
+  getTicketBinding: (ticketKey: string) => ipcRenderer.invoke('tickets:getBinding', ticketKey),
+  setTicketBinding: (ticketKey: string, data: any) => ipcRenderer.invoke('tickets:setBinding', ticketKey, data),
+  getAllTicketBindings: () => ipcRenderer.invoke('tickets:getAllBindings'),
+  removeTicketBinding: (ticketKey: string) => ipcRenderer.invoke('tickets:removeBinding', ticketKey),
 
   // Projects
   selectDirectory: () => ipcRenderer.invoke('project:selectDirectory'),
@@ -52,12 +61,36 @@ const electronAPI = {
   loadRecentProjects: () => ipcRenderer.invoke('project:loadRecent'),
   saveRecentProjects: (projects: Array<{ name: string; path: string }>) => ipcRenderer.invoke('project:saveRecent', projects),
 
+  // Claude
+  generateTicket: (description: string, projectKey: string, epicSummary?: string) =>
+    ipcRenderer.invoke('claude:generateTicket', description, projectKey, epicSummary),
+
+  // Jira
+  jiraFetch: (url: string, headers: Record<string, string>) => ipcRenderer.invoke('jira:fetch', url, headers),
+  jiraPost: (url: string, headers: Record<string, string>, body: string) => ipcRenderer.invoke('jira:post', url, headers, body),
+
   // Extensions
   getExtensionsDir: () => ipcRenderer.invoke('extensions:getDir'),
   listExtensions: () => ipcRenderer.invoke('extensions:list'),
   installExtension: (zipPath: string) => ipcRenderer.invoke('extensions:install', zipPath),
   uninstallExtension: (extensionId: string) => ipcRenderer.invoke('extensions:uninstall', extensionId),
   selectExtensionZip: () => ipcRenderer.invoke('extensions:selectZip'),
+
+  // Conductord log watching
+  watchConductordLogs: () => ipcRenderer.invoke('conductord:watchLogs'),
+  unwatchConductordLogs: (watchId: string) => ipcRenderer.invoke('conductord:unwatchLogs', watchId),
+  onConductordLogs: (callback: (event: IpcRendererEvent, watchId: string, data: string) => void) =>
+    ipcRenderer.on('conductord:logs', callback),
+  offConductordLogs: (callback: (event: IpcRendererEvent, watchId: string, data: string) => void) =>
+    ipcRenderer.removeListener('conductord:logs', callback),
+
+  // Service management
+  isConductordInstalled: () => ipcRenderer.invoke('conductord:isInstalled'),
+  installConductord: () => ipcRenderer.invoke('conductord:install'),
+  uninstallConductord: () => ipcRenderer.invoke('conductord:uninstall'),
+  startConductord: () => ipcRenderer.invoke('conductord:start'),
+  stopConductord: () => ipcRenderer.invoke('conductord:stop'),
+  restartConductord: () => ipcRenderer.invoke('conductord:restart'),
 
   // Platform
   platform: process.platform

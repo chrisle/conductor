@@ -1,6 +1,8 @@
 import * as pty from 'node-pty'
 import { BrowserWindow } from 'electron'
 import os from 'os'
+import fs from 'fs'
+import path from 'path'
 
 interface TerminalInstance {
   pty: pty.IPty
@@ -8,6 +10,7 @@ interface TerminalInstance {
 }
 
 const terminals = new Map<string, TerminalInstance>()
+let didEnsureSpawnHelperExecutable = false
 
 function getShell(): string {
   if (process.platform === 'win32') {
@@ -16,13 +19,35 @@ function getShell(): string {
   return process.env.SHELL || '/bin/zsh'
 }
 
+function ensureNodePtySpawnHelperExecutable(): void {
+  if (didEnsureSpawnHelperExecutable || process.platform !== 'darwin') {
+    return
+  }
+  didEnsureSpawnHelperExecutable = true
+
+  try {
+    const nodePtyDir = path.dirname(require.resolve('node-pty/package.json'))
+    const helperPath = path.join(nodePtyDir, 'prebuilds', `darwin-${process.arch}`, 'spawn-helper')
+    const stat = fs.statSync(helperPath)
+
+    // npm installs can lose the executable bit on macOS, which makes node-pty fail
+    // with "posix_spawnp failed" before any terminal output appears.
+    if ((stat.mode & 0o100) === 0) {
+      fs.chmodSync(helperPath, stat.mode | 0o755)
+    }
+  } catch (error) {
+    console.warn('Failed to ensure node-pty spawn-helper is executable:', error)
+  }
+}
+
 export function createTerminal(id: string, win: BrowserWindow, cwd?: string): void {
   if (terminals.has(id)) {
     return
   }
 
+  ensureNodePtySpawnHelperExecutable()
   const shell = getShell()
-  const ptyProcess = pty.spawn(shell, [], {
+  const ptyProcess = pty.spawn(shell, ['-l'], {
     name: 'xterm-256color',
     cols: 80,
     rows: 24,
@@ -59,7 +84,7 @@ export function writeTerminal(id: string, data: string): void {
 
 export function resizeTerminal(id: string, cols: number, rows: number): void {
   const terminal = terminals.get(id)
-  if (terminal) {
+  if (terminal && cols >= 2 && rows >= 2) {
     terminal.pty.resize(cols, rows)
   }
 }

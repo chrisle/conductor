@@ -3,8 +3,14 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { execFile } from 'child_process'
-import { createTerminal, writeTerminal, resizeTerminal, killTerminal, killAllTerminals } from './terminal'
 import { readDir, readFile, readFileBinary, writeFile, mkdirRecursive, deleteEntry } from './fs-handlers'
+import * as service from './service'
+
+const CONDUCTORD_URL = 'http://127.0.0.1:9800'
+
+// Conductord log watchers: watchId -> { watcher, fd }
+const logWatchers = new Map<string, { watcher: fs.FSWatcher; offset: number; logPath: string }>()
+let logWatchCounter = 0
 
 export function registerIpcHandlers(): void {
   // Window controls
@@ -24,8 +30,13 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('window:close', () => {
     const win = BrowserWindow.getFocusedWindow()
-    killAllTerminals()
-    win?.close()
+    // Ask the renderer to check for dirty state
+    win?.webContents.send('window:closeRequested')
+  })
+
+  ipcMain.handle('window:forceClose', () => {
+    const win = BrowserWindow.getFocusedWindow()
+    win?.destroy()
   })
 
   ipcMain.handle('window:isMaximized', () => {
@@ -120,26 +131,6 @@ export function registerIpcHandlers(): void {
         resolve(err ? null : stdout.trim() || null)
       })
     })
-  })
-
-  // Terminal
-  ipcMain.handle('terminal:create', (event, id: string, cwd?: string) => {
-    const win = BrowserWindow.fromWebContents(event.sender)
-    if (win) {
-      createTerminal(id, win, cwd)
-    }
-  })
-
-  ipcMain.handle('terminal:write', (_event, id: string, data: string) => {
-    writeTerminal(id, data)
-  })
-
-  ipcMain.handle('terminal:resize', (_event, id: string, cols: number, rows: number) => {
-    resizeTerminal(id, cols, rows)
-  })
-
-  ipcMain.handle('terminal:kill', (_event, id: string) => {
-    killTerminal(id)
   })
 
   ipcMain.handle('app:getCwd', () => process.cwd())
@@ -303,6 +294,112 @@ export function registerIpcHandlers(): void {
     }
   })
 
+  // Ticket bindings (claude sessions, worktrees, branches, PRs)
+  const ticketBindingsPath = path.join(app.getPath('userData'), 'ticket-bindings.json')
+
+  function loadTicketBindings(): Record<string, any> {
+    try {
+      if (fs.existsSync(ticketBindingsPath)) {
+        return JSON.parse(fs.readFileSync(ticketBindingsPath, 'utf-8'))
+      }
+    } catch {}
+    return {}
+  }
+
+  function saveTicketBindings(bindings: Record<string, any>): void {
+    fs.writeFileSync(ticketBindingsPath, JSON.stringify(bindings, null, 2), 'utf-8')
+  }
+
+  ipcMain.handle('tickets:getBinding', (_event, ticketKey: string) => {
+    const bindings = loadTicketBindings()
+    return bindings[ticketKey] || null
+  })
+
+  ipcMain.handle('tickets:setBinding', (_event, ticketKey: string, data: any) => {
+    const bindings = loadTicketBindings()
+    bindings[ticketKey] = { ...bindings[ticketKey], ...data }
+    saveTicketBindings(bindings)
+  })
+
+  ipcMain.handle('tickets:getAllBindings', () => {
+    return loadTicketBindings()
+  })
+
+  ipcMain.handle('tickets:removeBinding', (_event, ticketKey: string) => {
+    const bindings = loadTicketBindings()
+    delete bindings[ticketKey]
+    saveTicketBindings(bindings)
+  })
+
+  // Claude CLI ticket generation (via conductord)
+  ipcMain.handle('claude:generateTicket', async (_event, description: string, projectKey: string, epicSummary?: string) => {
+    const epicContext = epicSummary ? ` under the epic "${epicSummary}"` : ''
+    const prompt = `You are generating a Jira ticket for project ${projectKey}${epicContext}.
+
+The user described what they need:
+"${description}"
+
+Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no markdown, no code fences:
+{"summary": "concise ticket title", "description": "detailed description with acceptance criteria", "issueType": "Task|Bug|Story"}`
+
+    try {
+      const res = await fetch(`${CONDUCTORD_URL}/api/exec`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: 'claude',
+          args: ['-p', prompt, '--output-format', 'text'],
+          timeout: 60,
+        }),
+      })
+
+      const result = await res.json() as { success: boolean; stdout?: string; stderr?: string; error?: string }
+
+      if (!result.success) {
+        return { success: false, error: result.error || result.stderr || 'Command failed' }
+      }
+
+      const raw = (result.stdout || '').trim()
+      const jsonMatch = raw.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        return { success: false, error: 'No JSON found in Claude response' }
+      }
+
+      const parsed = JSON.parse(jsonMatch[0])
+      return {
+        success: true,
+        summary: parsed.summary,
+        description: parsed.description,
+        issueType: parsed.issueType || 'Task',
+      }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : 'Failed to reach conductord' }
+    }
+  })
+
+  // Jira proxy (avoids CORS in renderer)
+  ipcMain.handle('jira:fetch', async (_event, url: string, headers: Record<string, string>) => {
+    try {
+      const res = await fetch(url, { headers })
+      if (!res.ok) return { ok: false, status: res.status, body: null }
+      const body = await res.json()
+      return { ok: true, status: res.status, body }
+    } catch (err) {
+      return { ok: false, status: 0, body: null, error: String(err) }
+    }
+  })
+
+  ipcMain.handle('jira:post', async (_event, url: string, headers: Record<string, string>, body: string) => {
+    try {
+      const res = await fetch(url, { method: 'POST', headers, body })
+      const contentType = res.headers.get('content-type') || ''
+      const resBody = contentType.includes('json') ? await res.json() : null
+      return { ok: res.ok, status: res.status, body: resBody }
+    } catch (err) {
+      return { ok: false, status: 0, body: null, error: String(err) }
+    }
+  })
+
   // Extensions
   const extensionsDir = path.join(app.getPath('userData'), 'extensions')
 
@@ -369,4 +466,90 @@ export function registerIpcHandlers(): void {
     if (result.canceled || result.filePaths.length === 0) return null
     return result.filePaths[0]
   })
+
+  // Conductord log watching
+  ipcMain.handle('conductord:watchLogs', (event) => {
+    const watchId = `log-${++logWatchCounter}`
+    const logPath = path.join(os.homedir(), 'Library', 'Logs', 'conductord.log')
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return watchId
+
+    // Read existing content first
+    let offset = 0
+    try {
+      const stat = fs.statSync(logPath)
+      // Read last 64KB of existing log
+      const readStart = Math.max(0, stat.size - 65536)
+      const fd = fs.openSync(logPath, 'r')
+      const buf = Buffer.alloc(stat.size - readStart)
+      fs.readSync(fd, buf, 0, buf.length, readStart)
+      fs.closeSync(fd)
+      offset = stat.size
+      const content = buf.toString('utf-8')
+      if (content.length > 0) {
+        win.webContents.send('conductord:logs', watchId, content)
+      }
+    } catch {
+      // File may not exist yet
+    }
+
+    // Watch for changes
+    const sendNewData = () => {
+      try {
+        const stat = fs.statSync(logPath)
+        if (stat.size <= offset) {
+          if (stat.size < offset) offset = 0 // File was truncated/rotated
+          return
+        }
+        const fd = fs.openSync(logPath, 'r')
+        const buf = Buffer.alloc(stat.size - offset)
+        fs.readSync(fd, buf, 0, buf.length, offset)
+        fs.closeSync(fd)
+        offset = stat.size
+        const content = buf.toString('utf-8')
+        if (content.length > 0 && !win.isDestroyed()) {
+          win.webContents.send('conductord:logs', watchId, content)
+        }
+      } catch {
+        // Ignore read errors
+      }
+    }
+
+    try {
+      const watcher = fs.watch(logPath, () => sendNewData())
+      logWatchers.set(watchId, { watcher, offset, logPath })
+    } catch {
+      // If file doesn't exist yet, poll for it
+      const interval = setInterval(() => {
+        if (fs.existsSync(logPath)) {
+          clearInterval(interval)
+          try {
+            const watcher = fs.watch(logPath, () => sendNewData())
+            logWatchers.set(watchId, { watcher, offset, logPath })
+          } catch { /* ignore */ }
+        }
+      }, 2000)
+      // Store interval so we can clean up
+      const cleanup = { watcher: { close: () => clearInterval(interval) } as unknown as fs.FSWatcher, offset, logPath }
+      logWatchers.set(watchId, cleanup)
+    }
+
+    return watchId
+  })
+
+  ipcMain.handle('conductord:unwatchLogs', (_event, watchId: string) => {
+    const entry = logWatchers.get(watchId)
+    if (entry) {
+      entry.watcher.close()
+      logWatchers.delete(watchId)
+    }
+  })
+
+  // Conductord service management
+  ipcMain.handle('conductord:isInstalled', () => service.isInstalled())
+  ipcMain.handle('conductord:install', () => service.install())
+  ipcMain.handle('conductord:uninstall', () => service.uninstall())
+  ipcMain.handle('conductord:start', () => service.start())
+  ipcMain.handle('conductord:stop', () => service.stop())
+  ipcMain.handle('conductord:restart', () => service.restart())
 }
