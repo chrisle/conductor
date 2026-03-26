@@ -32,6 +32,8 @@ export interface NewTabMenuItem {
 export interface Extension {
   id: string
   name: string
+  description?: string
+  version?: string
   icon?: ComponentType<{ className?: string }>
   sidebar?: ComponentType<{ groupId: string }>
   tabs?: TabRegistration[]

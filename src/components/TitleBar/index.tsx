@@ -1,15 +1,19 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { Minus, Square, X, Maximize2, GitBranch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { useSidebarStore } from '@/store/sidebar'
 import { useActivityBarStore } from '@/store/activityBar'
 import { useProjectStore } from '@/store/project'
+import { saveProject, saveProjectAs } from '@/lib/project-io'
 
 export default function TitleBar(): React.ReactElement {
   const [isMaximized, setIsMaximized] = useState(false)
   const [gitBranch, setGitBranch] = useState<string | null>(null)
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false)
   const { rootPath } = useSidebarStore()
   const { activeExtensionId, toggleExtension } = useActivityBarStore()
   const projectName = useProjectStore(s => s.name)
@@ -30,12 +34,48 @@ export default function TitleBar(): React.ReactElement {
     return () => { cancelled = true; clearInterval(id) }
   }, [rootPath])
 
+  // Listen for system-initiated close (Cmd+Q, red button via main process)
+  useEffect(() => {
+    const handler = () => {
+      const { isAnyDirty } = useProjectStore.getState()
+      if (isAnyDirty()) {
+        setCloseDialogOpen(true)
+      } else {
+        window.electronAPI.forceClose()
+      }
+    }
+    window.electronAPI.onCloseRequested(handler)
+    return () => window.electronAPI.offCloseRequested(handler)
+  }, [])
+
   const handleMinimize = () => window.electronAPI.minimize()
   const handleMaximize = async () => {
     await window.electronAPI.maximize()
     setIsMaximized(await window.electronAPI.isMaximized())
   }
-  const handleClose = () => window.electronAPI.close()
+
+  const handleClose = useCallback(() => {
+    const { isAnyDirty } = useProjectStore.getState()
+    if (isAnyDirty()) {
+      setCloseDialogOpen(true)
+    } else {
+      window.electronAPI.forceClose()
+    }
+  }, [])
+
+  const handleCloseSave = useCallback(async () => {
+    const { filePath } = useProjectStore.getState()
+    if (filePath) await saveProject(filePath)
+    else await saveProjectAs()
+    setCloseDialogOpen(false)
+    window.electronAPI.forceClose()
+  }, [])
+
+  const handleCloseDiscard = useCallback(() => {
+    setCloseDialogOpen(false)
+    window.electronAPI.forceClose()
+  }, [])
+
   const isMac = window.electronAPI.platform === 'darwin'
 
   return (
@@ -83,21 +123,6 @@ export default function TitleBar(): React.ReactElement {
           </div>
         )}
 
-        {/* Sidebar toggle */}
-        <div className="no-drag">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={() => toggleExtension('file-explorer')} className="h-8 w-8 rounded-none">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                  <rect x="1" y="1" width="4" height="14" rx="1" opacity="0.5" />
-                  <rect x="7" y="1" width="8" height="14" rx="1" />
-                </svg>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{activeExtensionId ? 'Hide sidebar' : 'Show sidebar'}</TooltipContent>
-          </Tooltip>
-        </div>
-
         {/* Title */}
         <div className="flex-1 flex items-center justify-center gap-2 overflow-hidden px-4">
           <span className="text-xs text-zinc-500 truncate">
@@ -126,6 +151,30 @@ export default function TitleBar(): React.ReactElement {
           </div>
         )}
       </div>
+
+      {/* Close confirmation dialog */}
+      <Dialog open={closeDialogOpen} onOpenChange={(open) => !open && setCloseDialogOpen(false)}>
+        <DialogContent className="bg-zinc-900 border-zinc-700 max-w-sm" hideClose>
+          <VisuallyHidden><DialogTitle>Unsaved Changes</DialogTitle></VisuallyHidden>
+          <div className="space-y-3">
+            <div className="text-sm text-zinc-300 font-medium">Unsaved Changes</div>
+            <div className="text-xs text-zinc-400">
+              You have unsaved changes. Would you like to save before closing?
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" className="text-xs text-zinc-400 hover:text-zinc-200" onClick={() => setCloseDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="ghost" className="text-xs text-zinc-400 hover:text-zinc-200" onClick={handleCloseDiscard}>
+              Don't Save
+            </Button>
+            <Button className="text-xs bg-blue-600 hover:bg-blue-500 text-white" onClick={handleCloseSave}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </TooltipProvider>
   )
 }

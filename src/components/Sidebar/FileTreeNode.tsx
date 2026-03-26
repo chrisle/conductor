@@ -3,7 +3,8 @@ import {
   ChevronRight, ChevronDown, Folder, FolderOpen,
   FileCode, FileJson, FileText, FileImage, FileArchive,
   Terminal, Settings, Globe, Palette, Package, Database,
-  Film, Music, File, Lock, GitBranch
+  Film, Music, File, Lock, GitBranch,
+  FileUp, Star, StarOff, Pencil, Trash2
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -225,7 +226,10 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
         </ContextMenuTrigger>
         <ContextMenuContent>
           {entry.isFile && (
-            <ContextMenuItem onClick={openFile}>Open</ContextMenuItem>
+            <ContextMenuItem onClick={openFile}>
+              <FileUp className="w-3.5 h-3.5 mr-2" />
+              Open
+            </ContextMenuItem>
           )}
           {entry.isDirectory && (
             <ContextMenuItem onClick={() => {
@@ -236,10 +240,15 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
                 store.addFavorite(entry.path)
               }
             }}>
-              {useSidebarStore.getState().isFavorite(entry.path) ? 'Unfavorite' : 'Favorite'}
+              {useSidebarStore.getState().isFavorite(entry.path) ? (
+                <><StarOff className="w-3.5 h-3.5 mr-2" />Unfavorite</>
+              ) : (
+                <><Star className="w-3.5 h-3.5 mr-2" />Favorite</>
+              )}
             </ContextMenuItem>
           )}
           <ContextMenuItem onClick={() => { setIsRenaming(true); setRenameValue(entry.name) }}>
+            <Pencil className="w-3.5 h-3.5 mr-2" />
             Rename
           </ContextMenuItem>
           <ContextMenuSeparator />
@@ -247,6 +256,7 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
             className="text-red-400 focus:text-red-400 focus:bg-red-950"
             onClick={handleDelete}
           >
+            <Trash2 className="w-3.5 h-3.5 mr-2" />
             Delete
           </ContextMenuItem>
         </ContextMenuContent>

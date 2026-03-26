@@ -68,27 +68,22 @@
   background: #52525b;
 }
 
-/* xterm overrides */
-.xterm {
-  padding: 4px;
-  height: 100%;
-}
-
-.xterm-viewport {
-  overflow-y: auto !important;
-}
-
-/* Force xterm-screen to fill available width instead of using xterm's
-   incorrect cell width calculation (dims.css.cell.width is ~4% too small
-   on HiDPI, causing the screen to be narrower than the rendered text) */
-.xterm-screen {
-  width: 100% !important;
-}
 
 /* Monaco editor container */
 .monaco-editor-container {
   height: 100%;
   width: 100%;
+}
+
+/* Ghostty terminal: suppress contenteditable chrome and stretch canvas to fill */
+[contenteditable="true"]:has(> canvas) {
+  outline: none;
+  caret-color: transparent;
+}
+
+[contenteditable="true"] > canvas {
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* Webview */

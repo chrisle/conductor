@@ -5,11 +5,14 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator as CtxMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { useTabsStore, type Tab } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useSidebarStore } from '@/store/sidebar'
 import { extensionRegistry } from '@/extensions'
-import { openProjectDialog, createNewProject } from '@/lib/project-io'
+import { openProjectDialog, openProject, createNewProject } from '@/lib/project-io'
+import { useProjectStore } from '@/store/project'
+import { killTerminal } from '@/lib/terminal-api'
 
 interface TabGroupProps {
   groupId: string
@@ -20,7 +23,36 @@ type DropZone = 'left' | 'right' | 'top' | 'bottom' | 'center' | null
 const DRAGGING_TAB_KEY = '__dragging_tab__'
 const DRAGGING_GROUP_KEY = '__dragging_group__'
 
-function EmptyState({ onContextMenu }: { onContextMenu: (e: React.MouseEvent) => void }) {
+function RecentProjects() {
+  const recentProjects = useProjectStore(s => s.recentProjects)
+  const currentPath = useProjectStore(s => s.filePath)
+  const loadRecentProjects = useProjectStore(s => s.loadRecentProjects)
+
+  useEffect(() => { loadRecentProjects() }, [])
+
+  const filtered = recentProjects.filter(p => p.path !== currentPath)
+  if (filtered.length === 0) return null
+
+  const friendly = (p: string) => p.replace(/^\/Users\/[^/]+/, '~')
+
+  return (
+    <div className="flex flex-col gap-1.5 mt-4 w-full max-w-xs">
+      <div className="text-[11px] text-zinc-600 uppercase tracking-wider px-1">Recent Projects</div>
+      {filtered.map(p => (
+        <button
+          key={p.path}
+          onClick={() => openProject(p.path)}
+          className="flex flex-col gap-0.5 px-2 py-1.5 rounded text-left hover:bg-zinc-800/50 transition-colors group"
+        >
+          <span className="text-xs text-zinc-400 group-hover:text-zinc-200 truncate">{p.name}</span>
+          <span className="text-[10px] text-zinc-600 truncate">{friendly(p.path)}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function EmptyState({ groupId, menuItems }: { groupId: string, menuItems: ReturnType<typeof extensionRegistry.getNewTabMenuItems> }) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [projectName, setProjectName] = useState('')
   const [directory, setDirectory] = useState('')
@@ -55,9 +87,10 @@ function EmptyState({ onContextMenu }: { onContextMenu: (e: React.MouseEvent) =>
 
   return (
     <>
+      <ContextMenu>
+      <ContextMenuTrigger asChild>
       <div
         className="flex flex-col items-center justify-center h-full gap-6"
-        onContextMenu={onContextMenu}
       >
         <div className="text-2xl font-light text-zinc-400 tracking-wide">Conductor</div>
         <div className="flex gap-4">
@@ -76,17 +109,25 @@ function EmptyState({ onContextMenu }: { onContextMenu: (e: React.MouseEvent) =>
             <span className="text-xs text-zinc-500 group-hover:text-zinc-300 transition-colors">New Project</span>
           </button>
         </div>
-        <div className="flex flex-col gap-1.5 text-xs text-zinc-600 mt-2">
-          <div className="flex items-center gap-2">
-            <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-500 font-mono text-[10px]">⌘T</kbd>
-            <span>New terminal</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-500 font-mono text-[10px]">⌘W</kbd>
-            <span>Close tab</span>
-          </div>
-        </div>
+        <RecentProjects />
       </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
+        {menuItems.map((item, i) => (
+          <React.Fragment key={i}>
+            {item.separator === 'before' && <CtxMenuSeparator />}
+            <ContextMenuItem
+              onClick={() => item.action(groupId)}
+              className="gap-2 text-xs cursor-pointer"
+            >
+              <item.icon className={item.iconClassName || "w-3.5 h-3.5 shrink-0"} />
+              <span>{item.label}</span>
+            </ContextMenuItem>
+            {item.separator === 'after' && <CtxMenuSeparator />}
+          </React.Fragment>
+        ))}
+      </ContextMenuContent>
+      </ContextMenu>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="bg-zinc-900 border-zinc-700 max-w-sm" hideClose>
@@ -146,22 +187,11 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   const [dropZone, setDropZone] = useState<DropZone>(null)
   const [dragOverTabIndex, setDragOverTabIndex] = useState<number | null>(null)
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
-  const [cursorMenuOpen, setCursorMenuOpen] = useState(false)
-  const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 })
   const tabBarRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const dragIndexRef = useRef<number | null>(null)
   const { rootPath } = useSidebarStore()
   const isFocused = focusedGroupId === groupId
-
-  // Track mouse position within this group
-  useEffect(() => {
-    const el = contentRef.current
-    if (!el) return
-    const onMove = (e: MouseEvent) => setCursorPos({ x: e.clientX, y: e.clientY })
-    el.addEventListener('mousemove', onMove)
-    return () => el.removeEventListener('mousemove', onMove)
-  }, [])
 
   // Cmd+T opens terminal
   useEffect(() => {
@@ -287,7 +317,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   function closeTab(tabId: string) {
     const tab = group.tabs.find(t => t.id === tabId)
     if (tab && (tab.type === 'terminal' || tab.type === 'claude')) {
-      window.electronAPI.killTerminal(tabId)
+      killTerminal(tabId)
     }
     const groupTabs = group.tabs
     removeTab(groupId, tabId)
@@ -412,13 +442,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
         onDrop={handleContentDrop}
       >
         {group.tabs.length === 0 ? (
-          <EmptyState
-            onContextMenu={(e) => {
-              e.preventDefault()
-              setCursorPos({ x: e.clientX, y: e.clientY })
-              setCursorMenuOpen(true)
-            }}
-          />
+          <EmptyState groupId={groupId} menuItems={menuItems} />
         ) : (
           group.tabs.map(tab => {
             const Component = extensionRegistry.getTabComponent(tab.type)
@@ -457,17 +481,6 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
           <div className="absolute inset-0 pointer-events-none z-10 bg-blue-500/10 border-2 border-blue-500" />
         )}
 
-        {/* Context menu */}
-        {cursorMenuOpen && (
-          <DropdownMenu open onOpenChange={setCursorMenuOpen}>
-            <DropdownMenuTrigger asChild>
-              <div className="fixed" style={{ top: cursorPos.y, left: cursorPos.x, width: 1, height: 1 }} />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-44 bg-zinc-900 border-zinc-700">
-              {renderMenuItems(() => setCursorMenuOpen(false))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
       </div>
     </div>
   )

@@ -4,6 +4,10 @@ import MainLayout from './components/Layout'
 import Footer from './components/Footer'
 import GoToDialog from './components/GoToDialog'
 import { useSidebarStore } from './store/sidebar'
+import { useTabsStore } from './store/tabs'
+import { useLayoutStore } from './store/layout'
+import { useProjectStore } from './store/project'
+import { initializeDefaultProject } from './lib/project-io'
 
 function App(): React.ReactElement {
   const [goToOpen, setGoToOpen] = useState(false)
@@ -15,6 +19,28 @@ function App(): React.ReactElement {
         useSidebarStore.setState({ favorites: favs })
       }
     })
+  }, [])
+
+  // Initialize default project if none is loaded
+  useEffect(() => {
+    initializeDefaultProject()
+  }, [])
+
+  // Mark workspace dirty when tabs or layout change
+  useEffect(() => {
+    let initialized = false
+    // Skip the first state (initial setup)
+    const unsubTabs = useTabsStore.subscribe(() => {
+      if (!initialized) return
+      useProjectStore.getState().markWorkspaceDirty()
+    })
+    const unsubLayout = useLayoutStore.subscribe(() => {
+      if (!initialized) return
+      useProjectStore.getState().markWorkspaceDirty()
+    })
+    // Delay enabling to avoid marking dirty during initial setup
+    requestAnimationFrame(() => { initialized = true })
+    return () => { unsubTabs(); unsubLayout() }
   }, [])
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {

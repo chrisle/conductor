@@ -1,3 +1,10 @@
+// In web-only mode (no Electron), install a stub electronAPI before anything else
+if (!window.electronAPI) {
+  const { installElectronAPIMock } = await import('./electron-api-mock')
+  installElectronAPIMock()
+}
+
+
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { loader } from '@monaco-editor/react'
