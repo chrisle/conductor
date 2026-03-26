@@ -78,6 +78,13 @@
   overflow-y: auto !important;
 }
 
+/* Force xterm-screen to fill available width instead of using xterm's
+   incorrect cell width calculation (dims.css.cell.width is ~4% too small
+   on HiDPI, causing the screen to be narrower than the rendered text) */
+.xterm-screen {
+  width: 100% !important;
+}
+
 /* Monaco editor container */
 .monaco-editor-container {
   height: 100%;
