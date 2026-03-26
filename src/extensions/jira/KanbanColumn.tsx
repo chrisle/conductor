@@ -63,10 +63,10 @@ export function KanbanColumn({ title, status, tickets, pendingTickets = [], conf
   const columnPending = pendingTickets.filter((p) => p.status === status)
 
   return (
-    <div className="flex flex-col rounded-xl bg-zinc-900/30 p-3">
+    <div className="flex flex-col rounded-xl bg-zinc-900/40 p-3 border border-zinc-800/50">
       <div className="mb-3 flex shrink-0 items-center gap-2">
         <h2 className={`text-sm font-semibold ${STATUS_COLORS[status]}`}>{title}</h2>
-        <Badge variant="secondary" className="rounded-full bg-zinc-800 text-zinc-500">
+        <Badge variant="secondary" className="rounded-full bg-zinc-800 text-zinc-400">
           {columnTickets.length}
         </Badge>
 

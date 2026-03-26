@@ -198,10 +198,10 @@ export default function JiraSidebar({ groupId }: { groupId: string }): React.Rea
     >
       {/* Filter */}
       {projects.length > 5 && (
-        <div className="px-3 py-1.5 border-b border-zinc-800/50">
+        <div className="px-3 py-1.5 border-b border-zinc-700/40">
           <input
             ref={filterRef}
-            className="w-full bg-zinc-800/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-zinc-200 outline-none focus:border-zinc-500 placeholder-zinc-500"
+            className="w-full bg-zinc-800/50 border border-zinc-600/50 rounded px-2 py-1 text-xs text-zinc-200 outline-none focus:border-blue-500/60 placeholder-zinc-500"
             placeholder="Filter projects..."
             value={filter}
             onChange={e => setFilter(e.target.value)}
@@ -269,7 +269,7 @@ function ProjectGroup({
         <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
           {label}
         </span>
-        <span className="text-[10px] text-zinc-600 ml-auto">{projects.length}</span>
+        <span className="text-[10px] text-zinc-500 ml-auto">{projects.length}</span>
       </button>
       {!collapsed &&
         projects.map(project => (

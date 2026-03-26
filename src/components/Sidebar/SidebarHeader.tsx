@@ -30,9 +30,9 @@ export default function SidebarHeader({
   onSettings,
 }: SidebarHeaderProps): React.ReactElement {
   return (
-    <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-800 shrink-0">
+    <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-700/50 shrink-0">
       <div className="flex flex-col min-w-0">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
           {title}
         </span>
         {subtitle && (
@@ -53,7 +53,7 @@ export default function SidebarHeader({
                     size="icon"
                     onClick={action.onClick}
                     disabled={action.disabled}
-                    className={`h-6 w-6 ${action.className || 'text-zinc-500 hover:text-zinc-300'}`}
+                    className={`h-6 w-6 ${action.className || 'text-zinc-400 hover:text-zinc-200'}`}
                   >
                     <action.icon
                       className={`w-3.5 h-3.5 ${action.spinning ? 'animate-spin' : ''}`}
@@ -63,14 +63,14 @@ export default function SidebarHeader({
                 <TooltipContent>{action.label}</TooltipContent>
               </Tooltip>
               {separatorAfter === i && (
-                <Separator orientation="vertical" className="h-4 mx-1 bg-zinc-800" />
+                <Separator orientation="vertical" className="h-4 mx-1 bg-zinc-700/50" />
               )}
             </React.Fragment>
           ))}
           {onSettings && (
             <>
               {actions?.length ? (
-                <Separator orientation="vertical" className="h-4 mx-1 bg-zinc-800" />
+                <Separator orientation="vertical" className="h-4 mx-1 bg-zinc-700/50" />
               ) : null}
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -78,7 +78,7 @@ export default function SidebarHeader({
                     variant="ghost"
                     size="icon"
                     onClick={onSettings}
-                    className="h-6 w-6 text-zinc-500 hover:text-zinc-300"
+                    className="h-6 w-6 text-zinc-400 hover:text-zinc-200"
                   >
                     <Settings className="w-3.5 h-3.5" />
                   </Button>

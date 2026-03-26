@@ -113,7 +113,7 @@ export const TicketCard = memo(function TicketCard({
             <Button
               variant="secondary"
               size="sm"
-              className="h-6 bg-zinc-800 text-[11px] text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 px-2"
+              className="h-6 bg-zinc-800/80 text-[11px] text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 border border-zinc-700/50 px-2"
             >
               Claude
               <ChevronDown className="h-3 w-3 ml-0.5" />
@@ -136,7 +136,7 @@ export const TicketCard = memo(function TicketCard({
               variant="secondary"
               size="sm"
               disabled={jiraLoading}
-              className="h-6 bg-zinc-800 text-[11px] text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 px-2"
+              className="h-6 bg-zinc-800/80 text-[11px] text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 border border-zinc-700/50 px-2"
             >
               {jiraLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
               Jira
@@ -162,7 +162,7 @@ export const TicketCard = memo(function TicketCard({
             <Button
               variant="secondary"
               size="sm"
-              className="h-6 bg-zinc-800 text-[11px] text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 px-2"
+              className="h-6 bg-zinc-800/80 text-[11px] text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 border border-zinc-700/50 px-2"
             >
               Code
               <ChevronDown className="h-3 w-3 ml-0.5" />

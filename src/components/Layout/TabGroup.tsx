@@ -37,15 +37,15 @@ function RecentProjects() {
 
   return (
     <div className="flex flex-col gap-1.5 mt-4 w-full max-w-xs">
-      <div className="text-[11px] text-zinc-600 uppercase tracking-wider px-1">Recent Projects</div>
+      <div className="text-[11px] text-zinc-500 uppercase tracking-wider px-1">Recent Projects</div>
       {filtered.map(p => (
         <button
           key={p.path}
           onClick={() => openProject(p.path)}
           className="flex flex-col gap-0.5 px-2 py-1.5 rounded text-left hover:bg-zinc-800/50 transition-colors group"
         >
-          <span className="text-xs text-zinc-400 group-hover:text-zinc-200 truncate">{p.name}</span>
-          <span className="text-[10px] text-zinc-600 truncate">{friendly(p.path)}</span>
+          <span className="text-xs text-zinc-300 group-hover:text-zinc-100 truncate">{p.name}</span>
+          <span className="text-[10px] text-zinc-500 truncate">{friendly(p.path)}</span>
         </button>
       ))}
     </div>
@@ -92,21 +92,21 @@ function EmptyState({ groupId, menuItems }: { groupId: string, menuItems: Return
       <div
         className="flex flex-col items-center justify-center h-full gap-6"
       >
-        <div className="text-2xl font-light text-zinc-400 tracking-wide">Conductor</div>
+        <div className="text-2xl font-light text-zinc-300 tracking-wide">Conductor</div>
         <div className="flex gap-4">
           <button
             onClick={() => openProjectDialog()}
-            className="flex flex-col items-center gap-3 w-40 py-6 rounded-lg border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800/50 hover:border-zinc-700 transition-colors group"
+            className="flex flex-col items-center gap-3 w-40 py-6 rounded-lg border border-zinc-700/60 bg-zinc-900/50 hover:bg-zinc-800/60 hover:border-zinc-600 transition-colors group"
           >
-            <FolderOpen className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
-            <span className="text-xs text-zinc-500 group-hover:text-zinc-300 transition-colors">Open Project</span>
+            <FolderOpen className="w-8 h-8 text-zinc-500 group-hover:text-blue-400 transition-colors" />
+            <span className="text-xs text-zinc-400 group-hover:text-zinc-200 transition-colors">Open Project</span>
           </button>
           <button
             onClick={openDialog}
-            className="flex flex-col items-center gap-3 w-40 py-6 rounded-lg border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800/50 hover:border-zinc-700 transition-colors group"
+            className="flex flex-col items-center gap-3 w-40 py-6 rounded-lg border border-zinc-700/60 bg-zinc-900/50 hover:bg-zinc-800/60 hover:border-zinc-600 transition-colors group"
           >
-            <FilePlus2 className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
-            <span className="text-xs text-zinc-500 group-hover:text-zinc-300 transition-colors">New Project</span>
+            <FilePlus2 className="w-8 h-8 text-zinc-500 group-hover:text-blue-400 transition-colors" />
+            <span className="text-xs text-zinc-400 group-hover:text-zinc-200 transition-colors">New Project</span>
           </button>
         </div>
         <RecentProjects />
@@ -370,7 +370,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     >
       {/* Tab bar */}
       <div
-        className="flex items-end bg-zinc-900 border-b border-zinc-800 shrink-0 relative"
+        className="flex items-end bg-zinc-900/80 border-b border-zinc-700/50 shrink-0 relative"
         style={{ height: 36 }}
       >
         <div
@@ -392,11 +392,11 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                 setFocusedGroup(groupId)
               }}
               className={cn(
-                'flex items-center gap-1.5 px-3 h-8 cursor-pointer select-none border-r border-zinc-800 shrink-0 max-w-[180px] group/tab transition-colors',
+                'flex items-center gap-1.5 px-3 h-8 cursor-pointer select-none border-r border-zinc-700/40 shrink-0 max-w-[180px] group/tab transition-colors',
                 tab.id === group.activeTabId
-                  ? 'bg-zinc-950 text-zinc-100 border-b-2 border-b-blue-500'
-                  : 'bg-zinc-900 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300',
-                dragOverTabIndex === index && 'border-l-2 border-l-blue-500',
+                  ? 'bg-zinc-950 text-zinc-50 border-b-2 border-b-blue-400'
+                  : 'bg-zinc-900/60 text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-200',
+                dragOverTabIndex === index && 'border-l-2 border-l-blue-400',
                 tab.id === group.activeTabId && tab.isThinking && 'tab-thinking-bar'
               )}
             >
@@ -421,7 +421,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
           {/* New tab dropdown */}
           <DropdownMenu open={newTabMenuOpen} onOpenChange={setNewTabMenuOpen}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="w-8 h-8 shrink-0 rounded-none text-zinc-600 hover:text-zinc-300">
+              <Button variant="ghost" size="icon" className="w-8 h-8 shrink-0 rounded-none text-zinc-500 hover:text-zinc-200">
                 <Plus className="w-3.5 h-3.5" />
               </Button>
             </DropdownMenuTrigger>

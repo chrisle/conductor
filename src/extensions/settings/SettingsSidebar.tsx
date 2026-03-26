@@ -124,9 +124,9 @@ export default function SettingsSidebar({ groupId }: SettingsSidebarProps): Reac
               onClick={() => openTab(item.tabType, item.label)}
               className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-zinc-800/50 transition-colors group"
             >
-              <item.icon className="w-4 h-4 text-zinc-500 group-hover:text-zinc-400 shrink-0" />
+              <item.icon className="w-4 h-4 text-zinc-400 group-hover:text-zinc-300 shrink-0" />
               <span className="text-xs text-zinc-300 group-hover:text-zinc-100 truncate">{item.label}</span>
-              <ChevronRight className="w-3 h-3 text-zinc-600 ml-auto shrink-0" />
+              <ChevronRight className="w-3 h-3 text-zinc-500 ml-auto shrink-0" />
             </button>
           ))}
 
@@ -137,22 +137,22 @@ export default function SettingsSidebar({ groupId }: SettingsSidebarProps): Reac
               onClick={() => openTab(item.tabType, item.label)}
               className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-zinc-800/50 transition-colors group"
             >
-              <item.icon className="w-4 h-4 text-zinc-500 group-hover:text-zinc-400 shrink-0" />
+              <item.icon className="w-4 h-4 text-zinc-400 group-hover:text-zinc-300 shrink-0" />
               <span className="text-xs text-zinc-300 group-hover:text-zinc-100 truncate">{item.label}</span>
-              <ChevronRight className="w-3 h-3 text-zinc-600 ml-auto shrink-0" />
+              <ChevronRight className="w-3 h-3 text-zinc-500 ml-auto shrink-0" />
             </button>
           ))}
 
-          <Separator className="my-2 bg-zinc-800" />
+          <Separator className="my-2 bg-zinc-700/50" />
 
           {/* Extensions section */}
           <div className="px-3 py-1.5 flex items-center justify-between">
-            <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-medium">Extensions</span>
+            <span className="text-[11px] text-zinc-400 uppercase tracking-wider font-medium">Extensions</span>
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" onClick={loadExtensions} className="h-5 w-5 text-zinc-500 hover:text-zinc-300">
+              <Button variant="ghost" size="icon" onClick={loadExtensions} className="h-5 w-5 text-zinc-400 hover:text-zinc-200">
                 <RefreshCw className="w-3 h-3" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={handleInstallExtension} disabled={extLoading} className="h-5 w-5 text-zinc-500 hover:text-zinc-300">
+              <Button variant="ghost" size="icon" onClick={handleInstallExtension} disabled={extLoading} className="h-5 w-5 text-zinc-400 hover:text-zinc-200">
                 <Download className="w-3 h-3" />
               </Button>
             </div>

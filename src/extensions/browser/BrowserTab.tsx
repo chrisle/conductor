@@ -159,24 +159,24 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
   return (
     <div className="flex flex-col h-full w-full bg-zinc-950">
       {/* Browser toolbar */}
-      <div className="flex items-center gap-1 px-2 h-9 bg-zinc-900 border-b border-zinc-800 shrink-0">
+      <div className="flex items-center gap-1 px-2 h-9 bg-zinc-900/80 border-b border-zinc-700/50 shrink-0">
         <button
           onClick={handleBack}
           disabled={!canGoBack}
-          className="p-1 text-zinc-500 hover:text-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="p-1 text-zinc-400 hover:text-zinc-200 disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
         <button
           onClick={handleForward}
           disabled={!canGoForward}
-          className="p-1 text-zinc-500 hover:text-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="p-1 text-zinc-400 hover:text-zinc-200 disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
         >
           <ArrowRight className="w-4 h-4" />
         </button>
         <button
           onClick={handleRefresh}
-          className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors"
+          className="p-1 text-zinc-400 hover:text-zinc-200 transition-colors"
         >
           {isLoading ? (
             <X className="w-4 h-4" />
@@ -186,13 +186,13 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
         </button>
 
         <form onSubmit={handleSubmit} className="flex-1 flex items-center">
-          <div className="flex items-center flex-1 bg-zinc-800 border border-zinc-700 focus-within:border-zinc-500 transition-colors px-2 h-6 gap-1">
-            <Globe className="w-3 h-3 text-zinc-500 shrink-0" />
+          <div className="flex items-center flex-1 bg-zinc-800/80 border border-zinc-600/50 focus-within:border-blue-500/60 transition-colors px-2 h-6 gap-1 rounded-sm">
+            <Globe className="w-3 h-3 text-zinc-400 shrink-0" />
             <input
               type="text"
               value={inputUrl}
               onChange={e => setInputUrl(e.target.value)}
-              className="flex-1 bg-transparent text-zinc-200 text-xs font-mono outline-none placeholder:text-zinc-600"
+              className="flex-1 bg-transparent text-zinc-200 text-xs font-mono outline-none placeholder:text-zinc-500"
               placeholder="Enter URL or search..."
               onFocus={e => e.target.select()}
             />

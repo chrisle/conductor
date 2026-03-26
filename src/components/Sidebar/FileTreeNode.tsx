@@ -175,7 +175,7 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
         <ContextMenuTrigger>
           <div
             className={cn(
-              'flex items-center gap-1 px-2 py-[3px] cursor-pointer select-none text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors group',
+              'flex items-center gap-1 px-2 py-[3px] cursor-pointer select-none text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100 transition-colors group',
               'text-[13px]'
             )}
             style={{ paddingLeft: `${8 + indent}px` }}
@@ -184,7 +184,7 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
           >
             {entry.isDirectory ? (
               <>
-                <span className="text-zinc-600 shrink-0">
+                <span className="text-zinc-500 shrink-0">
                   {expanded ? (
                     <ChevronDown className="w-3 h-3" />
                   ) : (

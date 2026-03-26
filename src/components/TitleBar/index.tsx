@@ -81,7 +81,7 @@ export default function TitleBar(): React.ReactElement {
   return (
     <TooltipProvider delayDuration={400}>
       <div
-        className="drag-region flex items-center h-8 bg-zinc-900 border-b border-zinc-800 shrink-0 select-none"
+        className="drag-region flex items-center h-8 bg-zinc-900/80 border-b border-zinc-700/50 shrink-0 select-none"
         style={{ minHeight: 32 }}
       >
         {/* Mac traffic lights */}
@@ -125,8 +125,8 @@ export default function TitleBar(): React.ReactElement {
 
         {/* Title */}
         <div className="flex-1 flex items-center justify-center gap-2 overflow-hidden px-4">
-          <span className="text-xs text-zinc-500 truncate">
-            Conductor v0.1.0{projectName ? ` — ${projectName}` : ''}
+          <span className="text-xs truncate">
+            <span className="text-zinc-500">Conductor</span>{projectName ? <span className="text-zinc-300"> — {projectName}</span> : ''}
           </span>
           {gitBranch && (
             <Badge variant="outline" className="h-4 px-1.5 gap-1 text-[10px] text-fuchsia-400 border-fuchsia-900 bg-fuchsia-950/30 shrink-0">

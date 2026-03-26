@@ -83,14 +83,14 @@ export default function ClaudeSidebar({ groupId }: { groupId: string }): React.R
         <button
           key={session.id}
           onClick={() => resumeSession(session.id)}
-          className="w-full text-left px-3 py-1.5 hover:bg-zinc-800/50 transition-colors border-b border-zinc-800/50 group"
+          className="w-full text-left px-3 py-1.5 hover:bg-zinc-800/50 transition-colors border-b border-zinc-700/30 group"
         >
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-zinc-300 group-hover:text-zinc-100">{session.id.slice(0, 8)}</span>
+            <span className="text-xs font-mono text-zinc-200 group-hover:text-zinc-50">{session.id.slice(0, 8)}</span>
             <span className="text-[10px] text-zinc-500">{formatRelativeTime(session.mtime)}</span>
           </div>
           {session.summary && (
-            <div className="text-[11px] text-zinc-500 truncate mt-0.5 group-hover:text-zinc-400">
+            <div className="text-[11px] text-zinc-400 truncate mt-0.5 group-hover:text-zinc-300">
               {session.summary}
             </div>
           )}

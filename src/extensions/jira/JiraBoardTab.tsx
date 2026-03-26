@@ -188,15 +188,15 @@ export default function JiraBoardTab({ tabId, groupId, isActive, tab }: TabProps
   return (
     <div className="flex flex-col h-full bg-zinc-950 text-zinc-300">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-800 shrink-0">
-        <span className="text-sm font-semibold text-zinc-200">{projectKey}</span>
-        <span className="text-xs text-zinc-500">{tickets.length} tickets</span>
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-zinc-700/50 shrink-0">
+        <span className="text-sm font-semibold text-zinc-100">{projectKey}</span>
+        <span className="text-xs text-zinc-400">{tickets.length} tickets</span>
 
         <div className="ml-auto flex items-center gap-1.5">
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-500" />
             <input
-              className="h-7 w-48 rounded bg-zinc-800/50 border border-zinc-700/50 pl-7 pr-2 text-xs text-zinc-200 outline-none focus:border-zinc-500 placeholder-zinc-500"
+              className="h-7 w-48 rounded bg-zinc-800/50 border border-zinc-600/50 pl-7 pr-2 text-xs text-zinc-200 outline-none focus:border-blue-500/60 placeholder-zinc-500"
               placeholder="Filter tickets..."
               value={filter}
               onChange={e => setFilter(e.target.value)}

@@ -166,7 +166,7 @@ export default function ProjectSidebar({ groupId }: { groupId: string }): React.
       {/* Workspaces */}
       <div className="flex items-center justify-between px-3 py-1.5">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Workspaces</span>
-        <Button variant="ghost" size="icon" className="h-5 w-5 text-zinc-500 hover:text-zinc-300"
+        <Button variant="ghost" size="icon" className="h-5 w-5 text-zinc-400 hover:text-zinc-200"
           onClick={handleCreateWorkspace} title="New Workspace">
           <Plus className="w-3 h-3" />
         </Button>
