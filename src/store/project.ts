@@ -7,6 +7,7 @@ export interface SerializedTab {
   title: string
   filePath?: string
   url?: string
+  content?: string
   initialCommand?: string
   terminalHistory?: string
 }
@@ -31,6 +32,7 @@ export interface ConductorProject {
   name: string
   activeWorkspace: string
   workspaces: Record<string, Workspace>
+  workspaceOrder?: string[]
   sidebar: {
     rootPath: string | null
     expandedPaths: string[]
@@ -43,13 +45,19 @@ interface ProjectState {
   name: string | null
   activeWorkspace: string | null
   workspaceNames: string[]
-  isDirty: boolean
+  dirtyWorkspaces: Set<string>
   recentProjects: Array<{ name: string; path: string }>
+
   setProject: (filePath: string, name: string) => void
   clearProject: () => void
   setActiveWorkspace: (name: string) => void
   setWorkspaceNames: (names: string[]) => void
-  setDirty: (dirty: boolean) => void
+  markWorkspaceDirty: (name?: string) => void
+  clearWorkspaceDirty: (name?: string) => void
+  isWorkspaceDirty: (name?: string) => boolean
+  isAnyDirty: () => boolean
+  reorderWorkspace: (fromIndex: number, toIndex: number) => void
+  renameWorkspaceInStore: (oldName: string, newName: string) => void
   addRecentProject: (name: string, path: string) => void
   loadRecentProjects: () => Promise<void>
   saveRecentProjects: () => Promise<void>
@@ -60,21 +68,74 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   name: null,
   activeWorkspace: null,
   workspaceNames: [],
-  isDirty: false,
+  dirtyWorkspaces: new Set<string>(),
   recentProjects: [],
 
   setProject: (filePath, name) => {
-    set({ filePath, name, isDirty: false })
+    set({ filePath, name, dirtyWorkspaces: new Set() })
     get().addRecentProject(name, filePath)
   },
 
-  clearProject: () => set({ filePath: null, name: null, activeWorkspace: null, workspaceNames: [], isDirty: false }),
+  clearProject: () => set({
+    filePath: null, name: null, activeWorkspace: null,
+    workspaceNames: [], dirtyWorkspaces: new Set()
+  }),
 
   setActiveWorkspace: (name) => set({ activeWorkspace: name }),
 
   setWorkspaceNames: (names) => set({ workspaceNames: names }),
 
-  setDirty: (dirty) => set({ isDirty: dirty }),
+  markWorkspaceDirty: (name?) => {
+    const ws = name || get().activeWorkspace
+    if (!ws) return
+    set(state => {
+      const next = new Set(state.dirtyWorkspaces)
+      next.add(ws)
+      return { dirtyWorkspaces: next }
+    })
+  },
+
+  clearWorkspaceDirty: (name?) => {
+    const ws = name || get().activeWorkspace
+    if (!ws) return
+    set(state => {
+      const next = new Set(state.dirtyWorkspaces)
+      next.delete(ws)
+      return { dirtyWorkspaces: next }
+    })
+  },
+
+  isWorkspaceDirty: (name?) => {
+    const ws = name || get().activeWorkspace
+    if (!ws) return false
+    return get().dirtyWorkspaces.has(ws)
+  },
+
+  isAnyDirty: () => {
+    return get().dirtyWorkspaces.size > 0
+  },
+
+  reorderWorkspace: (fromIndex, toIndex) => {
+    set(state => {
+      const names = [...state.workspaceNames]
+      const [moved] = names.splice(fromIndex, 1)
+      names.splice(toIndex, 0, moved)
+      return { workspaceNames: names }
+    })
+  },
+
+  renameWorkspaceInStore: (oldName, newName) => {
+    set(state => {
+      const names = state.workspaceNames.map(n => n === oldName ? newName : n)
+      const activeWorkspace = state.activeWorkspace === oldName ? newName : state.activeWorkspace
+      const dirtyWorkspaces = new Set(state.dirtyWorkspaces)
+      if (dirtyWorkspaces.has(oldName)) {
+        dirtyWorkspaces.delete(oldName)
+        dirtyWorkspaces.add(newName)
+      }
+      return { workspaceNames: names, activeWorkspace, dirtyWorkspaces }
+    })
+  },
 
   addRecentProject: (name, path) => {
     set(state => {

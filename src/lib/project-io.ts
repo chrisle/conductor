@@ -2,6 +2,7 @@ import { useLayoutStore } from '@/store/layout'
 import { useTabsStore } from '@/store/tabs'
 import { useSidebarStore } from '@/store/sidebar'
 import { useActivityBarStore } from '@/store/activityBar'
+import { killTerminal } from '@/lib/terminal-api'
 import {
   useProjectStore,
   type ConductorProject,
@@ -41,6 +42,7 @@ export function serializeWorkspace(): Workspace {
           title: tab.title,
           filePath: tab.filePath,
           url: tab.url,
+          content: tab.content,
           initialCommand: tab.initialCommand
         }
         if ((tab.type === 'terminal' || tab.type === 'claude') && terminalBuffers.has(tab.id)) {
@@ -70,14 +72,6 @@ export function serializeProject(): ConductorProject {
   let workspaces: Record<string, Workspace> = {}
   const activeWs = project.activeWorkspace || 'default'
 
-  // Try to load existing project to preserve other workspaces
-  if (project.filePath) {
-    try {
-      // We'll merge the current workspace into the existing file on save
-      // For now, just use what we have in memory
-    } catch {}
-  }
-
   // Build workspaces from existing names
   for (const name of project.workspaceNames) {
     if (name !== activeWs) {
@@ -91,9 +85,10 @@ export function serializeProject(): ConductorProject {
 
   return {
     version: 2,
-    name: project.name || 'Untitled',
+    name: project.name || 'Untitled Project',
     activeWorkspace: activeWs,
     workspaces,
+    workspaceOrder: project.workspaceNames,
     sidebar: {
       rootPath: sidebar.rootPath,
       expandedPaths: Array.from(sidebar.expandedPaths)
@@ -111,7 +106,7 @@ function restoreWorkspace(workspace: Workspace): void {
   for (const groupId of Object.keys(tabsStore.groups)) {
     for (const tab of tabsStore.groups[groupId].tabs) {
       if (tab.type === 'terminal' || tab.type === 'claude') {
-        window.electronAPI.killTerminal(tab.id)
+        killTerminal(tab.id)
       }
     }
     tabsStore.removeGroup(groupId)
@@ -130,6 +125,7 @@ function restoreWorkspace(workspace: Workspace): void {
         title: tab.title,
         filePath: tab.filePath,
         url: tab.url,
+        content: tab.content,
         initialCommand: tab.initialCommand,
         _terminalHistory: tab.terminalHistory
       } as any))
@@ -145,7 +141,7 @@ function restoreWorkspace(workspace: Workspace): void {
 }
 
 /** Restore a full project */
-export function restoreProject(project: ConductorProject): void {
+export function restoreProject(project: ConductorProject, projectDir?: string): void {
   const sidebarStore = useSidebarStore.getState()
   const activityBarStore = useActivityBarStore.getState()
 
@@ -156,9 +152,11 @@ export function restoreProject(project: ConductorProject): void {
     restoreWorkspace(workspace)
   }
 
-  // Restore sidebar
+  // Restore sidebar — rootPath is set by caller via projectDir param
   if (project.sidebar?.rootPath) {
     sidebarStore.setRootPath(project.sidebar.rootPath)
+  } else if (projectDir) {
+    sidebarStore.setRootPath(projectDir)
   }
   if (project.sidebar?.expandedPaths) {
     useSidebarStore.setState({
@@ -171,9 +169,10 @@ export function restoreProject(project: ConductorProject): void {
     activityBarStore.setActiveExtension(project.activeExtensionId)
   }
 
-  // Update project store with workspace info
+  // Use persisted order if available, fall back to object keys
+  const workspaceNames = project.workspaceOrder || Object.keys(project.workspaces)
   useProjectStore.getState().setActiveWorkspace(wsName)
-  useProjectStore.getState().setWorkspaceNames(Object.keys(project.workspaces))
+  useProjectStore.getState().setWorkspaceNames(workspaceNames)
 }
 
 /** Save the current project to the given file path */
@@ -201,9 +200,10 @@ export async function saveProject(filePath: string): Promise<void> {
 
   const data: ConductorProject = {
     version: 2,
-    name: project.name || 'Untitled',
+    name: project.name || 'Untitled Project',
     activeWorkspace: activeWs,
     workspaces,
+    workspaceOrder: project.workspaceNames,
     sidebar: {
       rootPath: sidebar.rootPath,
       expandedPaths: Array.from(sidebar.expandedPaths)
@@ -212,8 +212,9 @@ export async function saveProject(filePath: string): Promise<void> {
   }
 
   await window.electronAPI.writeFile(filePath, JSON.stringify(data, null, 2))
-  useProjectStore.getState().setDirty(false)
-  useProjectStore.getState().setWorkspaceNames(Object.keys(workspaces))
+  // Clear dirty for all workspaces on save
+  useProjectStore.setState({ dirtyWorkspaces: new Set() })
+  useProjectStore.getState().setWorkspaceNames(project.workspaceNames)
 }
 
 /** Save with file picker dialog */
@@ -221,7 +222,7 @@ export async function saveProjectAs(): Promise<string | null> {
   const path = await window.electronAPI.saveProjectDialog()
   if (!path) return null
   await saveProject(path)
-  const name = path.split('/').pop()?.replace('.conductor', '') || 'Untitled'
+  const name = path.split('/').pop()?.replace('.conductor', '') || 'Untitled Project'
   useProjectStore.getState().setProject(path, name)
   return path
 }
@@ -237,6 +238,8 @@ export async function openProjectDialog(): Promise<boolean> {
 export async function openProject(filePath: string): Promise<boolean> {
   const result = await window.electronAPI.readFile(filePath)
   if (!result.success || !result.content) return false
+
+  const projectDir = filePath.replace(/\/[^/]+$/, '')
 
   try {
     const raw = JSON.parse(result.content)
@@ -257,8 +260,8 @@ export async function openProject(filePath: string): Promise<boolean> {
         sidebar: raw.sidebar,
         activeExtensionId: raw.activeExtensionId
       }
-      restoreProject(project)
-      const name = filePath.split('/').pop()?.replace('.conductor', '') || 'Untitled'
+      restoreProject(project, projectDir)
+      const name = filePath.split('/').pop()?.replace('.conductor', '') || 'Untitled Project'
       useProjectStore.getState().setProject(filePath, name)
       return true
     }
@@ -270,8 +273,8 @@ export async function openProject(filePath: string): Promise<boolean> {
       return false
     }
 
-    restoreProject(project)
-    const name = filePath.split('/').pop()?.replace('.conductor', '') || 'Untitled'
+    restoreProject(project, projectDir)
+    const name = filePath.split('/').pop()?.replace('.conductor', '') || 'Untitled Project'
     useProjectStore.getState().setProject(filePath, name)
     return true
   } catch (err) {
@@ -283,61 +286,163 @@ export async function openProject(filePath: string): Promise<boolean> {
 /** Switch to a different workspace within the current project */
 export async function switchWorkspace(workspaceName: string): Promise<boolean> {
   const project = useProjectStore.getState()
-  if (!project.filePath) return false
 
-  // Save current workspace first
-  await saveProject(project.filePath)
-
-  // Load the project file to get the target workspace
-  const result = await window.electronAPI.readFile(project.filePath)
-  if (!result.success || !result.content) return false
-
-  try {
-    const data: ConductorProject = JSON.parse(result.content)
-    const workspace = data.workspaces[workspaceName]
-    if (!workspace) return false
-
-    restoreWorkspace(workspace)
-    useProjectStore.getState().setActiveWorkspace(workspaceName)
-    useProjectStore.getState().setDirty(false)
-    return true
-  } catch {
-    return false
+  // If project is saved to disk, save current workspace first
+  if (project.filePath) {
+    await saveProject(project.filePath)
   }
+
+  // For unsaved projects, just store current workspace in memory
+  // (we lose it on switch — this is expected for unsaved projects)
+
+  if (project.filePath) {
+    // Load the project file to get the target workspace
+    const result = await window.electronAPI.readFile(project.filePath)
+    if (!result.success || !result.content) return false
+
+    try {
+      const data: ConductorProject = JSON.parse(result.content)
+      const workspace = data.workspaces[workspaceName]
+      if (!workspace) return false
+
+      restoreWorkspace(workspace)
+    } catch {
+      return false
+    }
+  } else {
+    // For unsaved projects, create a fresh empty workspace
+    const tabsStore = useTabsStore.getState()
+    const layoutStore = useLayoutStore.getState()
+
+    // Clear current state
+    for (const groupId of Object.keys(tabsStore.groups)) {
+      for (const tab of tabsStore.groups[groupId].tabs) {
+        if (tab.type === 'terminal' || tab.type === 'claude') {
+          killTerminal(tab.id)
+        }
+      }
+      tabsStore.removeGroup(groupId)
+    }
+
+    // Create fresh group
+    const groupId = tabsStore.createGroup()
+    layoutStore.setRoot({ type: 'leaf', groupId })
+    layoutStore.setFocusedGroup(groupId)
+  }
+
+  useProjectStore.getState().setActiveWorkspace(workspaceName)
+  useProjectStore.getState().clearWorkspaceDirty(workspaceName)
+  return true
 }
 
-/** Add a new workspace to the current project (saves current state as the new workspace) */
-export async function addWorkspace(workspaceName: string): Promise<boolean> {
+/** Generate a unique "Untitled Workspace" name */
+export function generateWorkspaceName(existingNames: string[]): string {
+  const base = 'Untitled Workspace'
+  if (!existingNames.includes(base)) return base
+  let i = 2
+  while (existingNames.includes(`${base} ${i}`)) i++
+  return `${base} ${i}`
+}
+
+/** Add a new empty workspace and switch to it */
+export async function addWorkspace(workspaceName?: string): Promise<boolean> {
   const project = useProjectStore.getState()
-  if (!project.filePath) return false
+  const name = workspaceName || generateWorkspaceName(project.workspaceNames)
 
-  // Save current workspace under the new name
-  const prevActive = project.activeWorkspace
-  useProjectStore.getState().setActiveWorkspace(workspaceName)
-  await saveProject(project.filePath)
+  if (project.workspaceNames.includes(name)) return false
 
-  // The workspace names are updated by saveProject
+  // If saved to disk, save current workspace first
+  if (project.filePath) {
+    await saveProject(project.filePath)
+  }
+
+  // Add the new workspace name
+  const newNames = [...project.workspaceNames, name]
+  useProjectStore.getState().setWorkspaceNames(newNames)
+
+  // Clear current tabs and create a fresh empty workspace
+  const tabsStore = useTabsStore.getState()
+  const layoutStore = useLayoutStore.getState()
+
+  for (const groupId of Object.keys(tabsStore.groups)) {
+    for (const tab of tabsStore.groups[groupId].tabs) {
+      if (tab.type === 'terminal' || tab.type === 'claude') {
+        killTerminal(tab.id)
+      }
+    }
+    tabsStore.removeGroup(groupId)
+  }
+
+  const groupId = tabsStore.createGroup()
+  layoutStore.setRoot({ type: 'leaf', groupId })
+  layoutStore.setFocusedGroup(groupId)
+
+  useProjectStore.getState().setActiveWorkspace(name)
+
+  // If saved to disk, save the new empty workspace
+  if (project.filePath) {
+    await saveProject(project.filePath)
+  }
+
   return true
 }
 
 /** Delete a workspace from the current project */
 export async function deleteWorkspace(workspaceName: string): Promise<boolean> {
   const project = useProjectStore.getState()
-  if (!project.filePath) return false
   if (project.activeWorkspace === workspaceName) return false // can't delete active
 
-  const result = await window.electronAPI.readFile(project.filePath)
-  if (!result.success || !result.content) return false
+  if (project.filePath) {
+    const result = await window.electronAPI.readFile(project.filePath)
+    if (!result.success || !result.content) return false
 
-  try {
-    const data: ConductorProject = JSON.parse(result.content)
-    delete data.workspaces[workspaceName]
-    await window.electronAPI.writeFile(project.filePath, JSON.stringify(data, null, 2))
-    useProjectStore.getState().setWorkspaceNames(Object.keys(data.workspaces))
-    return true
-  } catch {
-    return false
+    try {
+      const data: ConductorProject = JSON.parse(result.content)
+      delete data.workspaces[workspaceName]
+      data.workspaceOrder = (data.workspaceOrder || Object.keys(data.workspaces)).filter(n => n !== workspaceName)
+      await window.electronAPI.writeFile(project.filePath, JSON.stringify(data, null, 2))
+    } catch {
+      return false
+    }
   }
+
+  const newNames = project.workspaceNames.filter(n => n !== workspaceName)
+  useProjectStore.getState().setWorkspaceNames(newNames)
+  useProjectStore.getState().clearWorkspaceDirty(workspaceName)
+  return true
+}
+
+/** Rename a workspace */
+export async function renameWorkspace(oldName: string, newName: string): Promise<boolean> {
+  const project = useProjectStore.getState()
+  const trimmed = newName.trim()
+  if (!trimmed || trimmed === oldName) return false
+  if (project.workspaceNames.includes(trimmed)) return false
+
+  if (project.filePath) {
+    const result = await window.electronAPI.readFile(project.filePath)
+    if (!result.success || !result.content) return false
+
+    try {
+      const data: ConductorProject = JSON.parse(result.content)
+      if (data.workspaces[oldName]) {
+        data.workspaces[trimmed] = data.workspaces[oldName]
+        delete data.workspaces[oldName]
+      }
+      if (data.activeWorkspace === oldName) {
+        data.activeWorkspace = trimmed
+      }
+      if (data.workspaceOrder) {
+        data.workspaceOrder = data.workspaceOrder.map(n => n === oldName ? trimmed : n)
+      }
+      await window.electronAPI.writeFile(project.filePath, JSON.stringify(data, null, 2))
+    } catch {
+      return false
+    }
+  }
+
+  useProjectStore.getState().renameWorkspaceInStore(oldName, trimmed)
+  return true
 }
 
 /** Create a brand new project file and open it */
@@ -351,6 +456,7 @@ export async function createNewProject(projectName: string, directory: string): 
     workspaces: {
       default: serializeWorkspace()
     },
+    workspaceOrder: ['default'],
     sidebar: {
       rootPath: directory,
       expandedPaths: []
@@ -366,4 +472,17 @@ export async function createNewProject(projectName: string, directory: string): 
   useProjectStore.getState().setActiveWorkspace('default')
   useProjectStore.getState().setWorkspaceNames(['default'])
   return true
+}
+
+/** Initialize a default in-memory project if none is loaded */
+export function initializeDefaultProject(): void {
+  const project = useProjectStore.getState()
+  if (project.filePath || project.name) return // already loaded
+
+  const wsName = 'Untitled Workspace'
+  useProjectStore.setState({
+    name: 'Untitled Project',
+    activeWorkspace: wsName,
+    workspaceNames: [wsName]
+  })
 }
