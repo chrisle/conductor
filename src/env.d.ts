@@ -38,6 +38,28 @@ interface ElectronAPI {
   onTerminalExit: (callback: (event: IpcRendererEvent, id: string) => void) => void
   offTerminalExit: (callback: (event: IpcRendererEvent, id: string) => void) => void
 
+  // Git
+  worktreeList: (repoPath: string) => Promise<Array<{ path: string; branch: string; bare: boolean; head: string }>>
+  worktreeAdd: (repoPath: string, branchName: string, basePath?: string) => Promise<{ success: boolean; path?: string; error?: string }>
+
+  // Claude
+  getCwd: () => Promise<string>
+  listClaudeSessions: (projectPath: string) => Promise<Array<{ id: string; mtime: number; summary: string }>>
+
+  // Projects
+  selectDirectory: () => Promise<string | null>
+  saveProjectDialog: () => Promise<string | null>
+  openProjectDialog: () => Promise<string | null>
+  loadRecentProjects: () => Promise<Array<{ name: string; path: string }>>
+  saveRecentProjects: (projects: Array<{ name: string; path: string }>) => Promise<void>
+
+  // Extensions
+  getExtensionsDir: () => Promise<string>
+  listExtensions: () => Promise<Array<{ id: string; name: string; version: string; description?: string }>>
+  installExtension: (zipPath: string) => Promise<{ success: boolean; extensionId?: string; error?: string }>
+  uninstallExtension: (extensionId: string) => Promise<{ success: boolean; error?: string }>
+  selectExtensionZip: () => Promise<string | null>
+
   // Platform
   platform: string
 }

@@ -1,19 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { X, Plus, Terminal, Globe, FileText, BookOpen, FileSpreadsheet } from 'lucide-react'
-import ClaudeIcon from '../ui/ClaudeIcon'
+import { X, Plus, FileText, FolderOpen, FilePlus2, Folder } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useTabsStore, type Tab } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useSidebarStore } from '@/store/sidebar'
-import TextTab from '../tabs/TextTab'
-import BrowserTab from '../tabs/BrowserTab'
-import TerminalTab from '../tabs/TerminalTab'
-import ClaudeTab from '../tabs/ClaudeTab'
-import MarkdownTab from '../tabs/MarkdownTab'
-import WordTab from '../tabs/WordTab'
-import ExcelTab from '../tabs/ExcelTab'
+import { extensionRegistry } from '@/extensions'
+import { openProjectDialog, createNewProject } from '@/lib/project-io'
 
 interface TabGroupProps {
   groupId: string
@@ -24,14 +20,122 @@ type DropZone = 'left' | 'right' | 'top' | 'bottom' | 'center' | null
 const DRAGGING_TAB_KEY = '__dragging_tab__'
 const DRAGGING_GROUP_KEY = '__dragging_group__'
 
-function TabIcon({ type }: { type: Tab['type'] }) {
-  if (type === 'terminal') return <Terminal className="w-3 h-3" />
-  if (type === 'browser') return <Globe className="w-3 h-3" />
-  if (type === 'claude') return <ClaudeIcon className="w-5 h-5 text-[#D97757] -mr-1" />
-  if (type === 'markdown') return <BookOpen className="w-3 h-3" />
-  if (type === 'word') return <FileText className="w-3 h-3 text-blue-400" />
-  if (type === 'excel') return <FileSpreadsheet className="w-3 h-3 text-green-400" />
-  return <FileText className="w-3 h-3" />
+function EmptyState({ onContextMenu }: { onContextMenu: (e: React.MouseEvent) => void }) {
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [projectName, setProjectName] = useState('')
+  const [directory, setDirectory] = useState('')
+  const [error, setError] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  function openDialog() {
+    setProjectName('')
+    setDirectory('')
+    setError('')
+    setDialogOpen(true)
+    setTimeout(() => inputRef.current?.focus(), 50)
+  }
+
+  async function handleBrowse() {
+    const dir = await window.electronAPI.selectDirectory()
+    if (dir) setDirectory(dir)
+  }
+
+  async function handleCreate() {
+    const trimmed = projectName.trim()
+    if (!trimmed) { setError('Name is required'); return }
+    if (/[/\\:*?"<>|]/.test(trimmed)) { setError('Invalid characters in name'); return }
+    if (!directory) { setError('Select a directory'); return }
+
+    const success = await createNewProject(trimmed, directory)
+    if (!success) { setError('Failed to create project'); return }
+    setDialogOpen(false)
+  }
+
+  const friendly = (p: string) => p.replace(/^\/Users\/[^/]+/, '~')
+
+  return (
+    <>
+      <div
+        className="flex flex-col items-center justify-center h-full gap-6"
+        onContextMenu={onContextMenu}
+      >
+        <div className="text-2xl font-light text-zinc-400 tracking-wide">Conductor</div>
+        <div className="flex gap-4">
+          <button
+            onClick={() => openProjectDialog()}
+            className="flex flex-col items-center gap-3 w-40 py-6 rounded-lg border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800/50 hover:border-zinc-700 transition-colors group"
+          >
+            <FolderOpen className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+            <span className="text-xs text-zinc-500 group-hover:text-zinc-300 transition-colors">Open Project</span>
+          </button>
+          <button
+            onClick={openDialog}
+            className="flex flex-col items-center gap-3 w-40 py-6 rounded-lg border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800/50 hover:border-zinc-700 transition-colors group"
+          >
+            <FilePlus2 className="w-8 h-8 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+            <span className="text-xs text-zinc-500 group-hover:text-zinc-300 transition-colors">New Project</span>
+          </button>
+        </div>
+        <div className="flex flex-col gap-1.5 text-xs text-zinc-600 mt-2">
+          <div className="flex items-center gap-2">
+            <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-500 font-mono text-[10px]">⌘T</kbd>
+            <span>New terminal</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-500 font-mono text-[10px]">⌘W</kbd>
+            <span>Close tab</span>
+          </div>
+        </div>
+      </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="bg-zinc-900 border-zinc-700 max-w-sm" hideClose>
+          <VisuallyHidden><DialogTitle>New Project</DialogTitle></VisuallyHidden>
+          <div className="space-y-4">
+            <div className="text-sm text-zinc-300 font-medium">New Project</div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] text-zinc-500 uppercase tracking-wider">Name</label>
+              <input ref={inputRef}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-500 placeholder-zinc-500"
+                placeholder="my-project" value={projectName}
+                onChange={e => { setProjectName(e.target.value); setError('') }}
+                onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setDialogOpen(false) }}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] text-zinc-500 uppercase tracking-wider">Directory</label>
+              <div className="flex gap-2">
+                <div className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-400 truncate min-w-0">
+                  {directory ? friendly(directory) : 'Select a directory...'}
+                </div>
+                <Button variant="ghost" className="shrink-0 text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-700" onClick={handleBrowse}>
+                  <Folder className="w-3.5 h-3.5 mr-1.5" />
+                  Browse
+                </Button>
+              </div>
+            </div>
+            {error && <div className="text-xs text-red-400">{error}</div>}
+            {projectName.trim() && directory && (
+              <div className="text-[11px] text-zinc-500">
+                Creates <span className="text-zinc-300">{friendly(directory)}/{projectName.trim()}.conductor</span>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" className="text-xs text-zinc-400 hover:text-zinc-200" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button className="text-xs bg-zinc-700 hover:bg-zinc-600 text-zinc-200" onClick={handleCreate}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+function TabIcon({ type }: { type: string }) {
+  const Icon = extensionRegistry.getTabIcon(type)
+  if (!Icon) return <FileText className="w-3 h-3" />
+  const iconClassName = extensionRegistry.getTabIconClassName(type) || 'w-3 h-3'
+  return <Icon className={iconClassName} />
 }
 
 export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement {
@@ -59,7 +163,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     return () => el.removeEventListener('mousemove', onMove)
   }, [])
 
-  // Cmd+T opens menu at cursor
+  // Cmd+T opens terminal
   useEffect(() => {
     if (!isFocused) return
     function onKeyDown(e: KeyboardEvent) {
@@ -101,13 +205,11 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     if (!tabId) return
 
     if (sourceGroupId === groupId) {
-      // Reorder within group
       const sourceIndex = group.tabs.findIndex(t => t.id === tabId)
       if (sourceIndex !== -1 && sourceIndex !== targetIndex) {
         useTabsStore.getState().reorderTab(groupId, sourceIndex, targetIndex)
       }
     } else {
-      // Move from another group
       moveTab(sourceGroupId, tabId, groupId, targetIndex)
     }
   }
@@ -156,17 +258,11 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
       return
     }
 
-    // Create new group for split
     const newGroupId = useTabsStore.getState().createGroup()
     const direction = (zone === 'left' || zone === 'right') ? 'horizontal' : 'vertical'
-
-    // Split this group
     splitGroup(groupId, direction, newGroupId)
-
-    // Move tab to new group
     moveTab(sourceGroupId, tabId, newGroupId)
 
-    // Cleanup source group if empty
     setTimeout(() => {
       const src = useTabsStore.getState().groups[sourceGroupId]
       if (src && src.tabs.length === 0 && sourceGroupId !== groupId) {
@@ -174,35 +270,6 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
         useTabsStore.getState().removeGroup(sourceGroupId)
       }
     }, 0)
-  }
-
-  function openTerminal() {
-    const cwd = rootPath || undefined
-    addTab(groupId, { type: 'terminal', title: 'Terminal', filePath: cwd })
-    setNewTabMenuOpen(false)
-  }
-
-  function openBrowser() {
-    addTab(groupId, { type: 'browser', title: 'Browser', url: 'https://google.com' })
-    setNewTabMenuOpen(false)
-  }
-
-  function openClaude() {
-    addTab(groupId, { type: 'claude', title: 'Claude', filePath: rootPath || undefined })
-    setNewTabMenuOpen(false)
-    setCursorMenuOpen(false)
-  }
-
-  function openClaudeContinue() {
-    addTab(groupId, { type: 'claude', title: 'Claude', filePath: rootPath || undefined, initialCommand: "claude --continue\n" })
-    setNewTabMenuOpen(false)
-    setCursorMenuOpen(false)
-  }
-
-  function openClaudeResume() {
-    addTab(groupId, { type: 'claude', title: 'Claude', filePath: rootPath || undefined, initialCommand: "claude --resume\n" })
-    setNewTabMenuOpen(false)
-    setCursorMenuOpen(false)
   }
 
   useEffect(() => {
@@ -219,7 +286,6 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
 
   function closeTab(tabId: string) {
     const tab = group.tabs.find(t => t.id === tabId)
-    // Kill terminal PTY when tab is actually closed
     if (tab && (tab.type === 'terminal' || tab.type === 'claude')) {
       window.electronAPI.killTerminal(tabId)
     }
@@ -243,6 +309,25 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
 
   function handleContentClick() {
     setFocusedGroup(groupId)
+  }
+
+  // Get menu items from plugin registry
+  const menuItems = extensionRegistry.getNewTabMenuItems()
+
+  function renderMenuItems(onDone: () => void) {
+    return menuItems.map((item, i) => (
+      <React.Fragment key={i}>
+        {item.separator === 'before' && <DropdownMenuSeparator />}
+        <DropdownMenuItem
+          onClick={() => { item.action(groupId); onDone() }}
+          className="gap-2 text-xs cursor-pointer"
+        >
+          <item.icon className={item.iconClassName || "w-3.5 h-3.5 shrink-0"} />
+          <span>{item.label}</span>
+        </DropdownMenuItem>
+        {item.separator === 'after' && <DropdownMenuSeparator />}
+      </React.Fragment>
+    ))
   }
 
   return (
@@ -311,32 +396,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-44 bg-zinc-900 border-zinc-700">
-              <DropdownMenuItem onClick={openTerminal} className="gap-2 text-xs cursor-pointer">
-                <Terminal className="w-3.5 h-3.5 text-green-400 shrink-0" />
-                <span>Terminal</span>
-                {rootPath && (
-                  <span className="ml-auto text-zinc-600 truncate max-w-[60px]">
-                    {rootPath.split('/').pop()}
-                  </span>
-                )}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={openBrowser} className="gap-2 text-xs cursor-pointer">
-                <Globe className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                <span>Browser</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={openClaude} className="gap-2 text-xs cursor-pointer">
-                <ClaudeIcon className="w-5 h-5 text-[#D97757] shrink-0" />
-                <span>Claude</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={openClaudeContinue} className="gap-2 text-xs cursor-pointer">
-                <ClaudeIcon className="w-5 h-5 text-[#D97757] shrink-0" />
-                <span>Claude (continue)</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={openClaudeResume} className="gap-2 text-xs cursor-pointer">
-                <ClaudeIcon className="w-5 h-5 text-[#D97757] shrink-0" />
-                <span>Claude (resume)</span>
-              </DropdownMenuItem>
+              {renderMenuItems(() => setNewTabMenuOpen(false))}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -346,89 +406,37 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
       {/* Tab content */}
       <div
         ref={contentRef}
-        className="flex-1 relative overflow-hidden bg-zinc-950"
+        className="flex-1 min-h-0 min-w-0 relative overflow-hidden bg-zinc-950"
         onDragOver={handleContentDragOver}
         onDragLeave={handleContentDragLeave}
         onDrop={handleContentDrop}
       >
         {group.tabs.length === 0 ? (
-          <div
-            className="flex flex-col items-center justify-center h-full gap-3 text-zinc-600"
+          <EmptyState
             onContextMenu={(e) => {
               e.preventDefault()
               setCursorPos({ x: e.clientX, y: e.clientY })
               setCursorMenuOpen(true)
             }}
-          >
-            <div className="text-4xl">+</div>
-            <p className="text-sm">Drag a tab here or open a file</p>
-          </div>
+          />
         ) : (
-          group.tabs.map(tab => (
-            <div
-              key={tab.id}
-              className={cn('absolute inset-0', tab.id !== group.activeTabId && 'hidden')}
-            >
-              {tab.type === 'text' && (
-                <TextTab
-                  tabId={tab.id}
-                  groupId={groupId}
-                  filePath={tab.filePath}
-                  isActive={tab.id === group.activeTabId}
-                />
-              )}
-              {tab.type === 'browser' && (
-                <BrowserTab
-                  tabId={tab.id}
-                  groupId={groupId}
-                  initialUrl={tab.url}
-                  isActive={tab.id === group.activeTabId}
-                />
-              )}
-              {tab.type === 'terminal' && (
-                <TerminalTab
+          group.tabs.map(tab => {
+            const Component = extensionRegistry.getTabComponent(tab.type)
+            if (!Component) return null
+            return (
+              <div
+                key={tab.id}
+                className={cn('absolute inset-0', tab.id !== group.activeTabId && 'hidden')}
+              >
+                <Component
                   tabId={tab.id}
                   groupId={groupId}
                   isActive={tab.id === group.activeTabId}
-                  cwd={tab.filePath}
-                  initialCommand={tab.initialCommand}
+                  tab={tab}
                 />
-              )}
-              {tab.type === 'claude' && (
-                <ClaudeTab
-                  tabId={tab.id}
-                  groupId={groupId}
-                  isActive={tab.id === group.activeTabId}
-                  cwd={tab.filePath}
-                  initialCommand={tab.initialCommand}
-                />
-              )}
-              {tab.type === 'markdown' && (
-                <MarkdownTab
-                  tabId={tab.id}
-                  groupId={groupId}
-                  filePath={tab.filePath}
-                  isActive={tab.id === group.activeTabId}
-                />
-              )}
-              {tab.type === 'word' && (
-                <WordTab
-                  tabId={tab.id}
-                  groupId={groupId}
-                  filePath={tab.filePath}
-                  isActive={tab.id === group.activeTabId}
-                />
-              )}
-              {tab.type === 'excel' && (
-                <ExcelTab
-                  tabId={tab.id}
-                  groupId={groupId}
-                  filePath={tab.filePath}
-                  isActive={tab.id === group.activeTabId}
-                />
-              )}
-            </div>
-          ))
+              </div>
+            )
+          })
         )}
 
         {/* Drop zone overlay */}
@@ -449,39 +457,14 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
           <div className="absolute inset-0 pointer-events-none z-10 bg-blue-500/10 border-2 border-blue-500" />
         )}
 
-        {/* Cmd+T cursor menu */}
+        {/* Context menu */}
         {cursorMenuOpen && (
           <DropdownMenu open onOpenChange={setCursorMenuOpen}>
             <DropdownMenuTrigger asChild>
               <div className="fixed" style={{ top: cursorPos.y, left: cursorPos.x, width: 1, height: 1 }} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-44 bg-zinc-900 border-zinc-700">
-              <DropdownMenuItem onClick={openTerminal} className="gap-2 text-xs cursor-pointer">
-                <Terminal className="w-3.5 h-3.5 text-green-400 shrink-0" />
-                <span>Terminal</span>
-                {rootPath && (
-                  <span className="ml-auto text-zinc-600 truncate max-w-[60px]">
-                    {rootPath.split('/').pop()}
-                  </span>
-                )}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={openBrowser} className="gap-2 text-xs cursor-pointer">
-                <Globe className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                <span>Browser</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={openClaude} className="gap-2 text-xs cursor-pointer">
-                <ClaudeIcon className="w-5 h-5 text-[#D97757] shrink-0" />
-                <span>Claude</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={openClaudeContinue} className="gap-2 text-xs cursor-pointer">
-                <ClaudeIcon className="w-5 h-5 text-[#D97757] shrink-0" />
-                <span>Claude (continue)</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={openClaudeResume} className="gap-2 text-xs cursor-pointer">
-                <ClaudeIcon className="w-5 h-5 text-[#D97757] shrink-0" />
-                <span>Claude (resume)</span>
-              </DropdownMenuItem>
+              {renderMenuItems(() => setCursorMenuOpen(false))}
             </DropdownMenuContent>
           </DropdownMenu>
         )}

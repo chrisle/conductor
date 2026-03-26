@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Star, Folder, X } from 'lucide-react'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import {
   Command,
   CommandInput,
@@ -81,6 +82,7 @@ export default function GoToDialog({ open, onOpenChange }: GoToDialogProps): Rea
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="overflow-hidden p-0 bg-zinc-900 border-zinc-700 max-w-lg" hideClose>
+        <VisuallyHidden><DialogTitle>Go to folder</DialogTitle></VisuallyHidden>
         <Command className="rounded-lg bg-zinc-900" shouldFilter={false}>
           <CommandInput
             placeholder={rootPath ? `Search from ${friendly(rootPath)}...` : 'Type a path...'}

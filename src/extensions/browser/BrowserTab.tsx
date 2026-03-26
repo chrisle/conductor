@@ -1,13 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react'
 import { ArrowLeft, ArrowRight, RotateCw, X, Globe } from 'lucide-react'
 import { useTabsStore } from '@/store/tabs'
-
-interface BrowserTabProps {
-  tabId: string
-  groupId: string
-  initialUrl?: string
-  isActive: boolean
-}
+import type { TabProps } from '@/extensions/types'
 
 // Injected CSS to add claude code bridge
 const INJECT_CSS = `
@@ -53,7 +47,8 @@ type WebviewElement = HTMLElement & {
   executeJavaScript: (js: string) => Promise<unknown>
 }
 
-export default function BrowserTab({ tabId, groupId, initialUrl, isActive }: BrowserTabProps): React.ReactElement {
+export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
+  const initialUrl = tab.url
   const [url, setUrl] = useState(initialUrl || '')
   const [inputUrl, setInputUrl] = useState(initialUrl || '')
   const [isLoading, setIsLoading] = useState(false)

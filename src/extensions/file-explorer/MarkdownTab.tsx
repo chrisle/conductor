@@ -1,15 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import type { TabProps } from '@/extensions/types'
 
-interface MarkdownTabProps {
-  tabId: string
-  groupId: string
-  filePath?: string
-  isActive: boolean
-}
-
-export default function MarkdownTab({ tabId, groupId, filePath, isActive }: MarkdownTabProps): React.ReactElement {
+export default function MarkdownTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
+  const filePath = tab.filePath
   const [content, setContent] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

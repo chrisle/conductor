@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { nanoid } from '../lib/nanoid'
 
-export type TabType = 'text' | 'browser' | 'terminal' | 'claude' | 'markdown' | 'word' | 'excel'
+export type TabType = string
 
 export interface Tab {
   id: string
@@ -19,6 +19,8 @@ export interface TabGroup {
   id: string
   tabs: Tab[]
   activeTabId: string | null
+  /** The git worktree path this group is associated with */
+  worktree?: string
 }
 
 interface TabsState {
@@ -31,6 +33,7 @@ interface TabsState {
   moveTab: (fromGroupId: string, tabId: string, toGroupId: string, atIndex?: number) => void
   reorderTab: (groupId: string, fromIndex: number, toIndex: number) => void
   updateTab: (groupId: string, tabId: string, updates: Partial<Tab>) => void
+  setGroupWorktree: (groupId: string, worktree: string | undefined) => void
   getGroup: (groupId: string) => TabGroup | undefined
 }
 
@@ -186,6 +189,19 @@ export const useTabsStore = create<TabsState>((set, get) => ({
             ...group,
             tabs: group.tabs.map(t => t.id === tabId ? { ...t, ...updates } : t)
           }
+        }
+      }
+    })
+  },
+
+  setGroupWorktree: (groupId, worktree) => {
+    set(state => {
+      const group = state.groups[groupId]
+      if (!group) return state
+      return {
+        groups: {
+          ...state.groups,
+          [groupId]: { ...group, worktree }
         }
       }
     })

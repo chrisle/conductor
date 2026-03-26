@@ -1,13 +1,13 @@
 import React, { useEffect, useRef } from 'react'
 import { useLayoutStore } from '@/store/layout'
 import { useTabsStore } from '@/store/tabs'
-import { useSidebarStore } from '@/store/sidebar'
+import ActivityBar from '../ActivityBar'
 import Sidebar from '../Sidebar'
 import SplitPane from './SplitPane'
 
 export default function MainLayout(): React.ReactElement {
   const { root, setRoot, setFocusedGroup } = useLayoutStore()
-  const { createGroup, addTab } = useTabsStore()
+  const { createGroup } = useTabsStore()
   const initialized = useRef(false)
 
   useEffect(() => {
@@ -31,8 +31,9 @@ export default function MainLayout(): React.ReactElement {
 
   return (
     <div className="flex h-full w-full overflow-hidden">
+      <ActivityBar />
       <Sidebar defaultGroupId={getFirstGroupId(root)} />
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-w-0 overflow-hidden">
         <SplitPane node={root} />
       </div>
     </div>

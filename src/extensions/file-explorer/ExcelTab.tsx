@@ -1,12 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import * as XLSX from 'xlsx'
-
-interface ExcelTabProps {
-  tabId: string
-  groupId: string
-  filePath?: string
-  isActive: boolean
-}
+import type { TabProps } from '@/extensions/types'
 
 interface SheetData {
   name: string
@@ -14,7 +8,8 @@ interface SheetData {
   rows: string[][]
 }
 
-export default function ExcelTab({ tabId, groupId, filePath, isActive }: ExcelTabProps): React.ReactElement {
+export default function ExcelTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
+  const filePath = tab.filePath
   const [sheets, setSheets] = useState<SheetData[]>([])
   const [activeSheet, setActiveSheet] = useState(0)
   const [isLoading, setIsLoading] = useState(false)

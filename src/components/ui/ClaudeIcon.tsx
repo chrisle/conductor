@@ -4,7 +4,7 @@ import React from 'react'
 export default function ClaudeIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg">
-      <g transform="translate(12,12)">
+      <g transform="translate(12,12) scale(1.5)">
         {[0, 40, 80, 120, 160, 200, 240, 280, 320].map((angle, i) => (
           <ellipse
             key={i}

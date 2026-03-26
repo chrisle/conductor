@@ -1,13 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import Editor from '@monaco-editor/react'
 import { useTabsStore } from '@/store/tabs'
-
-interface TextTabProps {
-  tabId: string
-  groupId: string
-  filePath?: string
-  isActive: boolean
-}
+import type { TabProps } from '@/extensions/types'
 
 function getLanguage(filePath?: string): string {
   if (!filePath) return 'plaintext'
@@ -25,7 +19,8 @@ function getLanguage(filePath?: string): string {
   return map[ext] || 'plaintext'
 }
 
-export default function TextTab({ tabId, groupId, filePath, isActive }: TextTabProps): React.ReactElement {
+export default function TextTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
+  const filePath = tab.filePath
   const [content, setContent] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

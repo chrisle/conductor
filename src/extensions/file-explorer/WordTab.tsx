@@ -1,14 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import mammoth from 'mammoth'
+import type { TabProps } from '@/extensions/types'
 
-interface WordTabProps {
-  tabId: string
-  groupId: string
-  filePath?: string
-  isActive: boolean
-}
-
-export default function WordTab({ tabId, groupId, filePath, isActive }: WordTabProps): React.ReactElement {
+export default function WordTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
+  const filePath = tab.filePath
   const [html, setHtml] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

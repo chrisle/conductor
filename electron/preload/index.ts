@@ -37,6 +37,28 @@ const electronAPI = {
   offTerminalExit: (callback: (event: IpcRendererEvent, id: string) => void) =>
     ipcRenderer.removeListener('terminal:exit', callback),
 
+  // Git
+  worktreeList: (repoPath: string) => ipcRenderer.invoke('git:worktreeList', repoPath),
+  worktreeAdd: (repoPath: string, branchName: string, basePath?: string) => ipcRenderer.invoke('git:worktreeAdd', repoPath, branchName, basePath),
+
+  // Claude
+  getCwd: () => ipcRenderer.invoke('app:getCwd'),
+  listClaudeSessions: (projectPath: string) => ipcRenderer.invoke('claude:listSessions', projectPath),
+
+  // Projects
+  selectDirectory: () => ipcRenderer.invoke('project:selectDirectory'),
+  saveProjectDialog: () => ipcRenderer.invoke('project:saveDialog'),
+  openProjectDialog: () => ipcRenderer.invoke('project:openDialog'),
+  loadRecentProjects: () => ipcRenderer.invoke('project:loadRecent'),
+  saveRecentProjects: (projects: Array<{ name: string; path: string }>) => ipcRenderer.invoke('project:saveRecent', projects),
+
+  // Extensions
+  getExtensionsDir: () => ipcRenderer.invoke('extensions:getDir'),
+  listExtensions: () => ipcRenderer.invoke('extensions:list'),
+  installExtension: (zipPath: string) => ipcRenderer.invoke('extensions:install', zipPath),
+  uninstallExtension: (extensionId: string) => ipcRenderer.invoke('extensions:uninstall', extensionId),
+  selectExtensionZip: () => ipcRenderer.invoke('extensions:selectZip'),
+
   // Platform
   platform: process.platform
 }

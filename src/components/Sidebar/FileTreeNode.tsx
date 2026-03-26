@@ -15,8 +15,9 @@ import {
 } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
 import { useSidebarStore, type FileEntry } from '@/store/sidebar'
-import { useTabsStore, type TabType } from '@/store/tabs'
+import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
+import { extensionRegistry } from '@/extensions'
 
 interface FileTreeNodeProps {
   entry: FileEntry
@@ -135,18 +136,10 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
     }
   }
 
-  function getTabTypeForFile(filename: string): TabType {
-    const ext = filename.split('.').pop()?.toLowerCase() || ''
-    if (['md', 'mdx'].includes(ext)) return 'markdown'
-    if (['docx'].includes(ext)) return 'word'
-    if (['xlsx', 'xls'].includes(ext)) return 'excel'
-    return 'text'
-  }
-
   function openFile() {
     const targetGroupId = focusedGroupId || groupId
     addTab(targetGroupId, {
-      type: getTabTypeForFile(entry.name),
+      type: extensionRegistry.getTabTypeForFile(entry.name),
       title: entry.name,
       filePath: entry.path
     })

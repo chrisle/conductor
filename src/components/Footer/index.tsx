@@ -1,10 +1,10 @@
 import React from 'react'
-import { Terminal, Globe, FileText, Bot } from 'lucide-react'
+import { FileText } from 'lucide-react'
 import { Separator } from '@/components/ui/separator'
 import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useSidebarStore } from '@/store/sidebar'
-import ClaudeIcon from '@/components/ui/ClaudeIcon'
+import { extensionRegistry } from '@/extensions'
 
 function Item({ children }: { children: React.ReactNode }) {
   return (
@@ -24,10 +24,9 @@ export default function Footer(): React.ReactElement {
 
   const tabIcon = () => {
     if (!activeTab) return null
-    if (activeTab.type === 'terminal') return <Terminal className="w-3 h-3" />
-    if (activeTab.type === 'browser') return <Globe className="w-3 h-3" />
-    if (activeTab.type === 'claude') return <ClaudeIcon className="w-3 h-3 text-[#D97757]" />
-    return <FileText className="w-3 h-3" />
+    const Icon = extensionRegistry.getTabIcon(activeTab.type)
+    if (!Icon) return <FileText className="w-3 h-3" />
+    return <Icon className="w-3 h-3" />
   }
 
   const allGroups = Object.values(groups)
@@ -36,7 +35,11 @@ export default function Footer(): React.ReactElement {
 
   return (
     <div className="flex items-center h-6 bg-zinc-900 border-t border-zinc-800 shrink-0 text-[11px] select-none overflow-hidden">
-      <Item><span className="text-zinc-600">v0.1.0</span></Item>
+      <Item>
+        <span className="text-zinc-600 truncate max-w-[300px]">
+          {rootPath ? rootPath.replace(/^\/Users\/[^/]+/, '~') : '—'}
+        </span>
+      </Item>
       <Separator orientation="vertical" className="h-3 bg-zinc-800" />
       {activeTab && (
         <>

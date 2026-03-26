@@ -1,15 +1,18 @@
 import React, { useEffect, useState } from 'react'
-import { Minus, Square, X, Maximize2, GitBranch, Star } from 'lucide-react'
+import { Minus, Square, X, Maximize2, GitBranch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useSidebarStore } from '@/store/sidebar'
+import { useActivityBarStore } from '@/store/activityBar'
+import { useProjectStore } from '@/store/project'
 
 export default function TitleBar(): React.ReactElement {
   const [isMaximized, setIsMaximized] = useState(false)
   const [gitBranch, setGitBranch] = useState<string | null>(null)
-  const { isVisible, toggleVisibility, rootPath, favorites, setRootPath, removeFavorite } = useSidebarStore()
+  const { rootPath } = useSidebarStore()
+  const { activeExtensionId, toggleExtension } = useActivityBarStore()
+  const projectName = useProjectStore(s => s.name)
 
   useEffect(() => {
     window.electronAPI.isMaximized().then(setIsMaximized)
@@ -84,58 +87,22 @@ export default function TitleBar(): React.ReactElement {
         <div className="no-drag">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={toggleVisibility} className="h-8 w-8 rounded-none">
+              <Button variant="ghost" size="icon" onClick={() => toggleExtension('file-explorer')} className="h-8 w-8 rounded-none">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                   <rect x="1" y="1" width="4" height="14" rx="1" opacity="0.5" />
                   <rect x="7" y="1" width="8" height="14" rx="1" />
                 </svg>
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{isVisible ? 'Hide sidebar' : 'Show sidebar'}</TooltipContent>
+            <TooltipContent>{activeExtensionId ? 'Hide sidebar' : 'Show sidebar'}</TooltipContent>
           </Tooltip>
         </div>
 
-        {/* Dir + branch */}
+        {/* Title */}
         <div className="flex-1 flex items-center justify-center gap-2 overflow-hidden px-4">
-          {rootPath && (
-            <div className="no-drag">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="text-xs text-zinc-400 hover:text-zinc-200 truncate transition-colors cursor-pointer">
-                    {rootPath.replace(/^\/Users\/[^/]+/, '~')}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="center" className="w-64 bg-zinc-900 border-zinc-700">
-                  {favorites.length > 0 ? (
-                    <>
-                      {favorites.map(fav => (
-                        <DropdownMenuItem
-                          key={fav}
-                          className="gap-2 text-xs cursor-pointer justify-between group"
-                          onClick={() => setRootPath(fav)}
-                        >
-                          <div className="flex items-center gap-2 truncate">
-                            <Star className="w-3 h-3 text-yellow-500 shrink-0 fill-yellow-500" />
-                            <span className="truncate">{fav.replace(/^\/Users\/[^/]+/, '~')}</span>
-                          </div>
-                          <button
-                            className="text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100 shrink-0"
-                            onClick={(e) => { e.stopPropagation(); removeFavorite(fav) }}
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </DropdownMenuItem>
-                      ))}
-                    </>
-                  ) : (
-                    <div className="px-3 py-2 text-xs text-zinc-600">
-                      No favorites yet. Right-click a folder to add one.
-                    </div>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          )}
+          <span className="text-xs text-zinc-500 truncate">
+            Conductor v0.1.0{projectName ? ` — ${projectName}` : ''}
+          </span>
           {gitBranch && (
             <Badge variant="outline" className="h-4 px-1.5 gap-1 text-[10px] text-fuchsia-400 border-fuchsia-900 bg-fuchsia-950/30 shrink-0">
               <GitBranch className="w-2.5 h-2.5" />
