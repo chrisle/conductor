@@ -1,11 +1,9 @@
 import React from 'react'
 import { Terminal, Globe, FilePlus, FolderPlus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Separator } from '@/components/ui/separator'
 import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useSidebarStore } from '@/store/sidebar'
+import SidebarLayout from '@/components/Sidebar/SidebarLayout'
 import FileTree from '@/components/Sidebar/FileTree'
 
 interface FileExplorerSidebarProps {
@@ -33,53 +31,19 @@ export default function FileExplorerSidebar({ groupId }: FileExplorerSidebarProp
   }
 
   return (
-    <TooltipProvider delayDuration={400}>
-      <div className="flex flex-col h-full overflow-hidden min-w-0">
-        {/* Header toolbar */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-800 shrink-0">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Files</span>
-          <div className="flex items-center">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={triggerNewFile} className="h-6 w-6">
-                  <FilePlus className="w-3.5 h-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>New file</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={triggerNewFolder} className="h-6 w-6">
-                  <FolderPlus className="w-3.5 h-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>New folder</TooltipContent>
-            </Tooltip>
-            <Separator orientation="vertical" className="h-4 mx-1 bg-zinc-800" />
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={openNewTerminal} className="h-6 w-6">
-                  <Terminal className="w-3.5 h-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>New terminal</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={openNewBrowser} className="h-6 w-6">
-                  <Globe className="w-3.5 h-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>New browser</TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
-
-        {/* File tree */}
-        <div className="flex-1 overflow-hidden">
-          <FileTree groupId={groupId} />
-        </div>
+    <SidebarLayout
+      title="Files"
+      actions={[
+        { icon: FilePlus, label: 'New file', onClick: triggerNewFile },
+        { icon: FolderPlus, label: 'New folder', onClick: triggerNewFolder },
+        { icon: Terminal, label: 'New terminal', onClick: openNewTerminal },
+        { icon: Globe, label: 'New browser', onClick: openNewBrowser },
+      ]}
+      separatorAfter={1}
+    >
+      <div className="flex-1 overflow-hidden">
+        <FileTree groupId={groupId} />
       </div>
-    </TooltipProvider>
+    </SidebarLayout>
   )
 }

@@ -7,6 +7,8 @@ import { useSidebarStore } from '@/store/sidebar'
 export const terminalExtension: Extension = {
   id: 'terminal',
   name: 'Terminal',
+  description: 'Integrated terminal emulator',
+  version: '1.0.0',
   tabs: [
     {
       type: 'terminal',

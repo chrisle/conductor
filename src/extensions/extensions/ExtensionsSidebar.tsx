@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Download, Trash2, Package, RefreshCw, Puzzle } from 'lucide-react'
+import { Download, Trash2, Package, RefreshCw, Puzzle, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { extensionRegistry } from '@/extensions'
+import SidebarLayout from '@/components/Sidebar/SidebarLayout'
 
 interface InstalledExtension {
   id: string
@@ -82,133 +84,116 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
   )
 
   return (
-    <TooltipProvider delayDuration={400}>
-      <div className="flex flex-col h-full overflow-hidden min-w-0">
-        {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-800 shrink-0">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Extensions</span>
-          <div className="flex items-center gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={loadExtensions} className="h-6 w-6">
-                  <RefreshCw className="w-3.5 h-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Refresh</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={handleInstall} disabled={loading} className="h-6 w-6">
-                  <Download className="w-3.5 h-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Install from .zip</TooltipContent>
-            </Tooltip>
-          </div>
+    <SidebarLayout
+      title="Extensions"
+      actions={[
+        { icon: RefreshCw, label: 'Refresh', onClick: loadExtensions },
+        { icon: Download, label: 'Install from .zip', onClick: handleInstall, disabled: loading },
+      ]}
+      footer="Install extensions from .zip files built with the Conductor Extension SDK"
+    >
+      {/* Status message */}
+      {message && (
+        <div className={`px-3 py-2 text-xs border-b border-zinc-800 ${
+          message.type === 'success' ? 'text-green-400 bg-green-950/30' : 'text-red-400 bg-red-950/30'
+        }`}>
+          {message.text}
         </div>
+      )}
 
-        {/* Status message */}
-        {message && (
-          <div className={`px-3 py-2 text-xs border-b border-zinc-800 ${
-            message.type === 'success' ? 'text-green-400 bg-green-950/30' : 'text-red-400 bg-red-950/30'
-          }`}>
-            {message.text}
-          </div>
-        )}
-
-        <ScrollArea className="flex-1">
-          <div className="p-2">
-            {/* Installed external extensions */}
-            {externalExtensions.length > 0 && (
-              <>
-                <div className="px-1 py-1.5 text-[11px] text-zinc-500 uppercase tracking-wider font-medium">
-                  Installed
-                </div>
-                {externalExtensions.map(ext => (
-                  <div
-                    key={ext.id}
-                    className="flex items-start gap-2 px-2 py-2 rounded hover:bg-zinc-800/50 group transition-colors"
-                  >
-                    <Package className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-zinc-200 truncate">{ext.name}</span>
-                        <Badge variant="outline" className="h-4 px-1 text-[9px] border-zinc-700 text-zinc-500">
-                          v{ext.version}
-                        </Badge>
-                      </div>
-                      {ext.description && (
-                        <div className="text-[11px] text-zinc-500 truncate">{ext.description}</div>
-                      )}
-                      <div className="text-[11px] text-zinc-600 truncate">{ext.id}</div>
-                    </div>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleUninstall(ext.id)}
-                          disabled={loading}
-                          className="h-6 w-6 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 transition-all shrink-0"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Uninstall</TooltipContent>
-                    </Tooltip>
-                  </div>
-                ))}
-                <Separator className="my-2 bg-zinc-800" />
-              </>
-            )}
-
-            {/* Built-in extensions */}
-            <div className="px-1 py-1.5 text-[11px] text-zinc-500 uppercase tracking-wider font-medium">
-              Built-in
-            </div>
-            {builtinExtensions.map(ext => {
-              const Icon = ext.icon || Puzzle
-              const tabCount = ext.tabs?.length || 0
-              const hasSidebar = !!ext.sidebar
-              const description = [
-                tabCount > 0 && `${tabCount} tab${tabCount > 1 ? 's' : ''}`,
-                hasSidebar && 'sidebar'
-              ].filter(Boolean).join(', ')
-              return (
+      <ScrollArea className="flex-1">
+        <div className="p-2">
+          {/* Installed external extensions */}
+          {externalExtensions.length > 0 && (
+            <>
+              <div className="px-1 py-1.5 text-[11px] text-zinc-500 uppercase tracking-wider font-medium">
+                Installed
+              </div>
+              {externalExtensions.map(ext => (
                 <div
                   key={ext.id}
-                  className="flex items-start gap-2 px-2 py-2 rounded transition-colors"
+                  className="flex items-start gap-2 px-2 py-2 rounded hover:bg-zinc-800/50 group transition-colors"
                 >
-                  <Icon className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
+                  <Package className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-zinc-300 truncate">{ext.name}</span>
-                      <Badge variant="outline" className="h-4 px-1 text-[9px] border-zinc-700 text-zinc-600">
-                        built-in
+                      <span className="text-xs text-zinc-200 truncate">{ext.name}</span>
+                      <Badge variant="outline" className="h-4 px-1 text-[9px] border-zinc-700 text-zinc-500">
+                        v{ext.version}
                       </Badge>
                     </div>
-                    {description && (
-                      <div className="text-[11px] text-zinc-600">{description}</div>
+                    {ext.description && (
+                      <div className="text-[11px] text-zinc-500 truncate">{ext.description}</div>
                     )}
+                    <div className="text-[11px] text-zinc-600 truncate">{ext.id}</div>
                   </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleUninstall(ext.id)}
+                        disabled={loading}
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 transition-all shrink-0"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Uninstall</TooltipContent>
+                  </Tooltip>
                 </div>
-              )
-            })}
+              ))}
+              <Separator className="my-2 bg-zinc-800" />
+            </>
+          )}
 
-            {/* Empty state */}
-            {externalExtensions.length === 0 && builtinExtensions.length === 0 && (
-              <div className="px-3 py-8 text-center text-xs text-zinc-600">
-                No extensions installed
-              </div>
-            )}
-          </div>
-        </ScrollArea>
+          {/* Built-in extensions */}
+          <Collapsible defaultOpen={false}>
+            <CollapsibleTrigger className="flex items-center gap-1 px-1 py-1.5 w-full group cursor-pointer">
+              <ChevronRight className="w-3 h-3 text-zinc-500 transition-transform group-data-[state=open]:rotate-90" />
+              <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-medium">
+                Built-in
+              </span>
+              <Badge variant="outline" className="ml-auto h-4 px-1.5 text-[9px] border-zinc-700 text-zinc-600">
+                {builtinExtensions.length}
+              </Badge>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              {builtinExtensions.map(ext => {
+                const Icon = ext.icon || Puzzle
+                return (
+                  <div
+                    key={ext.id}
+                    className="flex items-start gap-2 px-2 py-2 rounded transition-colors"
+                  >
+                    <Icon className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-zinc-300 truncate">{ext.name}</span>
+                        {ext.version && (
+                          <Badge variant="outline" className="h-4 px-1 text-[9px] border-zinc-700 text-zinc-600">
+                            v{ext.version}
+                          </Badge>
+                        )}
+                      </div>
+                      {ext.description && (
+                        <div className="text-[11px] text-zinc-600">{ext.description}</div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </CollapsibleContent>
+          </Collapsible>
 
-        {/* Footer hint */}
-        <div className="px-3 py-2 border-t border-zinc-800 text-[11px] text-zinc-600">
-          Install extensions from .zip files built with the Conductor Extension SDK
+          {/* Empty state */}
+          {externalExtensions.length === 0 && builtinExtensions.length === 0 && (
+            <div className="px-3 py-8 text-center text-xs text-zinc-600">
+              No extensions installed
+            </div>
+          )}
         </div>
-      </div>
-    </TooltipProvider>
+      </ScrollArea>
+    </SidebarLayout>
   )
 }

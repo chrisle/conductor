@@ -9,6 +9,8 @@ import ExcelTab from './ExcelTab'
 export const fileExplorerExtension: Extension = {
   id: 'file-explorer',
   name: 'Explorer',
+  description: 'Browse and edit project files',
+  version: '1.0.0',
   icon: FolderOpen,
   sidebar: FileExplorerSidebar,
   tabs: [

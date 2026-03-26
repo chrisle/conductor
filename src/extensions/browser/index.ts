@@ -6,6 +6,8 @@ import { useTabsStore } from '@/store/tabs'
 export const browserExtension: Extension = {
   id: 'browser',
   name: 'Browser',
+  description: 'Embedded web browser',
+  version: '1.0.0',
   tabs: [
     {
       type: 'browser',

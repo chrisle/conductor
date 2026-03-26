@@ -8,6 +8,8 @@ import { useSidebarStore } from '@/store/sidebar'
 export const claudeExtension: Extension = {
   id: 'claude',
   name: 'Claude',
+  description: 'AI assistant powered by Anthropic',
+  version: '1.0.0',
   icon: ClaudeIcon,
   sidebar: ClaudeSidebar,
   tabs: [

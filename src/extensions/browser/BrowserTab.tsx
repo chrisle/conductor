@@ -206,6 +206,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
           ref: webviewRef,
           src: url || 'about:blank',
           className: 'w-full h-full',
+          partition: 'persist:browser',
           nodeintegration: 'false',
           webpreferences: 'contextIsolation=yes',
           allowpopups: 'false',

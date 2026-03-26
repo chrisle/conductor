@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { RefreshCw } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useSidebarStore } from '@/store/sidebar'
+import SidebarLayout from '@/components/Sidebar/SidebarLayout'
 
 interface Session {
   id: string
@@ -67,45 +67,35 @@ export default function ClaudeSidebar({ groupId }: { groupId: string }): React.R
   }
 
   return (
-    <div className="flex flex-col h-full text-zinc-300">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-800 shrink-0">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Sessions</span>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 text-zinc-500 hover:text-zinc-300"
-          onClick={loadSessions}
-          disabled={loading}
+    <SidebarLayout
+      title="Sessions"
+      actions={[
+        { icon: RefreshCw, label: 'Refresh', onClick: loadSessions, disabled: loading, spinning: loading },
+      ]}
+    >
+      {sessions.length === 0 && !loading && (
+        <div className="px-3 py-4 text-xs text-zinc-500">
+          {rootPath ? 'No sessions found' : 'Open a project first'}
+        </div>
+      )}
+
+      {sessions.map((session) => (
+        <button
+          key={session.id}
+          onClick={() => resumeSession(session.id)}
+          className="w-full text-left px-3 py-1.5 hover:bg-zinc-800/50 transition-colors border-b border-zinc-800/50 group"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-        </Button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto">
-        {sessions.length === 0 && !loading && (
-          <div className="px-3 py-4 text-xs text-zinc-500">
-            {rootPath ? 'No sessions found' : 'Open a project first'}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono text-zinc-300 group-hover:text-zinc-100">{session.id.slice(0, 8)}</span>
+            <span className="text-[10px] text-zinc-500">{formatRelativeTime(session.mtime)}</span>
           </div>
-        )}
-
-        {sessions.map((session) => (
-          <button
-            key={session.id}
-            onClick={() => resumeSession(session.id)}
-            className="w-full text-left px-3 py-1.5 hover:bg-zinc-800/50 transition-colors border-b border-zinc-800/50 group"
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-mono text-zinc-300 group-hover:text-zinc-100">{session.id.slice(0, 8)}</span>
-              <span className="text-[10px] text-zinc-500">{formatRelativeTime(session.mtime)}</span>
+          {session.summary && (
+            <div className="text-[11px] text-zinc-500 truncate mt-0.5 group-hover:text-zinc-400">
+              {session.summary}
             </div>
-            {session.summary && (
-              <div className="text-[11px] text-zinc-500 truncate mt-0.5 group-hover:text-zinc-400">
-                {session.summary}
-              </div>
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
+          )}
+        </button>
+      ))}
+    </SidebarLayout>
   )
 }

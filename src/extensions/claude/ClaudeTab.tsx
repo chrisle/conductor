@@ -3,6 +3,7 @@ import { useTabsStore } from '@/store/tabs'
 import { useSidebarStore } from '@/store/sidebar'
 import type { TabProps } from '@/extensions/types'
 import TerminalTab from '../terminal/TerminalTab'
+import { writeTerminal } from '@/lib/terminal-api'
 
 function Toggle({ on, onToggle, label, color = '#eab308' }: { on: boolean; onToggle: () => void; label: string; color?: string }) {
   return (
@@ -85,12 +86,12 @@ export default function ClaudeTab({ tabId, groupId, isActive, tab }: TabProps): 
     restartingRef.current = true
 
     // Exit Claude, then restart with/without the env var
-    window.electronAPI.writeTerminal(tabId, '\x03') // Ctrl+C to cancel any operation
+    writeTerminal(tabId, '\x03') // Ctrl+C to cancel any operation
     setTimeout(() => {
-      window.electronAPI.writeTerminal(tabId, '/exit\n')
+      writeTerminal(tabId, '/exit\n')
       setTimeout(() => {
         const prefix = newValue ? 'CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 ' : ''
-        window.electronAPI.writeTerminal(tabId, `${prefix}claude --resume ${sessionId}\n`)
+        writeTerminal(tabId, `${prefix}claude --resume ${sessionId}\n`)
         restartingRef.current = false
       }, 1500)
     }, 500)
