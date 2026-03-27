@@ -235,58 +235,54 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('claude:listSessions', async (_event, projectPath: string) => {
     try {
       const home = os.homedir()
-      // Claude CLI uses the absolute path with / replaced by -
-      const projectKey = projectPath.replace(/\//g, '-')
-      const sessionsDir = path.join(home, '.claude', 'projects', projectKey)
+      const sessionEnvDir = path.join(home, '.claude', 'sessions')
 
-      if (!fs.existsSync(sessionsDir)) return []
+      if (!fs.existsSync(sessionEnvDir)) return []
 
-      const entries = await fs.promises.readdir(sessionsDir, { withFileTypes: true })
-      const jsonlFiles = entries.filter(e => e.isFile() && e.name.endsWith('.jsonl'))
+      const entries = await fs.promises.readdir(sessionEnvDir, { withFileTypes: true })
+      const jsonFiles = entries.filter(e => e.isFile() && e.name.endsWith('.json'))
 
       const sessions: Array<{ id: string; mtime: number; summary: string }> = []
 
-      for (const file of jsonlFiles) {
-        const id = file.name.replace('.jsonl', '')
-        const filePath = path.join(sessionsDir, file.name)
-        const stat = await fs.promises.stat(filePath)
-
-        // Read first ~8KB to find the first real user message for a summary
-        let summary = ''
+      for (const file of jsonFiles) {
         try {
-          const fd = await fs.promises.open(filePath, 'r')
-          const buf = Buffer.alloc(8192)
-          await fd.read(buf, 0, 8192, 0)
-          await fd.close()
-          const lines = buf.toString('utf-8').split('\n')
-          for (const line of lines) {
-            if (!line.trim()) continue
-            try {
-              const obj = JSON.parse(line)
-              if (obj.type === 'user' && obj.message) {
-                const content = typeof obj.message === 'string'
-                  ? obj.message
-                  : typeof obj.message.content === 'string'
-                    ? obj.message.content
-                    : ''
-                // Strip XML tags and command artifacts
-                const cleaned = content
-                  .replace(/<[^>]+>/g, ' ')
-                  .replace(/\s+/g, ' ')
-                  .trim()
-                if (cleaned.length > 3 && !cleaned.startsWith('clear')) {
-                  summary = cleaned.slice(0, 120)
-                  break
-                }
-              }
-            } catch { /* skip unparseable lines */ }
-          }
-        } catch { /* skip unreadable files */ }
+          const raw = await fs.promises.readFile(path.join(sessionEnvDir, file.name), 'utf-8')
+          const env = JSON.parse(raw) as { sessionId?: string; cwd?: string; startedAt?: number }
+          if (!env.sessionId || env.cwd !== projectPath) continue
 
-        sessions.push({ id, mtime: stat.mtimeMs, summary: summary || id.slice(0, 8) })
+          // Try to read summary from the project's .jsonl file
+          const projectKey = projectPath.replace(/[/.]/g, '-')
+          const jsonlPath = path.join(home, '.claude', 'projects', projectKey, `${env.sessionId}.jsonl`)
+          let summary = ''
+          try {
+            const fd = await fs.promises.open(jsonlPath, 'r')
+            const buf = Buffer.alloc(8192)
+            await fd.read(buf, 0, 8192, 0)
+            await fd.close()
+            for (const line of buf.toString('utf-8').split('\n')) {
+              if (!line.trim()) continue
+              try {
+                const obj = JSON.parse(line)
+                if (obj.type === 'user' && obj.message) {
+                  const content = typeof obj.message === 'string'
+                    ? obj.message
+                    : typeof obj.message.content === 'string'
+                      ? obj.message.content
+                      : ''
+                  const cleaned = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+                  if (cleaned.length > 3 && !cleaned.startsWith('clear')) {
+                    summary = cleaned.slice(0, 120)
+                    break
+                  }
+                }
+              } catch { /* skip */ }
+            }
+          } catch { /* no jsonl yet */ }
+
+          sessions.push({ id: env.sessionId, mtime: env.startedAt ?? 0, summary: summary || env.sessionId.slice(0, 8) })
+        } catch { /* skip unreadable files */ }
       }
 
-      // Reverse chronological
       sessions.sort((a, b) => b.mtime - a.mtime)
       return sessions
     } catch {
