@@ -1,7 +1,7 @@
 import ClaudeIcon from '@/components/ui/ClaudeIcon'
 import type { Extension } from '../types'
-import ClaudeTab from './ClaudeTab'
-import ClaudeSidebar from './ClaudeSidebar'
+import ClaudeTab from './components/ClaudeTab'
+import ClaudeSidebar from './components/ClaudeSidebar'
 import { useTabsStore } from '@/store/tabs'
 import { useSidebarStore } from '@/store/sidebar'
 

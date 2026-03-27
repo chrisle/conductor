@@ -4,6 +4,7 @@ import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useSidebarStore } from '@/store/sidebar'
 import SidebarLayout from '@/components/Sidebar/SidebarLayout'
+import ClaudeOptionsDialog from './ClaudeOptionsDialog'
 
 interface Session {
   id: string
@@ -26,6 +27,7 @@ function formatRelativeTime(mtime: number): string {
 export default function ClaudeSidebar({ groupId }: { groupId: string }): React.ReactElement {
   const [sessions, setSessions] = useState<Session[]>([])
   const [loading, setLoading] = useState(false)
+  const [optionsOpen, setOptionsOpen] = useState(false)
   const { addTab } = useTabsStore()
   const { focusedGroupId } = useLayoutStore()
   const { rootPath } = useSidebarStore()
@@ -67,11 +69,13 @@ export default function ClaudeSidebar({ groupId }: { groupId: string }): React.R
   }
 
   return (
+    <>
     <SidebarLayout
       title="Sessions"
       actions={[
         { icon: RefreshCw, label: 'Refresh', onClick: loadSessions, disabled: loading, spinning: loading },
       ]}
+      onSettings={() => setOptionsOpen(true)}
     >
       {sessions.length === 0 && !loading && (
         <div className="px-3 py-4 text-xs text-zinc-500">
@@ -97,5 +101,7 @@ export default function ClaudeSidebar({ groupId }: { groupId: string }): React.R
         </button>
       ))}
     </SidebarLayout>
+    <ClaudeOptionsDialog open={optionsOpen} onClose={() => setOptionsOpen(false)} />
+    </>
   )
 }

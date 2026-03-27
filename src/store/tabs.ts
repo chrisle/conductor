@@ -11,8 +11,10 @@ export interface Tab {
   url?: string
   isDirty?: boolean
   isThinking?: boolean
+  thinkingTime?: string
   content?: string
   initialCommand?: string
+  autoPilot?: boolean
 }
 
 export interface TabGroup {
@@ -27,7 +29,7 @@ interface TabsState {
   groups: Record<string, TabGroup>
   createGroup: () => string
   removeGroup: (groupId: string) => void
-  addTab: (groupId: string, tab: Omit<Tab, 'id'>) => string
+  addTab: (groupId: string, tab: Omit<Tab, 'id'> & { id?: string }) => string
   removeTab: (groupId: string, tabId: string) => void
   setActiveTab: (groupId: string, tabId: string) => void
   moveTab: (fromGroupId: string, tabId: string, toGroupId: string, atIndex?: number) => void
@@ -60,8 +62,19 @@ export const useTabsStore = create<TabsState>((set, get) => ({
   },
 
   addTab: (groupId, tabData) => {
-    const id = nanoid()
-    const tab: Tab = { id, ...tabData }
+    const id = tabData.id || nanoid()
+    // If a specific ID was requested and already exists, just focus it
+    if (tabData.id) {
+      const group = get().groups[groupId]
+      if (group?.tabs.find(t => t.id === tabData.id)) {
+        set(state => ({
+          groups: { ...state.groups, [groupId]: { ...state.groups[groupId], activeTabId: tabData.id! } }
+        }))
+        return tabData.id
+      }
+    }
+    const { id: _id, ...rest } = tabData as Tab
+    const tab: Tab = { id, ...rest }
     set(state => {
       const group = state.groups[groupId]
       if (!group) return state
