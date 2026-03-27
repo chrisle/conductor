@@ -1,23 +1,35 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
-	"strings"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
+
+	"embed"
 
 	"github.com/creack/pty"
 	"github.com/gorilla/websocket"
 )
+
+// Embedded tmux bundle. The directory is populated by scripts/prepare-tmux.sh
+// before building. If the directory is absent the embed is a no-op and we fall
+// back to the system tmux.
+//
+//go:embed embedded
+var embeddedFS embed.FS
 
 // ---------------------------------------------------------------------------
 // Session — a PTY that outlives any single WebSocket connection
@@ -47,15 +59,181 @@ var (
 	sessionsMu sync.Mutex
 )
 
-func newSession(id, cwd string) (*session, error) {
-	shell := getShell()
-	cmd := exec.Command(shell, "-l")
-	cmd.Dir = cwd
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
+// tmuxPath is the resolved path to the tmux binary (bundled or system).
+var tmuxPath string
+
+// tmuxConf is the path to the extracted tmux.conf, or "" to use defaults.
+var tmuxConf string
+
+// initTmux extracts the embedded tmux bundle (if present) and sets tmuxPath.
+// Falls back to the system tmux when no embedded bundle is available.
+func initTmux() {
+	bundleDir := fmt.Sprintf("embedded/%s-%s", runtime.GOOS, runtime.GOARCH)
+
+	entries, err := fs.ReadDir(embeddedFS, bundleDir)
+	if err != nil || len(entries) == 0 {
+		// No embedded bundle — try system PATH
+		tmuxPath, _ = exec.LookPath("tmux")
+		if tmuxPath != "" {
+			log.Printf("[tmux] using system tmux: %s", tmuxPath)
+		} else {
+			log.Printf("[tmux] not found; terminal sessions will use a plain shell")
+		}
+		return
+	}
+
+	// Extract bundle to a per-user cache directory so it survives reboots but
+	// is refreshed when the binary changes.
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		cacheDir = os.TempDir()
+	}
+	extractDir := filepath.Join(cacheDir, "conductor", "tmux")
+	if err := os.MkdirAll(extractDir, 0755); err != nil {
+		log.Printf("[tmux] failed to create extract dir %s: %v", extractDir, err)
+		tmuxPath, _ = exec.LookPath("tmux")
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		src := bundleDir + "/" + entry.Name()
+		data, err := embeddedFS.ReadFile(src)
+		if err != nil {
+			log.Printf("[tmux] embed read error %s: %v", src, err)
+			continue
+		}
+		dest := filepath.Join(extractDir, entry.Name())
+		// Only write if content changed (avoid touching mtime unnecessarily)
+		if existing, err := os.ReadFile(dest); err != nil || !bytes.Equal(existing, data) {
+			if err := os.WriteFile(dest, data, 0755); err != nil {
+				log.Printf("[tmux] write error %s: %v", dest, err)
+				continue
+			}
+		}
+		// Ensure executable bit is set
+		os.Chmod(dest, 0755)
+	}
+
+	// Also extract the shared tmux.conf (lives in embedded/, not the arch subdir)
+	if confData, err := embeddedFS.ReadFile("embedded/tmux.conf"); err == nil {
+		confDest := filepath.Join(extractDir, "tmux.conf")
+		if existing, err := os.ReadFile(confDest); err != nil || !bytes.Equal(existing, confData) {
+			os.WriteFile(confDest, confData, 0644)
+		}
+		tmuxConf = confDest
+	}
+
+	candidate := filepath.Join(extractDir, "tmux")
+	if _, err := os.Stat(candidate); err == nil {
+		tmuxPath = candidate
+		log.Printf("[tmux] using bundled tmux: %s (conf: %s)", tmuxPath, tmuxConf)
+	} else {
+		tmuxPath, _ = exec.LookPath("tmux")
+		log.Printf("[tmux] bundle extract failed, falling back to system: %s", tmuxPath)
+	}
+}
+
+// tmuxCmd builds a tmux exec.Cmd, prepending "-u" (force UTF-8) and
+// "-f <conf>" when a config file has been extracted, so every invocation
+// uses the same settings.
+func tmuxCmd(args ...string) *exec.Cmd {
+	// -u: force UTF-8 output regardless of locale. Critical because conductord
+	// runs as a launchd service with a bare environment (no LANG/LC_ALL), and
+	// without -u tmux disables UTF-8 — mangling box-drawing and block chars.
+	prefix := []string{"-u"}
+	if tmuxConf != "" {
+		prefix = append(prefix, "-f", tmuxConf)
+	}
+	return exec.Command(tmuxPath, append(prefix, args...)...)
+}
+
+// tmuxEnv returns the environment for tmux processes. It starts from the
+// current process environment and ensures the essential variables are set,
+// filling in sensible defaults for the ones launchd strips out (LANG, etc.).
+func tmuxEnv() []string {
+	env := os.Environ()
+	// Ensure UTF-8 locale — launchd services start with a bare environment
+	// that has no LANG/LC_ALL, which makes tmux disable UTF-8 output even
+	// when -u is passed. Inject only if not already present.
+	hasLang := false
+	for _, e := range env {
+		if strings.HasPrefix(e, "LANG=") || strings.HasPrefix(e, "LC_ALL=") {
+			hasLang = true
+			break
+		}
+	}
+	if !hasLang {
+		env = append(env, "LANG=en_US.UTF-8", "LC_ALL=en_US.UTF-8")
+	}
+	// Always override TERM/COLORTERM so they're correct regardless of what
+	// the parent environment has.
+	env = append(env, "TERM=xterm-256color", "COLORTERM=truecolor")
+	return env
+}
+
+// sanitizeTmuxName converts an ID to a valid tmux session name.
+func sanitizeTmuxName(id string) string {
+	var b strings.Builder
+	for _, c := range id {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') || c == '-' || c == '_' {
+			b.WriteRune(c)
+		} else {
+			b.WriteRune('_')
+		}
+	}
+	if b.Len() == 0 {
+		return "default"
+	}
+	return b.String()
+}
+
+// tmuxSessionExists returns true if a tmux session with exactly this name exists.
+func tmuxSessionExists(name string) bool {
+	cmd := tmuxCmd("has-session", "-t", "="+name)
+	return cmd.Run() == nil
+}
+
+// newSession creates a new conductord session. Returns the session, whether it
+// is a brand-new tmux session (isNew=true) or an attach to an existing one
+// (isNew=false), and any error.
+func newSession(id, cwd string) (*session, bool, error) {
+	var cmd *exec.Cmd
+	isNew := true
+
+	if tmuxPath != "" {
+		tmuxName := sanitizeTmuxName(id)
+		isNew = !tmuxSessionExists(tmuxName)
+
+		if isNew {
+			// Create a new detached tmux session so the shell is started in the
+			// right directory. We then attach to it via a PTY below.
+			createCmd := tmuxCmd("new-session", "-d", "-s", tmuxName, "-c", cwd)
+			createCmd.Env = tmuxEnv()
+			if err := createCmd.Run(); err != nil {
+				return nil, false, fmt.Errorf("tmux new-session: %w", err)
+			}
+			log.Printf("[session %s] created tmux session '%s'", id, tmuxName)
+		} else {
+			log.Printf("[session %s] attaching to existing tmux session '%s'", id, tmuxName)
+		}
+
+		cmd = tmuxCmd("attach-session", "-t", "="+tmuxName)
+		cmd.Env = tmuxEnv()
+	} else {
+		// tmux not available — fall back to a plain login shell
+		shell := getShell()
+		cmd = exec.Command(shell, "-l")
+		cmd.Dir = cwd
+		cmd.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
+	}
 
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	s := &session{
@@ -65,12 +243,13 @@ func newSession(id, cwd string) (*session, error) {
 		scrollback: make([]byte, scrollbackSize),
 	}
 
-	// PTY reader goroutine — runs for the lifetime of the session
 	go s.readLoop()
 
-	// Watch for process exit
 	go func() {
 		s.cmd.Wait()
+		// When tmux attach-session exits the underlying tmux session may still
+		// be alive (just detached). Remove from the in-memory map so the next
+		// WebSocket connection creates a fresh attach process.
 		s.mu.Lock()
 		s.dead = true
 		conn := s.conn
@@ -78,14 +257,14 @@ func newSession(id, cwd string) (*session, error) {
 		if conn != nil {
 			conn.Close()
 		}
-		log.Printf("[session %s] process exited", id)
+		log.Printf("[session %s] attach process exited", id)
 
 		sessionsMu.Lock()
 		delete(sessions, id)
 		sessionsMu.Unlock()
 	}()
 
-	return s, nil
+	return s, isNew, nil
 }
 
 func (s *session) readLoop() {
@@ -168,6 +347,10 @@ func (s *session) resize(cols, rows uint16) {
 }
 
 func (s *session) kill() {
+	// Kill the tmux session itself so it doesn't keep running in the background.
+	if tmuxPath != "" {
+		tmuxCmd("kill-session", "-t", "="+sanitizeTmuxName(s.id)).Run()
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.dead {
@@ -219,9 +402,9 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 
 	sessionsMu.Lock()
 	s, exists := sessions[id]
+	isNew := false
 	if !exists && id != "" {
-		// Create new session with the given ID
-		s, err = newSession(id, cwd)
+		s, isNew, err = newSession(id, cwd)
 		if err != nil {
 			sessionsMu.Unlock()
 			log.Printf("session create error: %v", err)
@@ -230,11 +413,9 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		sessions[id] = s
-		log.Printf("[session %s] created (cwd: %s)", id, cwd)
 	} else if !exists {
-		// No ID provided — generate one
 		id = fmt.Sprintf("s-%d", time.Now().UnixNano())
-		s, err = newSession(id, cwd)
+		s, isNew, err = newSession(id, cwd)
 		if err != nil {
 			sessionsMu.Unlock()
 			log.Printf("session create error: %v", err)
@@ -243,14 +424,16 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		sessions[id] = s
-		log.Printf("[session %s] created (cwd: %s)", id, cwd)
 	} else {
-		log.Printf("[session %s] reattached", id)
+		log.Printf("[session %s] reattached (existing conductord session)", id)
 	}
 	sessionsMu.Unlock()
 
-	// Send session ID to client (useful if server generated it)
-	conn.WriteJSON(map[string]string{"type": "session", "data": s.id})
+	// Send session ID + isNew flag to client.
+	// isNew=true means a brand-new tmux session was created → client should
+	// send its initialCommand. isNew=false means we attached to an existing
+	// tmux session → client should NOT send initialCommand (process is running).
+	conn.WriteJSON(map[string]interface{}{"type": "session", "data": s.id, "isNew": isNew})
 
 	// Replay scrollback so the client sees previous output
 	scrollback := s.getScrollback()
@@ -302,6 +485,29 @@ type sessionInfo struct {
 }
 
 func handleSessions(w http.ResponseWriter, r *http.Request) {
+	// DELETE /api/sessions/{id} — kill a session
+	if r.Method == http.MethodDelete {
+		// Path is /api/sessions/{id}
+		id := strings.TrimPrefix(r.URL.Path, "/api/sessions/")
+		if id == "" {
+			http.Error(w, "session id required", http.StatusBadRequest)
+			return
+		}
+		sessionsMu.Lock()
+		s, ok := sessions[id]
+		if ok {
+			delete(sessions, id)
+		}
+		sessionsMu.Unlock()
+		if ok {
+			s.kill()
+			log.Printf("[session %s] killed via API", id)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+		return
+	}
+
 	sessionsMu.Lock()
 	list := make([]sessionInfo, 0, len(sessions))
 	for _, s := range sessions {
@@ -318,6 +524,46 @@ func handleSessions(w http.ResponseWriter, r *http.Request) {
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// handleTmuxSessions lists live tmux session names or kills one.
+//   GET  /api/tmux          → [{"name":"t-NP-123"}, ...]
+//   DELETE /api/tmux/{name} → kills the tmux session
+func handleTmuxSessions(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method == http.MethodDelete {
+		name := strings.TrimPrefix(r.URL.Path, "/api/tmux/")
+		if name == "" || tmuxPath == "" {
+			json.NewEncoder(w).Encode(map[string]bool{"ok": false})
+			return
+		}
+		tmuxCmd("kill-session", "-t", "="+name).Run()
+		log.Printf("[tmux] killed session '%s' via API", name)
+		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+		return
+	}
+
+	if tmuxPath == "" {
+		json.NewEncoder(w).Encode([]interface{}{})
+		return
+	}
+	out, err := tmuxCmd("ls", "-F", "#{session_name}").Output()
+	if err != nil {
+		// tmux exits non-zero when there are no sessions
+		json.NewEncoder(w).Encode([]interface{}{})
+		return
+	}
+	type entry struct {
+		Name string `json:"name"`
+	}
+	var list []entry
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line != "" {
+			list = append(list, entry{Name: line})
+		}
+	}
+	json.NewEncoder(w).Encode(list)
 }
 
 // ---------------------------------------------------------------------------
@@ -457,7 +703,7 @@ func handleExec(w http.ResponseWriter, r *http.Request) {
 func cors(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -470,6 +716,9 @@ func cors(next http.HandlerFunc) http.HandlerFunc {
 func main() {
 	port := flag.Int("port", 9800, "port to listen on")
 	flag.Parse()
+
+	// Extract bundled tmux (if available) and set tmuxPath.
+	initTmux()
 
 	addr := fmt.Sprintf("127.0.0.1:%d", *port)
 
@@ -485,7 +734,10 @@ func main() {
 	}
 
 	http.HandleFunc("/ws/terminal", handleTerminal)
+	http.HandleFunc("/api/sessions/", cors(handleSessions))
 	http.HandleFunc("/api/sessions", cors(handleSessions))
+	http.HandleFunc("/api/tmux/", cors(handleTmuxSessions))
+	http.HandleFunc("/api/tmux", cors(handleTmuxSessions))
 	http.HandleFunc("/api/exec", cors(handleExec))
 	http.HandleFunc("/health", cors(handleHealth))
 

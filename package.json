@@ -7,7 +7,8 @@
     "dev-web": "vite --config vite.web.config.ts",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "package": "electron-vite build && electron-builder",
+    "prepare-tmux": "bash scripts/prepare-tmux.sh",
+    "package": "bash scripts/prepare-tmux.sh && cd conductord && go build -o conductord . && cd .. && electron-vite build && electron-builder",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build && npx playwright test"
