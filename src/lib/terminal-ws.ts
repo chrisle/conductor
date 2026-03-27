@@ -2,8 +2,11 @@
  * WebSocket-based terminal transport via conductord.
  * Used by both Electron and web modes.
  *
- * Sessions are identified by the tab ID. If a session with that ID already
- * exists in conductord, the client reattaches and receives scrollback replay.
+ * When tmux is available, conductord wraps each session in a named tmux
+ * session so it survives app restarts. createTerminal resolves with
+ * { isNew: true } if a fresh tmux session was created, or { isNew: false }
+ * if an existing session was reattached. Callers use this to decide whether
+ * to send an initialCommand.
  */
 
 const CONDUCTORD_PORT = 9800
@@ -13,8 +16,12 @@ const sockets = new Map<string, WebSocket>()
 const decoders = new Map<string, TextDecoder>()
 const dataListeners = new Set<(event: any, id: string, data: string) => void>()
 const exitListeners = new Set<(event: any, id: string) => void>()
+// Tracks sockets that were intentionally closed (tab close / detach).
+// When onclose fires for these, we skip the exit event so the terminal
+// doesn't show "[Process exited]" just because the tab was closed.
+const intentionalClose = new Set<string>()
 
-export function createTerminal(id: string, cwd?: string): Promise<void> {
+export function createTerminal(id: string, cwd?: string): Promise<{ isNew: boolean }> {
   return new Promise((resolve, reject) => {
     const params = new URLSearchParams()
     params.set('id', id)
@@ -22,10 +29,20 @@ export function createTerminal(id: string, cwd?: string): Promise<void> {
     const ws = new WebSocket(`${CONDUCTORD_URL}?${params}`)
     ws.binaryType = 'arraybuffer'
 
+    // Resolved once the session message arrives (gives us isNew)
+    let sessionResolved = false
+
     ws.onopen = () => {
       sockets.set(id, ws)
       decoders.set(id, new TextDecoder('utf-8'))
-      resolve()
+      // If conductord doesn't send a session message (old version), resolve
+      // with isNew:true as a safe default so initialCommand still runs.
+      setTimeout(() => {
+        if (!sessionResolved) {
+          sessionResolved = true
+          resolve({ isNew: true })
+        }
+      }, 2000)
     }
 
     ws.onmessage = (event) => {
@@ -33,7 +50,13 @@ export function createTerminal(id: string, cwd?: string): Promise<void> {
       if (typeof event.data === 'string') {
         try {
           const msg = JSON.parse(event.data)
-          if (msg.type === 'session') return // session ID ack, ignore
+          if (msg.type === 'session') {
+            if (!sessionResolved) {
+              sessionResolved = true
+              resolve({ isNew: msg.isNew !== false })
+            }
+            return
+          }
           if (msg.type === 'error') {
             console.error('[conductord]', msg.data)
             return
@@ -58,9 +81,14 @@ export function createTerminal(id: string, cwd?: string): Promise<void> {
     ws.onclose = () => {
       sockets.delete(id)
       decoders.delete(id)
-      for (const cb of exitListeners) {
-        cb(null, id)
+      // Only fire exit listeners when the close was NOT initiated by us
+      // (i.e., the process actually died, not the user closing the tab)
+      if (!intentionalClose.has(id)) {
+        for (const cb of exitListeners) {
+          cb(null, id)
+        }
       }
+      intentionalClose.delete(id)
     }
 
     ws.onerror = () => {
@@ -86,12 +114,12 @@ export function resizeTerminal(id: string, cols: number, rows: number): Promise<
 }
 
 export function killTerminal(id: string): Promise<void> {
+  // Just close the WebSocket — the tmux session keeps running so the user
+  // can continue it later. Explicit session destruction is handled via the
+  // conductord REST API (DELETE /api/tmux/{name}).
   const ws = sockets.get(id)
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    // Tell conductord to kill the PTY process
-    ws.send(JSON.stringify({ type: 'kill' }))
-  }
   if (ws) {
+    intentionalClose.add(id)
     ws.close()
     sockets.delete(id)
     decoders.delete(id)
