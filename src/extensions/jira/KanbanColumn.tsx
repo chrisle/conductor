@@ -27,9 +27,11 @@ interface KanbanColumnProps {
   pendingTickets?: PendingTicket[]
   config: JiraConfig
   jiraBaseUrl: string
+  tmuxSessions: Set<string>
   onOpenUrl: (url: string, title: string) => void
-  onOpenClaude: (ticket: Ticket) => void
-  onBeginWork: (ticket: Ticket) => void
+  onNewSession: (ticket: Ticket) => void
+  onContinueSession: (ticket: Ticket) => void
+  onStartWork: (ticket: Ticket) => void
   onRefresh: () => void
   onCreateTicket?: (status: TicketStatus) => void
 }
@@ -61,7 +63,7 @@ function saveCompact(set: Set<string>) {
   localStorage.setItem(COMPACT_KEY, JSON.stringify([...set]))
 }
 
-export function KanbanColumn({ title, status, tickets, pendingTickets = [], config, jiraBaseUrl, onOpenUrl, onOpenClaude, onBeginWork, onRefresh, onCreateTicket }: KanbanColumnProps) {
+export function KanbanColumn({ title, status, tickets, pendingTickets = [], config, jiraBaseUrl, tmuxSessions, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh, onCreateTicket }: KanbanColumnProps) {
   const [sort, setSort] = useState<SortMode>('none')
   const [compact, setCompact] = useState(() => loadCompact().has(status))
 
@@ -182,9 +184,11 @@ export function KanbanColumn({ title, status, tickets, pendingTickets = [], conf
                 ticket={ticket}
                 config={config}
                 jiraBaseUrl={jiraBaseUrl}
+                hasSession={tmuxSessions.has(`t-${ticket.key}`)}
                 onOpenUrl={onOpenUrl}
-                onOpenClaude={onOpenClaude}
-                onBeginWork={onBeginWork}
+                onNewSession={onNewSession}
+                onContinueSession={onContinueSession}
+                onStartWork={onStartWork}
                 onRefresh={onRefresh}
               />
             ))}

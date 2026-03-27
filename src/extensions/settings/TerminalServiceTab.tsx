@@ -1,14 +1,45 @@
-import React, { useState, useEffect } from 'react'
-import { Server, Trash2, CheckCircle, XCircle, RefreshCw, RefreshCcw, Square, Play } from 'lucide-react'
+import React, { useState, useEffect, useCallback } from 'react'
+import { Server, CheckCircle, XCircle, RefreshCw, RefreshCcw, Square, Play, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import type { TabProps } from '@/extensions/types'
+
+interface SessionInfo {
+  id: string
+  dead: boolean
+}
 
 export default function TerminalServiceTab({ isActive }: TabProps): React.ReactElement {
   const [serviceInstalled, setServiceInstalled] = useState<boolean | null>(null)
   const [serviceRunning, setServiceRunning] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [sessions, setSessions] = useState<SessionInfo[]>([])
+  const [sessionsLoading, setSessionsLoading] = useState(false)
+
+  const loadSessions = useCallback(async () => {
+    setSessionsLoading(true)
+    try {
+      const res = await fetch('http://127.0.0.1:9800/api/tmux')
+      if (res.ok) {
+        const list: { name: string }[] = await res.json()
+        setSessions(list.map(s => ({ id: s.name, dead: false })))
+      }
+    } catch {
+      setSessions([])
+    } finally {
+      setSessionsLoading(false)
+    }
+  }, [])
+
+  async function killSession(id: string) {
+    try {
+      await fetch(`http://127.0.0.1:9800/api/tmux/${id}`, { method: 'DELETE' })
+      setSessions(prev => prev.filter(s => s.id !== id))
+    } catch {
+      setMessage({ type: 'error', text: `Failed to kill session ${id}` })
+    }
+  }
 
   async function checkStatus() {
     try {
@@ -27,8 +58,11 @@ export default function TerminalServiceTab({ isActive }: TabProps): React.ReactE
   }
 
   useEffect(() => {
-    if (isActive) checkStatus()
-  }, [isActive])
+    if (isActive) {
+      checkStatus()
+      loadSessions()
+    }
+  }, [isActive, loadSessions])
 
   async function handleInstall() {
     setLoading(true)
@@ -176,6 +210,45 @@ export default function TerminalServiceTab({ isActive }: TabProps): React.ReactE
               )}
             </div>
           </div>
+        </div>
+
+        <Separator className="bg-zinc-800" />
+
+        {/* Running sessions */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-zinc-400">Active sessions</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={loadSessions}
+              disabled={sessionsLoading}
+              className="h-6 w-6 text-zinc-500 hover:text-zinc-300"
+              title="Refresh sessions"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${sessionsLoading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
+          {sessions.length === 0 ? (
+            <p className="text-xs text-zinc-600">No active sessions</p>
+          ) : (
+            <div className="space-y-1">
+              {sessions.map(s => (
+                <div key={s.id} className="flex items-center justify-between rounded bg-zinc-900 px-2 py-1.5 border border-zinc-800">
+                  <span className="text-xs font-mono text-zinc-400 truncate">{s.id}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => killSession(s.id)}
+                    className="h-5 w-5 shrink-0 text-zinc-600 hover:text-red-400"
+                    title="Kill session"
+                  >
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <Separator className="bg-zinc-800" />

@@ -18,14 +18,16 @@ interface KanbanBoardProps {
   config: JiraConfig
   jiraBaseUrl: string
   pendingTickets?: PendingTicket[]
+  tmuxSessions: Set<string>
   onOpenUrl: (url: string, title: string) => void
-  onOpenClaude: (ticket: Ticket) => void
-  onBeginWork: (ticket: Ticket) => void
+  onNewSession: (ticket: Ticket) => void
+  onContinueSession: (ticket: Ticket) => void
+  onStartWork: (ticket: Ticket) => void
   onRefresh: () => void
   onCreateTicket?: (status: TicketStatus, epicKey: string | null) => void
 }
 
-export function KanbanBoard({ tickets, epics, config, jiraBaseUrl, pendingTickets = [], onOpenUrl, onOpenClaude, onBeginWork, onRefresh, onCreateTicket }: KanbanBoardProps) {
+export function KanbanBoard({ tickets, epics, config, jiraBaseUrl, pendingTickets = [], tmuxSessions, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh, onCreateTicket }: KanbanBoardProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   const epicKeys = epics.map((e) => e.key)
@@ -40,7 +42,7 @@ export function KanbanBoard({ tickets, epics, config, jiraBaseUrl, pendingTicket
     })
   }
 
-  const columnProps = { config, jiraBaseUrl, onOpenUrl, onOpenClaude, onBeginWork, onRefresh }
+  const columnProps = { config, jiraBaseUrl, tmuxSessions, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh }
 
   return (
     <div className="h-full overflow-y-auto p-4 space-y-6">

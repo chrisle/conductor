@@ -32,6 +32,7 @@ export default function JiraBoardTab({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("");
+  const [tmuxSessions, setTmuxSessions] = useState<Set<string>>(new Set());
   const [pendingTickets, setPendingTickets] = useState<PendingTicket[]>([]);
   const [createDialog, setCreateDialog] = useState<{
     open: boolean;
@@ -45,6 +46,21 @@ export default function JiraBoardTab({
   const { addTab } = useTabsStore();
   const { focusedGroupId } = useLayoutStore();
   const { rootPath } = useSidebarStore();
+
+  // Tmux session name for a ticket — one session per ticket
+  function tmuxSessionName(ticketKey: string): string {
+    return `t-${ticketKey}`
+  }
+
+  const loadTmuxSessions = useCallback(async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:9800/api/tmux")
+      if (res.ok) {
+        const list: { name: string }[] = await res.json()
+        setTmuxSessions(new Set(list.map((s) => s.name)))
+      }
+    } catch { /* conductord not running */ }
+  }, [])
 
   // tab.content holds the project key; fall back to title for old saved files
   const projectKey = tab.content || tab.title?.replace(/ Board$/, "") || "";
@@ -66,6 +82,7 @@ export default function JiraBoardTab({
 
       setTickets(ticketData);
       setEpics(epicData);
+      loadTmuxSessions();
 
       // Fetch PRs for active tickets in background
       const activeTickets = ticketData.filter(
@@ -152,43 +169,49 @@ export default function JiraBoardTab({
     return { cwd: rootPath || "", binding };
   }
 
-  async function openClaude(ticket: Ticket) {
+  async function newSession(ticket: Ticket) {
     const targetGroup = focusedGroupId || groupId;
-    const { cwd, binding } = await resolveWorktree(ticket);
-    let initialCommand: string | undefined;
-    if (binding?.claude_session_id) {
-      initialCommand = `claude --resume ${binding.claude_session_id}\n`;
-    } else if (cwd) {
-      initialCommand = `cd ${JSON.stringify(cwd)} && claude\n`;
-    }
+    const tmuxName = tmuxSessionName(ticket.key);
+    const { cwd } = await resolveWorktree(ticket);
     addTab(targetGroup, {
+      id: tmuxName,
       type: "claude",
       title: `Claude · ${ticket.key}`,
       filePath: cwd,
-      initialCommand,
+      initialCommand: `cd ${JSON.stringify(cwd)} && claude\n`,
+    });
+    // Refresh tmux session list after a short delay so hasSession updates
+    setTimeout(loadTmuxSessions, 1500);
+  }
+
+  async function continueSession(ticket: Ticket) {
+    const targetGroup = focusedGroupId || groupId;
+    const tmuxName = tmuxSessionName(ticket.key);
+    const { cwd } = await resolveWorktree(ticket);
+    // No initialCommand — conductord will attach to the running tmux session
+    addTab(targetGroup, {
+      id: tmuxName,
+      type: "claude",
+      title: `Claude · ${ticket.key}`,
+      filePath: cwd,
     });
   }
 
-  async function beginWork(ticket: Ticket) {
+  async function startWork(ticket: Ticket) {
     const targetGroup = focusedGroupId || groupId;
-    const { cwd, binding } = await resolveWorktree(ticket);
-    if (binding?.claude_session_id) {
-      addTab(targetGroup, {
-        type: "claude",
-        title: `Claude · ${ticket.key}`,
-        filePath: cwd,
-        initialCommand: `claude --resume ${binding.claude_session_id}\n`,
-      });
-    } else {
-      const prompt = `Use the claude.ai Atlassian MCP (cloud ID 8fd881b3-a07f-4662-bad9-1a9d9e0321a3) to fetch ${ticket.key} from the ${projectKey} space in ${config?.domain}.atlassian.net. Work autonomously on this ticket. Use opus for planning mode and sonnet for implementation.`;
-      const escaped = prompt.replace(/'/g, "'\\''");
-      addTab(targetGroup, {
-        type: "claude",
-        title: `Claude · ${ticket.key}`,
-        filePath: cwd,
-        initialCommand: `cd ${JSON.stringify(cwd)} && claude '${escaped}'\n`,
-      });
-    }
+    const tmuxName = tmuxSessionName(ticket.key);
+    const { cwd } = await resolveWorktree(ticket);
+    const prompt = `Use the claude.ai Atlassian MCP (cloud ID 8fd881b3-a07f-4662-bad9-1a9d9e0321a3) to fetch ${ticket.key} from the ${projectKey} project in ${config?.domain}. Work autonomously on this ticket end to end.`
+    const escaped = prompt.replace(/'/g, "'\\''")
+    addTab(targetGroup, {
+      id: tmuxName,
+      type: "claude",
+      title: `Claude · ${ticket.key}`,
+      filePath: cwd,
+      initialCommand: `cd ${JSON.stringify(cwd)} && claude --dangerously-skip-permissions '${escaped}'\n`,
+      autoPilot: true,
+    });
+    setTimeout(loadTmuxSessions, 1500);
   }
 
   function handleOpenCreateDialog(
@@ -319,9 +342,11 @@ export default function JiraBoardTab({
           config={config}
           jiraBaseUrl={jiraBaseUrl}
           pendingTickets={pendingTickets}
+          tmuxSessions={tmuxSessions}
           onOpenUrl={openUrl}
-          onOpenClaude={openClaude}
-          onBeginWork={beginWork}
+          onNewSession={newSession}
+          onContinueSession={continueSession}
+          onStartWork={startWork}
           onRefresh={loadData}
           onCreateTicket={handleOpenCreateDialog}
         />

@@ -1,5 +1,6 @@
 import { memo, useState } from 'react'
 import { Bug, Bookmark, CircleCheck, ChevronDown, Loader2 } from 'lucide-react'
+import ClaudeIcon from '@/components/ui/ClaudeIcon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,9 +17,11 @@ interface TicketCardProps {
   ticket: Ticket
   config: JiraConfig
   jiraBaseUrl: string
+  hasSession: boolean
   onOpenUrl: (url: string, title: string) => void
-  onOpenClaude: (ticket: Ticket) => void
-  onBeginWork: (ticket: Ticket) => void
+  onNewSession: (ticket: Ticket) => void
+  onContinueSession: (ticket: Ticket) => void
+  onStartWork: (ticket: Ticket) => void
   onRefresh: () => void
 }
 
@@ -26,9 +29,11 @@ export const TicketCard = memo(function TicketCard({
   ticket,
   config,
   jiraBaseUrl,
+  hasSession,
   onOpenUrl,
-  onOpenClaude,
-  onBeginWork,
+  onNewSession,
+  onContinueSession,
+  onStartWork,
   onRefresh,
 }: TicketCardProps) {
   const [jiraLoading, setJiraLoading] = useState(false)
@@ -120,12 +125,23 @@ export const TicketCard = memo(function TicketCard({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start">
-            <DropdownMenuItem onSelect={() => onOpenClaude(ticket)}>
-              Open in Claude
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onBeginWork(ticket)}>
-              Begin work in Claude
-            </DropdownMenuItem>
+            {hasSession ? (
+              <DropdownMenuItem onSelect={() => onContinueSession(ticket)}>
+                <ClaudeIcon className="w-3 h-3 text-[#D97757]" />
+                Continue session
+              </DropdownMenuItem>
+            ) : (
+              <>
+                <DropdownMenuItem onSelect={() => onNewSession(ticket)}>
+                  <ClaudeIcon className="w-3 h-3 text-[#D97757]" />
+                  New session
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onStartWork(ticket)}>
+                  <ClaudeIcon className="w-3 h-3 text-[#D97757]" />
+                  Start work
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
