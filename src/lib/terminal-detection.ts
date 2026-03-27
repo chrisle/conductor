@@ -9,45 +9,34 @@ export function stripAnsi(s: string): string {
   return s.replace(ANSI_RE, '')
 }
 
-// Regex to detect Claude "thinking" status lines: e.g. "✳ Zigzagging… (4m 35s · ↓ 611 tokens)"
-const THINKING_RE = /…\s*\(/
+// Detect Claude actively working: a timer + token counter in parentheses.
+// Matches all observed formats:
+//   "(4m 35s · ↑ 611 tokens)"
+//   "(6m 1s · ↑ 4.8k tokens · thinking with medium effort)"
+//   "(53s · ↓ 778 tokens)"   ← seconds-only, down-arrow variant
+const THINKING_RE = /\((?:(\d+m)\s+)?(\d+s)\s*·\s*[↑↓]\s*[\d.]+[kmb]?\s+tokens/i
+
+// Detect Claude finished — "Cooked for 8m 57s" means it's done, not thinking.
+const DONE_RE = /cooked\s+for\b/i
+
+export interface ThinkingState {
+  thinking: boolean
+  /** Elapsed time string, e.g. "4m 35s" or "53s". Only set when thinking. */
+  time?: string
+  /** True when a completion message ("Cooked for…") was detected — clears immediately. */
+  done?: boolean
+}
+
+export function getThinkingState(screenText: string): ThinkingState {
+  const stripped = stripAnsi(screenText)
+  if (DONE_RE.test(stripped)) return { thinking: false, done: true }
+  const match = THINKING_RE.exec(stripped)
+  if (!match) return { thinking: false }
+  const time = match[1] ? `${match[1]} ${match[2]}` : match[2]
+  return { thinking: true, time }
+}
 
 export function isThinking(screenText: string): boolean {
-  return THINKING_RE.test(stripAnsi(screenText))
+  return getThinkingState(screenText).thinking
 }
 
-export interface AutopilotRule {
-  pattern: RegExp
-  response: string
-}
-
-export const AUTOPILOT_RULES: AutopilotRule[] = [
-  // Claude Code interactive menus — any numbered menu where option 1 is "Yes".
-  // Must come FIRST: these menus only accept Enter/arrows,
-  // sending "y" would be ignored and poison the dedup cache.
-  // Covers: file creation, workspace trust, bash permission, etc.
-  { pattern: /1\.\s*Yes/s, response: '\r' },
-
-  // Simple y/n prompts (text-based, not numbered menus)
-  { pattern: /\(Y\/n\)\s*$/im, response: 'y\r' },
-  { pattern: /\(y\/N\)\s*$/im, response: 'y\r' },
-  { pattern: /\[y\/n\]\s*$/im, response: 'y\r' },
-  { pattern: /\[Y\/n\]\s*$/im, response: 'y\r' },
-  { pattern: /confirm\? \(y\/n\)/i, response: 'y\r' },
-  { pattern: /press enter to continue/i, response: '\r' },
-  { pattern: /continue\? \[y\/n\]/i, response: 'y\r' },
-  { pattern: /Allow.*\(y\/n\)/i, response: 'y\r' },
-]
-
-/**
- * Finds the first autopilot rule matching the given screen text.
- * Returns the rule if found, or null if no match.
- */
-export function matchAutopilotRule(screenText: string): AutopilotRule | null {
-  for (const rule of AUTOPILOT_RULES) {
-    if (rule.pattern.test(screenText)) {
-      return rule
-    }
-  }
-  return null
-}
