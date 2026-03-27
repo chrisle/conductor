@@ -244,11 +244,13 @@ export async function openProject(filePath: string): Promise<boolean> {
   try {
     const raw = JSON.parse(result.content)
 
+    const fileBaseName = filePath.split('/').pop()?.replace('.conductor', '') || 'Untitled Project'
+
     // Handle v1 format (single workspace)
     if (raw.version === 1) {
       const project: ConductorProject = {
         version: 2,
-        name: raw.name,
+        name: raw.name || fileBaseName,
         activeWorkspace: 'default',
         workspaces: {
           default: {
@@ -261,8 +263,7 @@ export async function openProject(filePath: string): Promise<boolean> {
         activeExtensionId: raw.activeExtensionId
       }
       restoreProject(project, projectDir)
-      const name = filePath.split('/').pop()?.replace('.conductor', '') || 'Untitled Project'
-      useProjectStore.getState().setProject(filePath, name)
+      useProjectStore.getState().setProject(filePath, project.name)
       return true
     }
 
@@ -274,8 +275,7 @@ export async function openProject(filePath: string): Promise<boolean> {
     }
 
     restoreProject(project, projectDir)
-    const name = filePath.split('/').pop()?.replace('.conductor', '') || 'Untitled Project'
-    useProjectStore.getState().setProject(filePath, name)
+    useProjectStore.getState().setProject(filePath, project.name || fileBaseName)
     return true
   } catch (err) {
     console.error('Failed to parse .conductor file:', err)
@@ -390,7 +390,14 @@ export async function addWorkspace(workspaceName?: string): Promise<boolean> {
 /** Delete a workspace from the current project */
 export async function deleteWorkspace(workspaceName: string): Promise<boolean> {
   const project = useProjectStore.getState()
-  if (project.activeWorkspace === workspaceName) return false // can't delete active
+  if (project.workspaceNames.length <= 1) return false // can't delete the only workspace
+
+  // If deleting the active workspace, switch to another one first
+  if (project.activeWorkspace === workspaceName) {
+    const other = project.workspaceNames.find(n => n !== workspaceName)
+    if (!other) return false
+    await switchWorkspace(other)
+  }
 
   if (project.filePath) {
     const result = await window.electronAPI.readFile(project.filePath)
@@ -442,6 +449,30 @@ export async function renameWorkspace(oldName: string, newName: string): Promise
   }
 
   useProjectStore.getState().renameWorkspaceInStore(oldName, trimmed)
+  return true
+}
+
+/** Rename the current project (display name only, does not rename the file) */
+export async function renameProject(newName: string): Promise<boolean> {
+  const trimmed = newName.trim()
+  if (!trimmed) return false
+
+  const project = useProjectStore.getState()
+  useProjectStore.getState().setName(trimmed)
+
+  if (project.filePath) {
+    try {
+      const result = await window.electronAPI.readFile(project.filePath)
+      if (result.success && result.content) {
+        const data: ConductorProject = JSON.parse(result.content)
+        data.name = trimmed
+        await window.electronAPI.writeFile(project.filePath, JSON.stringify(data, null, 2))
+      }
+    } catch {
+      // Name is updated in memory even if disk write fails
+    }
+  }
+
   return true
 }
 

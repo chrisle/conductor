@@ -49,7 +49,7 @@ export async function loadExternalExtensions(): Promise<void> {
           continue
         }
 
-        extensionRegistry.register(extension)
+        extensionRegistry.register(extension, false)
         console.log(`Loaded external extension: ${extension.name} (${extension.id})`)
       } catch (err) {
         console.error(`Failed to load extension from ${entry.path}:`, err)

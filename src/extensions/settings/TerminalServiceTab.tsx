@@ -111,7 +111,7 @@ export default function TerminalServiceTab({ isActive }: TabProps): React.ReactE
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Server className="w-5 h-5 text-zinc-400" />
-            <h2 className="text-sm font-medium text-zinc-200">Terminal Service</h2>
+            <h2 className="text-sm font-medium text-zinc-200">Conductor Daemon</h2>
           </div>
           <Button variant="ghost" size="icon" onClick={checkStatus} className="h-7 w-7 text-zinc-500 hover:text-zinc-300">
             <RefreshCw className="w-4 h-4" />

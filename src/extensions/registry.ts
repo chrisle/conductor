@@ -1,17 +1,43 @@
 import type { Extension, TabRegistration, NewTabMenuItem } from './types'
 
+const DISABLED_KEY = 'conductor:extensions:disabled'
+
+function loadDisabled(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DISABLED_KEY)
+    return raw ? new Set(JSON.parse(raw)) : new Set()
+  } catch {
+    return new Set()
+  }
+}
+
+function saveDisabled(set: Set<string>) {
+  localStorage.setItem(DISABLED_KEY, JSON.stringify([...set]))
+}
+
 class ExtensionRegistry {
   private extensions: Map<string, Extension> = new Map()
+  private builtinIds: Set<string> = new Set()
   private tabTypes: Map<string, TabRegistration> = new Map()
   private fileExtMap: Map<string, string> = new Map()
+  private disabledIds: Set<string> = loadDisabled()
+  private listeners: Set<() => void> = new Set()
 
-  register(extension: Extension): void {
+  register(extension: Extension, builtin = true): void {
     if (this.extensions.has(extension.id)) {
       console.warn(`Extension "${extension.id}" already registered, skipping.`)
       return
     }
     this.extensions.set(extension.id, extension)
+    if (builtin) this.builtinIds.add(extension.id)
 
+    if (!this.disabledIds.has(extension.id)) {
+      this.registerTabs(extension)
+      extension.onActivate?.()
+    }
+  }
+
+  private registerTabs(extension: Extension): void {
     if (extension.tabs) {
       for (const tab of extension.tabs) {
         if (this.tabTypes.has(tab.type)) {
@@ -26,8 +52,54 @@ class ExtensionRegistry {
         }
       }
     }
+  }
 
-    extension.onActivate?.()
+  private unregisterTabs(extension: Extension): void {
+    if (extension.tabs) {
+      for (const tab of extension.tabs) {
+        this.tabTypes.delete(tab.type)
+        if (tab.fileExtensions) {
+          for (const ext of tab.fileExtensions) {
+            if (this.fileExtMap.get(ext.toLowerCase()) === tab.type) {
+              this.fileExtMap.delete(ext.toLowerCase())
+            }
+          }
+        }
+      }
+    }
+  }
+
+  isBuiltin(id: string): boolean {
+    return this.builtinIds.has(id)
+  }
+
+  isEnabled(id: string): boolean {
+    return !this.disabledIds.has(id)
+  }
+
+  setEnabled(id: string, enabled: boolean): void {
+    const ext = this.extensions.get(id)
+    if (!ext) return
+
+    if (enabled) {
+      this.disabledIds.delete(id)
+      this.registerTabs(ext)
+      ext.onActivate?.()
+    } else {
+      this.disabledIds.add(id)
+      this.unregisterTabs(ext)
+    }
+    saveDisabled(this.disabledIds)
+    this.notifyListeners()
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+
+  private notifyListeners(): void {
+    for (const listener of this.listeners) listener()
   }
 
   getExtension(id: string): Extension | undefined {
@@ -38,8 +110,12 @@ class ExtensionRegistry {
     return Array.from(this.extensions.values())
   }
 
+  getEnabledExtensions(): Extension[] {
+    return this.getAllExtensions().filter(e => !this.disabledIds.has(e.id))
+  }
+
   getSidebarExtensions(): Extension[] {
-    return this.getAllExtensions().filter(p => p.icon && p.sidebar)
+    return this.getEnabledExtensions().filter(p => p.icon && p.sidebar)
   }
 
   getTabRegistration(type: string): TabRegistration | undefined {
@@ -66,7 +142,7 @@ class ExtensionRegistry {
   getNewTabMenuItems(): NewTabMenuItem[] {
     const items: NewTabMenuItem[] = []
     for (const extension of this.extensions.values()) {
-      if (extension.newTabMenuItems) {
+      if (!this.disabledIds.has(extension.id) && extension.newTabMenuItems) {
         items.push(...extension.newTabMenuItems)
       }
     }

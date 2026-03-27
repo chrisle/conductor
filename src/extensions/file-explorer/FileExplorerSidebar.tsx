@@ -1,5 +1,5 @@
 import React from 'react'
-import { Terminal, Globe, FilePlus, FolderPlus } from 'lucide-react'
+import { Terminal, FilePlus, FolderPlus } from 'lucide-react'
 import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useSidebarStore } from '@/store/sidebar'
@@ -25,11 +25,6 @@ export default function FileExplorerSidebar({ groupId }: FileExplorerSidebarProp
     const targetGroup = focusedGroupId || groupId
     addTab(targetGroup, { type: 'terminal', title: 'Terminal', filePath: rootPath || undefined })
   }
-  function openNewBrowser() {
-    const targetGroup = focusedGroupId || groupId
-    addTab(targetGroup, { type: 'browser', title: 'Browser', url: 'https://google.com' })
-  }
-
   return (
     <SidebarLayout
       title="Files"
@@ -37,7 +32,6 @@ export default function FileExplorerSidebar({ groupId }: FileExplorerSidebarProp
         { icon: FilePlus, label: 'New file', onClick: triggerNewFile },
         { icon: FolderPlus, label: 'New folder', onClick: triggerNewFolder },
         { icon: Terminal, label: 'New terminal', onClick: openNewTerminal },
-        { icon: Globe, label: 'New browser', onClick: openNewBrowser },
       ]}
       separatorAfter={1}
     >

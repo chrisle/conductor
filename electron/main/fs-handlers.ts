@@ -12,7 +12,6 @@ export async function readDir(dirPath: string): Promise<FileEntry[]> {
   try {
     const entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
     return entries
-      .filter(entry => !entry.name.startsWith('.') || entry.name === '.env')
       .map(entry => ({
         name: entry.name,
         path: path.join(dirPath, entry.name),

@@ -224,15 +224,15 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
             )}
           </div>
         </ContextMenuTrigger>
-        <ContextMenuContent>
+        <ContextMenuContent className="bg-zinc-900 border-zinc-700 min-w-[140px]">
           {entry.isFile && (
-            <ContextMenuItem onClick={openFile}>
+            <ContextMenuItem className="text-xs text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={openFile}>
               <FileUp className="w-3.5 h-3.5 mr-2" />
               Open
             </ContextMenuItem>
           )}
           {entry.isDirectory && (
-            <ContextMenuItem onClick={() => {
+            <ContextMenuItem className="text-xs text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => {
               const store = useSidebarStore.getState()
               if (store.isFavorite(entry.path)) {
                 store.removeFavorite(entry.path)
@@ -247,13 +247,13 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
               )}
             </ContextMenuItem>
           )}
-          <ContextMenuItem onClick={() => { setIsRenaming(true); setRenameValue(entry.name) }}>
+          <ContextMenuItem className="text-xs text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => { setIsRenaming(true); setRenameValue(entry.name) }}>
             <Pencil className="w-3.5 h-3.5 mr-2" />
             Rename
           </ContextMenuItem>
-          <ContextMenuSeparator />
+          <ContextMenuSeparator className="bg-zinc-700" />
           <ContextMenuItem
-            className="text-red-400 focus:text-red-400 focus:bg-red-950"
+            className="text-xs text-red-400 focus:bg-zinc-800 focus:text-red-300"
             onClick={handleDelete}
           >
             <Trash2 className="w-3.5 h-3.5 mr-2" />

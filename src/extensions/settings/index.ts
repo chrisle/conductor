@@ -14,7 +14,7 @@ export const settingsExtension: Extension = {
   tabs: [
     {
       type: 'settings-terminal-service',
-      label: 'Terminal Service',
+      label: 'Conductor Daemon',
       icon: Server,
       component: TerminalServiceTab,
     },

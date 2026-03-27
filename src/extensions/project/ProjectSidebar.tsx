@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
-import { Save, Plus, FolderOpen, Circle, MoreHorizontal, GripVertical } from 'lucide-react'
+import { Save, Plus, FolderOpen, Circle, MoreHorizontal, GripVertical, Pencil, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
@@ -25,7 +25,8 @@ import {
   switchWorkspace,
   addWorkspace,
   deleteWorkspace,
-  renameWorkspace
+  renameWorkspace,
+  renameProject
 } from '@/lib/project-io'
 import SidebarLayout from '@/components/Sidebar/SidebarLayout'
 
@@ -35,6 +36,11 @@ export default function ProjectSidebar({ groupId }: { groupId: string }): React.
     activeWorkspace, workspaceNames, dirtyWorkspaces,
     isAnyDirty, isWorkspaceDirty, reorderWorkspace
   } = useProjectStore()
+
+  // Project name editing state
+  const [editingName, setEditingName] = useState(false)
+  const [nameValue, setNameValue] = useState('')
+  const nameInputRef = useRef<HTMLInputElement>(null)
 
   // Dirty confirmation dialog state
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -47,9 +53,21 @@ export default function ProjectSidebar({ groupId }: { groupId: string }): React.
   const [renameValue, setRenameValue] = useState('')
   const renameInputRef = useRef<HTMLInputElement>(null)
 
+  // Delete confirmation dialog state
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; workspace: string }>({ open: false, workspace: '' })
+
   // Drag state
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropIndex, setDropIndex] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (editingName) {
+      setTimeout(() => {
+        nameInputRef.current?.focus()
+        nameInputRef.current?.select()
+      }, 50)
+    }
+  }, [editingName])
 
   useEffect(() => {
     if (renameDialog.open) {
@@ -59,6 +77,31 @@ export default function ProjectSidebar({ groupId }: { groupId: string }): React.
       }, 50)
     }
   }, [renameDialog.open])
+
+  function handleStartEditName() {
+    if (!name) return
+    setNameValue(name)
+    setEditingName(true)
+  }
+
+  async function handleSaveName() {
+    setEditingName(false)
+    const trimmed = nameValue.trim()
+    if (trimmed && trimmed !== name) {
+      await renameProject(trimmed)
+    }
+    setNameValue('')
+  }
+
+  function handleCancelEditName() {
+    setEditingName(false)
+    setNameValue('')
+  }
+
+  function handleNameKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') handleSaveName()
+    if (e.key === 'Escape') handleCancelEditName()
+  }
 
   async function handleSave() {
     if (filePath) await saveProject(filePath)
@@ -121,6 +164,21 @@ export default function ProjectSidebar({ groupId }: { groupId: string }): React.
     if (e.key === 'Escape') handleRenameCancel()
   }
 
+  function handleStartDelete(wsName: string) {
+    setDeleteDialog({ open: true, workspace: wsName })
+  }
+
+  async function handleConfirmDelete() {
+    if (deleteDialog.workspace) {
+      await deleteWorkspace(deleteDialog.workspace)
+    }
+    setDeleteDialog({ open: false, workspace: '' })
+  }
+
+  function handleCancelDelete() {
+    setDeleteDialog({ open: false, workspace: '' })
+  }
+
   // Drag handlers for workspace reordering
   function handleDragStart(e: React.DragEvent, index: number) {
     setDragIndex(index)
@@ -162,6 +220,7 @@ export default function ProjectSidebar({ groupId }: { groupId: string }): React.
         { icon: Save, label: 'Save', onClick: handleSave, disabled: !hasAnyDirty && !!filePath },
         { icon: FolderOpen, label: 'Open...', onClick: () => openProjectDialog() },
       ]}
+      onSettings={name ? handleStartEditName : undefined}
     >
       {/* Workspaces */}
       <div className="flex items-center justify-between px-3 py-1.5">
@@ -223,7 +282,7 @@ export default function ProjectSidebar({ groupId }: { groupId: string }): React.
                       <>
                         <DropdownMenuSeparator className="bg-zinc-700" />
                         <DropdownMenuItem className="text-xs text-red-400 focus:bg-zinc-800 focus:text-red-300"
-                          onClick={() => deleteWorkspace(wsName)}>
+                          onClick={() => handleStartDelete(wsName)}>
                           Delete
                         </DropdownMenuItem>
                       </>
@@ -241,7 +300,7 @@ export default function ProjectSidebar({ groupId }: { groupId: string }): React.
                 <>
                   <ContextMenuSeparator className="bg-zinc-700" />
                   <ContextMenuItem className="text-xs text-red-400 focus:bg-zinc-800 focus:text-red-300"
-                    onClick={() => deleteWorkspace(wsName)}>
+                    onClick={() => handleStartDelete(wsName)}>
                     Delete
                   </ContextMenuItem>
                 </>
@@ -304,6 +363,57 @@ export default function ProjectSidebar({ groupId }: { groupId: string }): React.
             <Button className="text-xs bg-blue-600 hover:bg-blue-500 text-white" onClick={handleRenameSave}
               disabled={!renameValue.trim() || renameValue.trim() === renameDialog.workspace}>
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename project dialog */}
+      <Dialog open={editingName} onOpenChange={(open) => !open && handleCancelEditName()}>
+        <DialogContent className="bg-zinc-900 border-zinc-700 max-w-sm" hideClose>
+          <VisuallyHidden><DialogTitle>Project Settings</DialogTitle></VisuallyHidden>
+          <div className="space-y-3">
+            <div className="text-sm text-zinc-300 font-medium">Project Settings</div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] text-zinc-400 font-medium">Title</label>
+              <input
+                ref={nameInputRef}
+                className="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1.5 text-xs text-zinc-200 outline-none focus:border-blue-500"
+                value={nameValue}
+                onChange={e => setNameValue(e.target.value)}
+                onKeyDown={handleNameKeyDown}
+                placeholder="Project name"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" className="text-xs text-zinc-400 hover:text-zinc-200" onClick={handleCancelEditName}>
+              Cancel
+            </Button>
+            <Button className="text-xs bg-blue-600 hover:bg-blue-500 text-white" onClick={handleSaveName}
+              disabled={!nameValue.trim() || nameValue.trim() === name}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete workspace confirmation dialog */}
+      <Dialog open={deleteDialog.open} onOpenChange={(open) => !open && handleCancelDelete()}>
+        <DialogContent className="bg-zinc-900 border-zinc-700 max-w-sm" hideClose>
+          <VisuallyHidden><DialogTitle>Delete Workspace</DialogTitle></VisuallyHidden>
+          <div className="space-y-3">
+            <div className="text-sm text-zinc-300 font-medium">Delete Workspace</div>
+            <div className="text-xs text-zinc-400">
+              Are you sure you want to delete "{deleteDialog.workspace}"? This cannot be undone.
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" className="text-xs text-zinc-400 hover:text-zinc-200" onClick={handleCancelDelete}>
+              Cancel
+            </Button>
+            <Button className="text-xs bg-red-600 hover:bg-red-500 text-white" onClick={handleConfirmDelete}>
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

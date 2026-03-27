@@ -9,7 +9,6 @@ import type { Ticket, Epic, TicketStatus, JiraConfig } from './jira-api'
 const COLUMNS: { title: string; status: TicketStatus }[] = [
   { title: 'Backlog', status: 'backlog' },
   { title: 'In Progress', status: 'in_progress' },
-  { title: 'Verify', status: 'verify' },
   { title: 'Done', status: 'done' },
 ]
 
@@ -17,7 +16,6 @@ interface KanbanBoardProps {
   tickets: Ticket[]
   epics: Epic[]
   config: JiraConfig
-  hideDone?: boolean
   jiraBaseUrl: string
   pendingTickets?: PendingTicket[]
   onOpenUrl: (url: string, title: string) => void
@@ -27,11 +25,8 @@ interface KanbanBoardProps {
   onCreateTicket?: (status: TicketStatus, epicKey: string | null) => void
 }
 
-export function KanbanBoard({ tickets, epics, config, hideDone, jiraBaseUrl, pendingTickets = [], onOpenUrl, onOpenClaude, onBeginWork, onRefresh, onCreateTicket }: KanbanBoardProps) {
+export function KanbanBoard({ tickets, epics, config, jiraBaseUrl, pendingTickets = [], onOpenUrl, onOpenClaude, onBeginWork, onRefresh, onCreateTicket }: KanbanBoardProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
-
-  const visibleColumns = hideDone ? COLUMNS.filter((c) => c.status !== 'done') : COLUMNS
-  const gridCols = hideDone ? 'grid-cols-3' : 'grid-cols-4'
 
   const epicKeys = epics.map((e) => e.key)
   const ungroupedTickets = tickets.filter((t) => !t.epicKey || !epicKeys.includes(t.epicKey))
@@ -54,7 +49,7 @@ export function KanbanBoard({ tickets, epics, config, hideDone, jiraBaseUrl, pen
         if (epicTickets.length === 0 && !pendingTickets.some(p => p.epicKey === epic.key)) return null
 
         const isCollapsed = collapsed.has(epic.key)
-        const counts = visibleColumns.map((col) => epicTickets.filter((t) => t.status === col.status).length)
+        const counts = COLUMNS.map((col) => epicTickets.filter((t) => t.status === col.status).length)
         const epicPending = pendingTickets.filter(p => p.epicKey === epic.key)
 
         return (
@@ -68,7 +63,7 @@ export function KanbanBoard({ tickets, epics, config, hideDone, jiraBaseUrl, pen
                 <h2 className="text-sm font-semibold text-zinc-200">{epic.summary}</h2>
                 <span className="text-xs text-zinc-600">{epic.key}</span>
                 <div className="ml-auto flex gap-2">
-                  {visibleColumns.map((col, i) => (
+                  {COLUMNS.map((col, i) => (
                     counts[i] > 0 && (
                       <Badge key={col.status} variant="secondary" className="rounded bg-zinc-800 text-[10px] text-zinc-500">
                         {col.title} {counts[i]}
@@ -79,8 +74,8 @@ export function KanbanBoard({ tickets, epics, config, hideDone, jiraBaseUrl, pen
               </CollapsibleTrigger>
 
               <CollapsibleContent>
-                <div className={`grid ${gridCols} gap-4`}>
-                  {visibleColumns.map((col) => (
+                <div className={`grid grid-cols-3 gap-4`}>
+                  {COLUMNS.map((col) => (
                     <KanbanColumn
                       key={col.status}
                       title={col.title}
@@ -108,7 +103,7 @@ export function KanbanBoard({ tickets, epics, config, hideDone, jiraBaseUrl, pen
               }
               <h2 className="text-sm font-semibold text-zinc-200">Ungrouped</h2>
               <div className="ml-auto flex gap-2">
-                {visibleColumns.map((col) => {
+                {COLUMNS.map((col) => {
                   const count = ungroupedTickets.filter((t) => t.status === col.status).length
                   return count > 0 && (
                     <Badge key={col.status} variant="secondary" className="rounded bg-zinc-800 text-[10px] text-zinc-500">
@@ -120,8 +115,8 @@ export function KanbanBoard({ tickets, epics, config, hideDone, jiraBaseUrl, pen
             </CollapsibleTrigger>
 
             <CollapsibleContent>
-              <div className={`grid ${gridCols} gap-4`}>
-                {visibleColumns.map((col) => (
+              <div className={`grid grid-cols-3 gap-4`}>
+                {COLUMNS.map((col) => (
                   <KanbanColumn
                     key={col.status}
                     title={col.title}

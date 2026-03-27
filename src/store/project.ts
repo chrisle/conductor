@@ -49,6 +49,7 @@ interface ProjectState {
   recentProjects: Array<{ name: string; path: string }>
 
   setProject: (filePath: string, name: string) => void
+  setName: (name: string) => void
   clearProject: () => void
   setActiveWorkspace: (name: string) => void
   setWorkspaceNames: (names: string[]) => void
@@ -74,6 +75,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setProject: (filePath, name) => {
     set({ filePath, name, dirtyWorkspaces: new Set() })
     get().addRecentProject(name, filePath)
+  },
+
+  setName: (name) => {
+    set({ name })
+    const { filePath } = get()
+    if (filePath) get().addRecentProject(name, filePath)
   },
 
   clearProject: () => set({

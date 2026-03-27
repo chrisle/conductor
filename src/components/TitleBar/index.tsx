@@ -1,38 +1,22 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Minus, Square, X, Maximize2, GitBranch } from 'lucide-react'
+import { Minus, Square, X, Maximize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
-import { useSidebarStore } from '@/store/sidebar'
 import { useActivityBarStore } from '@/store/activityBar'
 import { useProjectStore } from '@/store/project'
 import { saveProject, saveProjectAs } from '@/lib/project-io'
 
 export default function TitleBar(): React.ReactElement {
   const [isMaximized, setIsMaximized] = useState(false)
-  const [gitBranch, setGitBranch] = useState<string | null>(null)
   const [closeDialogOpen, setCloseDialogOpen] = useState(false)
-  const { rootPath } = useSidebarStore()
   const { activeExtensionId, toggleExtension } = useActivityBarStore()
   const projectName = useProjectStore(s => s.name)
 
   useEffect(() => {
     window.electronAPI.isMaximized().then(setIsMaximized)
   }, [])
-
-  useEffect(() => {
-    if (!rootPath) return
-    let cancelled = false
-    const fetch = async () => {
-      const branch = await window.electronAPI.gitBranch(rootPath)
-      if (!cancelled) setGitBranch(branch)
-    }
-    fetch()
-    const id = setInterval(fetch, 3000)
-    return () => { cancelled = true; clearInterval(id) }
-  }, [rootPath])
 
   // Listen for system-initiated close (Cmd+Q, red button via main process)
   useEffect(() => {
@@ -128,12 +112,6 @@ export default function TitleBar(): React.ReactElement {
           <span className="text-xs truncate">
             <span className="text-zinc-500">Conductor</span>{projectName ? <span className="text-zinc-300"> — {projectName}</span> : ''}
           </span>
-          {gitBranch && (
-            <Badge variant="outline" className="h-4 px-1.5 gap-1 text-[10px] text-fuchsia-400 border-fuchsia-900 bg-fuchsia-950/30 shrink-0">
-              <GitBranch className="w-2.5 h-2.5" />
-              {gitBranch}
-            </Badge>
-          )}
         </div>
 
         {/* Windows controls */}

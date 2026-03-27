@@ -107,7 +107,7 @@ export const TicketCard = memo(function TicketCard({
 
       {/* Action buttons */}
       <div className="flex items-center gap-1.5">
-        {/* Claude dropdown */}
+        {/* Worktree dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -115,16 +115,16 @@ export const TicketCard = memo(function TicketCard({
               size="sm"
               className="h-6 bg-zinc-800/80 text-[11px] text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 border border-zinc-700/50 px-2"
             >
-              Claude
+              Worktree
               <ChevronDown className="h-3 w-3 ml-0.5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start">
             <DropdownMenuItem onSelect={() => onOpenClaude(ticket)}>
-              Open Claude
+              Open in Claude
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => onBeginWork(ticket)}>
-              Begin work
+              Begin work in Claude
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -146,9 +146,6 @@ export const TicketCard = memo(function TicketCard({
           <DropdownMenuContent side="top" align="start">
             <DropdownMenuItem onSelect={() => handleTransition('In Progress')}>
               In Progress
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => handleTransition('Validate')}>
-              Verify
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => handleTransition('Done')}>
               Done

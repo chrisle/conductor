@@ -1,10 +1,15 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { extensionRegistry } from '@/extensions'
 import { useActivityBarStore } from '@/store/activityBar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 export default function ActivityBar(): React.ReactElement {
+  const [, forceUpdate] = useState(0)
+  useEffect(() => {
+    return extensionRegistry.subscribe(() => forceUpdate(n => n + 1))
+  }, [])
+
   const allSidebarExtensions = extensionRegistry.getSidebarExtensions()
   const { activeExtensionId, toggleExtension } = useActivityBarStore()
 

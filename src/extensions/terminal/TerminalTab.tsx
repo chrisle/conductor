@@ -10,6 +10,9 @@ import * as termAPI from "@/lib/terminal-api";
 // Initialize ghostty WASM once
 const ghosttyReady = initGhostty();
 
+// Ensure bundled fonts are loaded before measuring
+const fontsReady = document.fonts.ready;
+
 export type { TerminalWatcher, TerminalTabExtraProps } from "./types";
 
 export default function TerminalTab({
@@ -33,7 +36,6 @@ export default function TerminalTab({
   const respondedBufRef = useRef("");
   const userScrolledUpRef = useRef(false);
   const watchersRef = useRef(watchers);
-  const watchBufRef = useRef("");
   const watchLastMatchRef = useRef<Map<string, string>>(new Map());
   const watchLastFireRef = useRef<Map<string, number>>(new Map());
   const [showSearch, setShowSearch] = useState(false);
@@ -51,9 +53,13 @@ export default function TerminalTab({
 
   function doFit() {
     const fitAddon = fitAddonRef.current;
-    if (!fitAddon) return;
+    const term = terminalRef.current;
+    if (!fitAddon || !term) return;
     try {
       fitAddon.fit();
+      // Always sync PTY dimensions after fit, even if cols/rows didn't change
+      // from the terminal's perspective (onResize won't fire in that case)
+      termAPI.resizeTerminal(tabId, term.cols, term.rows);
     } catch {}
   }
 
@@ -89,7 +95,7 @@ export default function TerminalTab({
 
     let disposed = false;
 
-    ghosttyReady.then(() => {
+    Promise.all([ghosttyReady, fontsReady]).then(() => {
       if (disposed || !containerRef.current) return;
 
       const term = new Terminal(terminalConfig);
@@ -100,6 +106,9 @@ export default function TerminalTab({
       terminalRef.current = term;
       fitAddonRef.current = fitAddon;
 
+      // Hide container until PTY is ready to avoid stale buffer flash
+      containerRef.current.style.visibility = "hidden";
+
       term.open(containerRef.current);
 
       setTimeout(() => {
@@ -108,12 +117,34 @@ export default function TerminalTab({
         console.log(`[terminal] ghostty fit: cols=${cols} rows=${rows}`);
         termAPI.createTerminal(tabId, cwd).then(() => {
           termAPI.resizeTerminal(tabId, cols, rows);
+          // Show the terminal now that the PTY is connected
+          if (containerRef.current) {
+            containerRef.current.style.visibility = "visible";
+          }
           if (initialCommand && !initCmdSentRef.current) {
-            initCmdSentRef.current = true;
-            setTimeout(
-              () => termAPI.writeTerminal(tabId, initialCommand),
-              500,
-            );
+            // Wait for the shell prompt to settle before sending the command.
+            // We detect readiness by waiting for a gap in incoming PTY data,
+            // which means the prompt has finished rendering.
+            let idleTimer: ReturnType<typeof setTimeout> | null = null;
+            const onData = (_event: any, id: string, _data: string) => {
+              if (id !== tabId) return;
+              if (idleTimer) clearTimeout(idleTimer);
+              idleTimer = setTimeout(() => {
+                if (initCmdSentRef.current) return;
+                initCmdSentRef.current = true;
+                termAPI.offTerminalData(onData);
+                termAPI.writeTerminal(tabId, initialCommand);
+              }, 150);
+            };
+            termAPI.onTerminalData(onData);
+            // Fallback in case no data arrives (e.g. bare shell with no prompt)
+            setTimeout(() => {
+              if (initCmdSentRef.current) return;
+              initCmdSentRef.current = true;
+              termAPI.offTerminalData(onData);
+              if (idleTimer) clearTimeout(idleTimer);
+              termAPI.writeTerminal(tabId, initialCommand);
+            }, 3000);
           }
         });
       }, 50);
@@ -126,6 +157,10 @@ export default function TerminalTab({
       term.onResize(({ cols, rows }: { cols: number; rows: number }) => {
         console.log(`[terminal] ghostty resize: cols=${cols} rows=${rows}`);
         termAPI.resizeTerminal(tabId, cols, rows);
+      });
+
+      term.onRender(({ start, end }: { start: number; end: number }) => {
+        processWatchers(term, start, end);
       });
 
       // Track user scroll-up via wheel events only
@@ -169,7 +204,6 @@ export default function TerminalTab({
           term.scrollToBottom();
         }
 
-        processWatchers(term, data);
         processAutoPilot(term);
       };
 
@@ -202,7 +236,6 @@ export default function TerminalTab({
         termAPI.offTerminalExit(handleTerminalExit);
         el?.removeEventListener("wheel", onWheel);
         resizeObserver.disconnect();
-        watchBufRef.current = "";
         watchLastMatchRef.current.clear();
         watchLastFireRef.current.clear();
         term.dispose();
@@ -219,19 +252,19 @@ export default function TerminalTab({
   }, [tabId]);
 
   // --- Watcher system ---
-  function processWatchers(term: Terminal, data: string) {
+  function processWatchers(term: Terminal, start: number, end: number) {
     if (!watchersRef.current || watchersRef.current.length === 0) return;
 
-    const WATCH_BUF_MAX = 4096;
-    watchBufRef.current += data;
-    if (watchBufRef.current.length > WATCH_BUF_MAX) {
-      watchBufRef.current = watchBufRef.current.slice(-WATCH_BUF_MAX);
+    const buf = term.buffer.active;
+    let renderedText = "";
+    for (let i = start; i <= end; i++) {
+      const line = buf.getLine(buf.baseY + i);
+      if (line) renderedText += line.translateToString(true) + "\n";
     }
-    const strippedBuf = stripAnsi(watchBufRef.current);
 
     for (const watcher of watchersRef.current) {
       if (watcher.pattern.global) watcher.pattern.lastIndex = 0;
-      const match = watcher.pattern.exec(strippedBuf);
+      const match = watcher.pattern.exec(renderedText);
       if (!match) continue;
 
       const matchStr = match[0];
@@ -245,7 +278,6 @@ export default function TerminalTab({
       watchLastMatchRef.current.set(watcher.id, matchStr);
       watchLastFireRef.current.set(watcher.id, now);
 
-      const buf = term.buffer.active;
       let history = "";
       for (let i = 0; i <= buf.baseY + term.rows - 1; i++) {
         const line = buf.getLine(i);
@@ -267,10 +299,13 @@ export default function TerminalTab({
         if (line) screenText += line.translateToString(true) + "\n";
       }
 
-      for (const rule of AUTOPILOT_RULES) {
-        if (!rule.pattern.test(screenText)) continue;
+      // Strip ANSI codes so regex patterns match cleanly
+      const cleaned = stripAnsi(screenText);
 
-        const screenKey = screenText.trim().slice(-120);
+      for (const rule of AUTOPILOT_RULES) {
+        if (!rule.pattern.test(cleaned)) continue;
+
+        const screenKey = cleaned.trim().slice(-120);
         if (respondedBufRef.current === screenKey) continue;
         respondedBufRef.current = screenKey;
         setTimeout(
@@ -328,7 +363,7 @@ export default function TerminalTab({
       <div
         ref={containerRef}
         className="h-full w-full min-w-0 overflow-hidden"
-        onClick={() => terminalRef.current?.focus()}
+                onClick={() => terminalRef.current?.focus()}
       />
     </div>
   );

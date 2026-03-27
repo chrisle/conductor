@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { RefreshCw, LogOut, ChevronRight, Globe, ExternalLink, Plus } from 'lucide-react'
+import { RefreshCw, ChevronRight, Globe, ExternalLink, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -15,11 +17,13 @@ import {
   type JiraProject,
   loadConfig,
   saveConfig,
-  clearConfig,
   fetchProjects,
   projectBoardUrl,
 } from './jira-api'
 import SidebarLayout from '@/components/Sidebar/SidebarLayout'
+
+// Module-level cache so projects survive sidebar unmount/remount
+let cachedProjects: JiraProject[] | null = null
 
 function ConfigForm({ onSave }: { onSave: (c: JiraConfig) => void }) {
   const [domain, setDomain] = useState('')
@@ -88,20 +92,26 @@ function ConfigForm({ onSave }: { onSave: (c: JiraConfig) => void }) {
 
 export default function JiraSidebar({ groupId }: { groupId: string }): React.ReactElement {
   const [config, setConfig] = useState<JiraConfig | null>(loadConfig)
-  const [projects, setProjects] = useState<JiraProject[]>([])
+  const [projects, setProjects] = useState<JiraProject[]>(cachedProjects || [])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [filter, setFilter] = useState('')
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsForm, setSettingsForm] = useState({ domain: '', email: '', apiToken: '' })
+  const [settingsTesting, setSettingsTesting] = useState(false)
+  const [settingsError, setSettingsError] = useState('')
   const { addTab, setActiveTab, groups } = useTabsStore()
   const { focusedGroupId } = useLayoutStore()
   const filterRef = useRef<HTMLInputElement>(null)
 
-  const loadProjects = useCallback(async () => {
+  const loadProjects = useCallback(async (force = false) => {
     if (!config) return
+    if (!force && cachedProjects) return
     setLoading(true)
     setError('')
     try {
       const result = await fetchProjects(config)
+      cachedProjects = result
       setProjects(result)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load')
@@ -151,10 +161,40 @@ export default function JiraSidebar({ groupId }: { groupId: string }): React.Rea
     window.open(projectBoardUrl(config, project))
   }
 
-  function handleDisconnect() {
-    clearConfig()
-    setConfig(null)
-    setProjects([])
+  function handleOpenSettings() {
+    setSettingsForm({
+      domain: config?.domain || '',
+      email: config?.email || '',
+      apiToken: config?.apiToken || '',
+    })
+    setSettingsError('')
+    setSettingsOpen(true)
+  }
+
+  async function handleSaveSettings() {
+    const newConfig: JiraConfig = {
+      domain: settingsForm.domain.trim(),
+      email: settingsForm.email.trim(),
+      apiToken: settingsForm.apiToken.trim(),
+    }
+    if (!newConfig.domain || !newConfig.email || !newConfig.apiToken) {
+      setSettingsError('All fields are required')
+      return
+    }
+    setSettingsTesting(true)
+    setSettingsError('')
+    try {
+      await fetchProjects(newConfig)
+      saveConfig(newConfig)
+      cachedProjects = null
+      setConfig(newConfig)
+      setSettingsOpen(false)
+      loadProjects(true)
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : 'Connection failed')
+    } finally {
+      setSettingsTesting(false)
+    }
   }
 
   if (!config) {
@@ -191,9 +231,9 @@ export default function JiraSidebar({ groupId }: { groupId: string }): React.Rea
     <SidebarLayout
       title="Jira"
       actions={[
-        { icon: RefreshCw, label: 'Refresh', onClick: loadProjects, disabled: loading, spinning: loading },
-        { icon: LogOut, label: 'Disconnect', onClick: handleDisconnect, className: 'text-zinc-500 hover:text-red-400' },
+        { icon: RefreshCw, label: 'Refresh', onClick: () => loadProjects(true), disabled: loading, spinning: loading },
       ]}
+      onSettings={handleOpenSettings}
       footer={config.domain.replace(/\.atlassian\.net$/, '') + '.atlassian.net'}
     >
       {/* Filter */}
@@ -236,6 +276,53 @@ export default function JiraSidebar({ groupId }: { groupId: string }): React.Rea
           onOpenNewTab={(p) => openBoard(p, true)}
         />
       ))}
+
+      {/* Settings dialog */}
+      <Dialog open={settingsOpen} onOpenChange={(open) => !open && setSettingsOpen(false)}>
+        <DialogContent className="bg-zinc-900 border-zinc-700 max-w-sm" hideClose>
+          <VisuallyHidden><DialogTitle>Jira Settings</DialogTitle></VisuallyHidden>
+          <div className="space-y-3">
+            <div className="text-sm text-zinc-300 font-medium">Jira Settings</div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] text-zinc-400 font-medium">Domain</label>
+              <input
+                className="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1.5 text-xs text-zinc-200 outline-none focus:border-blue-500 placeholder-zinc-500"
+                placeholder="e.g. mycompany"
+                value={settingsForm.domain}
+                onChange={e => setSettingsForm(f => ({ ...f, domain: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] text-zinc-400 font-medium">Email</label>
+              <input
+                className="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1.5 text-xs text-zinc-200 outline-none focus:border-blue-500 placeholder-zinc-500"
+                placeholder="you@example.com"
+                value={settingsForm.email}
+                onChange={e => setSettingsForm(f => ({ ...f, email: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] text-zinc-400 font-medium">API Token</label>
+              <input
+                type="password"
+                className="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1.5 text-xs text-zinc-200 outline-none focus:border-blue-500 placeholder-zinc-500"
+                placeholder="API token"
+                value={settingsForm.apiToken}
+                onChange={e => setSettingsForm(f => ({ ...f, apiToken: e.target.value }))}
+              />
+            </div>
+            {settingsError && <div className="text-[11px] text-red-400">{settingsError}</div>}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" className="text-xs text-zinc-400 hover:text-zinc-200" onClick={() => setSettingsOpen(false)}>
+              Cancel
+            </Button>
+            <Button className="text-xs bg-blue-600 hover:bg-blue-500 text-white" onClick={handleSaveSettings} disabled={settingsTesting}>
+              {settingsTesting ? 'Testing...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SidebarLayout>
   )
 }
@@ -296,17 +383,17 @@ function ProjectGroup({
                 </div>
               </button>
             </ContextMenuTrigger>
-            <ContextMenuContent>
-              <ContextMenuItem onClick={() => onOpenInConductor(project)}>
+            <ContextMenuContent className="bg-zinc-900 border-zinc-700 min-w-[140px]">
+              <ContextMenuItem className="text-xs text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => onOpenInConductor(project)}>
                 <Globe className="w-3.5 h-3.5 mr-2" />
                 Open in Conductor
               </ContextMenuItem>
-              <ContextMenuItem onClick={() => onOpenInSystemBrowser(project)}>
+              <ContextMenuItem className="text-xs text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => onOpenInSystemBrowser(project)}>
                 <ExternalLink className="w-3.5 h-3.5 mr-2" />
                 Open in System Browser
               </ContextMenuItem>
-              <ContextMenuSeparator />
-              <ContextMenuItem onClick={() => onOpenNewTab(project)}>
+              <ContextMenuSeparator className="bg-zinc-700" />
+              <ContextMenuItem className="text-xs text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => onOpenNewTab(project)}>
                 <Plus className="w-3.5 h-3.5 mr-2" />
                 Open in New Tab
               </ContextMenuItem>

@@ -63,36 +63,54 @@ export interface JiraProject {
   name: string
   projectTypeKey: string
   avatarUrl?: string
+  boardId?: number
 }
 
 export async function fetchProjects(config: JiraConfig): Promise<JiraProject[]> {
   const data = await jiraGet(config, '/rest/api/3/project/search?maxResults=100&orderBy=name') as {
     values?: Array<Record<string, unknown>>
   }
-  return (data.values || []).map((p) => ({
+  const projects = (data.values || []).map((p) => ({
     id: p.id as string,
     key: p.key as string,
     name: p.name as string,
     projectTypeKey: p.projectTypeKey as string,
     avatarUrl: (p.avatarUrls as Record<string, string>)?.['24x24'],
   }))
+
+  // Fetch board IDs in parallel
+  const withBoards = await Promise.all(
+    projects.map(async (p) => {
+      try {
+        const boardData = await jiraGet(config,
+          `/rest/agile/1.0/board?projectKeyOrId=${p.key}&maxResults=1`
+        ) as { values?: Array<{ id: number }> }
+        return { ...p, boardId: boardData.values?.[0]?.id }
+      } catch {
+        return p
+      }
+    })
+  )
+
+  return withBoards
 }
 
 export function projectBoardUrl(config: JiraConfig, project: JiraProject): string {
   const base = baseUrl(config)
+  const boardSuffix = project.boardId ? `boards/${project.boardId}` : 'board'
   switch (project.projectTypeKey) {
     case 'service_desk':
-      return `${base}/jira/servicedesk/projects/${project.key}/boards`
+      return `${base}/jira/servicedesk/projects/${project.key}/${boardSuffix}`
     case 'business':
-      return `${base}/jira/core/projects/${project.key}/board`
+      return `${base}/jira/core/projects/${project.key}/${boardSuffix}`
     default:
-      return `${base}/jira/software/projects/${project.key}/board`
+      return `${base}/jira/software/projects/${project.key}/${boardSuffix}`
   }
 }
 
 // ── Tickets & Epics ─────────────────────────────────────────────────────────
 
-export type TicketStatus = 'backlog' | 'in_progress' | 'verify' | 'done'
+export type TicketStatus = 'backlog' | 'in_progress' | 'done'
 
 export interface Epic {
   key: string
@@ -123,8 +141,7 @@ export interface Ticket {
 
 function mapStatus(jiraStatus: string): TicketStatus {
   const s = jiraStatus.toLowerCase()
-  if (s === 'done' || s === 'closed') return 'done'
-  if (s === 'in review' || s === 'review' || s === 'in qa' || s === 'validate') return 'verify'
+  if (s === 'done' || s === 'closed' || s === 'in review' || s === 'review' || s === 'in qa' || s === 'validate') return 'done'
   if (s === 'in progress' || s === 'in development') return 'in_progress'
   return 'backlog'
 }
@@ -313,7 +330,6 @@ export async function createJiraTicket(config: JiraConfig, params: CreateTicketP
   // If we need a status other than backlog, transition it
   if (params.status && params.status !== 'backlog') {
     const statusName = params.status === 'in_progress' ? 'In Progress'
-      : params.status === 'verify' ? 'Validate'
       : params.status === 'done' ? 'Done'
       : 'Backlog'
     try {

@@ -22,21 +22,20 @@ export interface AutopilotRule {
 }
 
 export const AUTOPILOT_RULES: AutopilotRule[] = [
-  // Claude Code interactive menus — any question followed by numbered options
-  // where option 1 is "Yes". Must come FIRST: these menus only accept Enter/arrows,
+  // Claude Code interactive menus — any numbered menu where option 1 is "Yes".
+  // Must come FIRST: these menus only accept Enter/arrows,
   // sending "y" would be ignored and poison the dedup cache.
   // Covers: file creation, workspace trust, bash permission, etc.
-  { pattern: /\?.*1\.\s*Yes/s, response: '\r' },
+  { pattern: /1\.\s*Yes/s, response: '\r' },
 
   // Simple y/n prompts (text-based, not numbered menus)
-  { pattern: /\(Y\/n\)\s*$/i, response: 'y\r' },
-  { pattern: /\(y\/N\)\s*$/i, response: 'y\r' },
-  { pattern: /\[y\/n\]\s*$/i, response: 'y\r' },
-  { pattern: /\[Y\/n\]\s*$/i, response: 'y\r' },
+  { pattern: /\(Y\/n\)\s*$/im, response: 'y\r' },
+  { pattern: /\(y\/N\)\s*$/im, response: 'y\r' },
+  { pattern: /\[y\/n\]\s*$/im, response: 'y\r' },
+  { pattern: /\[Y\/n\]\s*$/im, response: 'y\r' },
   { pattern: /confirm\? \(y\/n\)/i, response: 'y\r' },
   { pattern: /press enter to continue/i, response: '\r' },
   { pattern: /continue\? \[y\/n\]/i, response: 'y\r' },
-  { pattern: /Do you want to proceed/i, response: 'y\r' },
   { pattern: /Allow.*\(y\/n\)/i, response: 'y\r' },
 ]
 

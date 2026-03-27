@@ -10,6 +10,7 @@ const CONDUCTORD_PORT = 9800
 const CONDUCTORD_URL = `ws://127.0.0.1:${CONDUCTORD_PORT}/ws/terminal`
 
 const sockets = new Map<string, WebSocket>()
+const decoders = new Map<string, TextDecoder>()
 const dataListeners = new Set<(event: any, id: string, data: string) => void>()
 const exitListeners = new Set<(event: any, id: string) => void>()
 
@@ -23,6 +24,7 @@ export function createTerminal(id: string, cwd?: string): Promise<void> {
 
     ws.onopen = () => {
       sockets.set(id, ws)
+      decoders.set(id, new TextDecoder('utf-8'))
       resolve()
     }
 
@@ -46,7 +48,8 @@ export function createTerminal(id: string, cwd?: string): Promise<void> {
       }
 
       // Binary messages are terminal output
-      const data = new TextDecoder().decode(event.data)
+      const decoder = decoders.get(id) || new TextDecoder('utf-8')
+      const data = decoder.decode(event.data, { stream: true })
       for (const cb of dataListeners) {
         cb(null, id, data)
       }
@@ -54,6 +57,7 @@ export function createTerminal(id: string, cwd?: string): Promise<void> {
 
     ws.onclose = () => {
       sockets.delete(id)
+      decoders.delete(id)
       for (const cb of exitListeners) {
         cb(null, id)
       }
@@ -90,6 +94,7 @@ export function killTerminal(id: string): Promise<void> {
   if (ws) {
     ws.close()
     sockets.delete(id)
+    decoders.delete(id)
   }
   return Promise.resolve()
 }

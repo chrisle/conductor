@@ -1,5 +1,6 @@
-import React from 'react'
-import { FileText } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { FileText, GitBranch } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
@@ -18,6 +19,19 @@ export default function Footer(): React.ReactElement {
   const { groups } = useTabsStore()
   const { focusedGroupId } = useLayoutStore()
   const { rootPath } = useSidebarStore()
+  const [gitBranch, setGitBranch] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!rootPath) return
+    let cancelled = false
+    const fetch = async () => {
+      const branch = await window.electronAPI.gitBranch(rootPath)
+      if (!cancelled) setGitBranch(branch)
+    }
+    fetch()
+    const id = setInterval(fetch, 3000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [rootPath])
 
   const focusedGroup = focusedGroupId ? groups[focusedGroupId] : null
   const activeTab = focusedGroup?.tabs.find(t => t.id === focusedGroup.activeTabId)
@@ -70,6 +84,18 @@ export default function Footer(): React.ReactElement {
       )}
 
       <div className="flex-1" />
+
+      {gitBranch && (
+        <>
+          <Item>
+            <Badge variant="outline" className="h-4 px-1.5 gap-1 text-[10px] text-fuchsia-400 border-fuchsia-900 bg-fuchsia-950/30">
+              <GitBranch className="w-2.5 h-2.5" />
+              {gitBranch}
+            </Badge>
+          </Item>
+          <Separator orientation="vertical" className="h-3 bg-zinc-800" />
+        </>
+      )}
 
       {splitCount > 1 && (
         <>
