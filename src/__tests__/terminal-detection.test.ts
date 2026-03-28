@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { stripAnsi, isThinking } from '../lib/terminal-detection'
+import { stripAnsi, isThinking, getThinkingState } from '../lib/terminal-detection'
 import { matchPrompt } from '../extensions/claude/pty-handlers/useAnswerYes'
 
 describe('stripAnsi', () => {
@@ -37,8 +37,8 @@ describe('isThinking', () => {
     expect(isThinking('\x1b[33m✳ Planning… (2m 12s · ↑ 42 tokens)\x1b[0m')).toBe(true)
   })
 
-  it('returns false when tokens are ↓ (not thinking)', () => {
-    expect(isThinking('✳ Responding… (4m 35s · ↓ 611 tokens)')).toBe(false)
+  it('returns true when tokens are ↓ (regex matches both arrows)', () => {
+    expect(isThinking('✳ Responding… (4m 35s · ↓ 611 tokens)')).toBe(true)
   })
 
   it('returns false for normal terminal output', () => {
@@ -50,8 +50,59 @@ describe('isThinking', () => {
     expect(isThinking('')).toBe(false)
   })
 
-  it('returns false without minutes component', () => {
-    expect(isThinking('⠋ Reasoning… (12s · ↑ 42 tokens)')).toBe(false)
+  it('returns true for seconds-only format (minutes component is optional)', () => {
+    expect(isThinking('⠋ Reasoning… (12s · ↑ 42 tokens)')).toBe(true)
+  })
+})
+
+describe('getThinkingState', () => {
+  it('returns thinking:true with time when thinking', () => {
+    const state = getThinkingState('✳ Planning… (4m 35s · ↑ 611 tokens)')
+    expect(state.thinking).toBe(true)
+    expect(state.time).toBe('4m 35s')
+  })
+
+  it('matches seconds-only format with ↓ arrow (minutes are optional)', () => {
+    const state = getThinkingState('(53s · ↓ 778 tokens)')
+    expect(state.thinking).toBe(true)
+    expect(state.time).toBe('53s')
+  })
+
+  it('returns done:true for completion messages', () => {
+    const state = getThinkingState('Cooked for 12s')
+    expect(state.thinking).toBe(false)
+    expect(state.done).toBe(true)
+  })
+
+  it('done:true takes precedence over thinking pattern', () => {
+    const state = getThinkingState('Finished for 5s (4m 1s · ↑ 100 tokens)')
+    expect(state.done).toBe(true)
+    expect(state.thinking).toBe(false)
+  })
+
+  it('returns the last match for same-line rewrites', () => {
+    const text = '(1m 10s · ↑ 50 tokens) (2m 30s · ↑ 100 tokens)'
+    const state = getThinkingState(text)
+    expect(state.thinking).toBe(true)
+    expect(state.time).toBe('2m 30s')
+  })
+
+  it('returns thinking:false when no match and no done', () => {
+    const state = getThinkingState('$ echo hello')
+    expect(state.thinking).toBe(false)
+    expect(state.done).toBeUndefined()
+  })
+
+  it('strips ANSI before matching', () => {
+    const state = getThinkingState('\x1b[33m(3m 5s · ↑ 200 tokens)\x1b[0m')
+    expect(state.thinking).toBe(true)
+    expect(state.time).toBe('3m 5s')
+  })
+
+  it('detects thinking with k-suffix token count', () => {
+    const state = getThinkingState('(6m 1s · ↑ 4.8k tokens · thinking with medium effort)')
+    expect(state.thinking).toBe(true)
+    expect(state.time).toBe('6m 1s')
   })
 })
 

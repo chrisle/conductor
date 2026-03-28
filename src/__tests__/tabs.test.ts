@@ -68,6 +68,16 @@ describe('useTabsStore', () => {
       useTabsStore.getState().addTab('nonexistent', { type: 'text', title: 'tab' })
       expect(useTabsStore.getState().groups).toEqual(before)
     })
+
+    it('focuses existing tab when same id is provided again', () => {
+      const groupId = useTabsStore.getState().createGroup()
+      const tabId = useTabsStore.getState().addTab(groupId, { type: 'text', title: 'first' })
+      useTabsStore.getState().addTab(groupId, { type: 'text', title: 'second' })
+      // Re-add first by explicit id — should just focus, not duplicate
+      useTabsStore.getState().addTab(groupId, { id: tabId, type: 'text', title: 'first' })
+      expect(useTabsStore.getState().groups[groupId].tabs).toHaveLength(2)
+      expect(useTabsStore.getState().groups[groupId].activeTabId).toBe(tabId)
+    })
   })
 
   describe('removeTab', () => {
@@ -200,6 +210,50 @@ describe('useTabsStore', () => {
       expect(tab.title).toBe('new title')
       expect(tab.filePath).toBe('/some/path')
       expect(tab.type).toBe('text')
+    })
+
+    it('updates isThinking and thinkingTime fields', () => {
+      const groupId = useTabsStore.getState().createGroup()
+      const tabId = useTabsStore.getState().addTab(groupId, { type: 'claude', title: 'Claude' })
+
+      useTabsStore.getState().updateTab(groupId, tabId, { isThinking: true, thinkingTime: '4m 35s' })
+
+      const tab = useTabsStore.getState().groups[groupId].tabs[0]
+      expect(tab.isThinking).toBe(true)
+      expect(tab.thinkingTime).toBe('4m 35s')
+    })
+
+    it('clears isThinking and thinkingTime when thinking stops', () => {
+      const groupId = useTabsStore.getState().createGroup()
+      const tabId = useTabsStore.getState().addTab(groupId, { type: 'claude', title: 'Claude' })
+
+      useTabsStore.getState().updateTab(groupId, tabId, { isThinking: true, thinkingTime: '2m 10s' })
+      useTabsStore.getState().updateTab(groupId, tabId, { isThinking: false, thinkingTime: undefined })
+
+      const tab = useTabsStore.getState().groups[groupId].tabs[0]
+      expect(tab.isThinking).toBe(false)
+      expect(tab.thinkingTime).toBeUndefined()
+    })
+  })
+
+  describe('setGroupWorktree', () => {
+    it('sets the worktree on a group', () => {
+      const groupId = useTabsStore.getState().createGroup()
+      useTabsStore.getState().setGroupWorktree(groupId, '/path/to/worktree')
+      expect(useTabsStore.getState().groups[groupId].worktree).toBe('/path/to/worktree')
+    })
+
+    it('clears the worktree by setting undefined', () => {
+      const groupId = useTabsStore.getState().createGroup()
+      useTabsStore.getState().setGroupWorktree(groupId, '/path/to/worktree')
+      useTabsStore.getState().setGroupWorktree(groupId, undefined)
+      expect(useTabsStore.getState().groups[groupId].worktree).toBeUndefined()
+    })
+
+    it('does nothing for a non-existent group', () => {
+      const before = { ...useTabsStore.getState().groups }
+      useTabsStore.getState().setGroupWorktree('nonexistent', '/some/path')
+      expect(useTabsStore.getState().groups).toEqual(before)
     })
   })
 
