@@ -97,11 +97,26 @@ export function createTerminal(id: string, cwd?: string): Promise<{ isNew: boole
   })
 }
 
-export function writeTerminal(id: string, data: string): Promise<void> {
+export function writeTerminal(id: string, data: string, opts?: { programmatic?: boolean }): Promise<void> {
   const ws = sockets.get(id)
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'input', data }))
+  if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.resolve()
+
+  // For programmatic writes, delay before sending \r or \n so the
+  // receiving process has time to ingest preceding input.
+  if (opts?.programmatic) {
+    const idx = data.search(/[\r\n]/)
+    if (idx > 0) {
+      ws.send(JSON.stringify({ type: 'input', data: data.slice(0, idx) }))
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          ws.send(JSON.stringify({ type: 'input', data: data.slice(idx) }))
+          resolve()
+        }, 150)
+      })
+    }
   }
+
+  ws.send(JSON.stringify({ type: 'input', data }))
   return Promise.resolve()
 }
 
@@ -111,6 +126,13 @@ export function resizeTerminal(id: string, cols: number, rows: number): Promise<
     ws.send(JSON.stringify({ type: 'resize', data: { cols, rows } }))
   }
   return Promise.resolve()
+}
+
+export function setTmuxOption(id: string, key: string, value: string): void {
+  const ws = sockets.get(id)
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'tmux-option', data: { key, value } }))
+  }
 }
 
 export function setAutoPilot(id: string, enabled: boolean): void {

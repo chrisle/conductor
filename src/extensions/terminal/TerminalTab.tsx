@@ -1,10 +1,13 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
+import { RotateCw } from "lucide-react";
 import { init as initGhostty, Terminal, FitAddon } from "ghostty-web";
 import type { TabProps } from "@/extensions/types";
 import type { TerminalTabExtraProps } from "./types";
 import { terminalConfig } from "./theme";
 import SearchBar from "./SearchBar";
 import * as termAPI from "@/lib/terminal-api";
+import { useResolvedSettings } from "@/hooks/useResolvedSettings";
+import { useTabsStore } from "@/store/tabs";
 
 // Initialize ghostty WASM once
 const ghosttyReady = initGhostty();
@@ -24,6 +27,7 @@ export type { TerminalWatcher, TerminalTabExtraProps } from "./types";
 
 export default function TerminalTab({
   tabId,
+  groupId,
   isActive,
   tab,
   preventScreenClear = false,
@@ -32,6 +36,7 @@ export default function TerminalTab({
   onTerminalReady,
   onSessionReady,
   interceptKeys,
+  footer,
 }: TabProps & TerminalTabExtraProps): React.ReactElement {
   const cwd = tab.filePath;
   const initialCommand = tab.initialCommand;
@@ -49,6 +54,15 @@ export default function TerminalTab({
   const watchLastFireRef = useRef<Map<string, number>>(new Map());
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const resolvedSettings = useResolvedSettings();
+  const sessionReadyRef = useRef(false);
+
+  const handleRefresh = useCallback(() => {
+    termAPI.killTerminal(tabId);
+    useTabsStore.getState().updateTab(groupId, tabId, {
+      refreshKey: (tab.refreshKey || 0) + 1,
+    });
+  }, [tabId, groupId, tab.refreshKey]);
 
   useEffect(() => {
     preventScreenClearRef.current = preventScreenClear;
@@ -59,6 +73,13 @@ export default function TerminalTab({
   useEffect(() => {
     onPtyDataRef.current = onPtyData;
   }, [onPtyData]);
+
+  // Re-apply tmux mouse whenever the resolved setting changes
+  useEffect(() => {
+    if (sessionReadyRef.current) {
+      termAPI.setTmuxOption(tabId, 'mouse', resolvedSettings.terminal.tmuxMouse ? 'on' : 'off');
+    }
+  }, [resolvedSettings.terminal.tmuxMouse, tabId]);
 
   function doFit() {
     const fitAddon = fitAddonRef.current;
@@ -126,13 +147,16 @@ export default function TerminalTab({
         console.log(`[terminal] ghostty fit: cols=${cols} rows=${rows}`);
         termAPI.createTerminal(tabId, cwd).then(({ isNew }) => {
           termAPI.resizeTerminal(tabId, cols, rows);
+          sessionReadyRef.current = true;
+          // Apply tmux mouse setting from resolved project/workspace config
+          termAPI.setTmuxOption(tabId, 'mouse', resolvedSettings.terminal.tmuxMouse ? 'on' : 'off');
           // Show the terminal now that the PTY is connected and focus it
           if (containerRef.current) {
             containerRef.current.style.visibility = "visible";
           }
           term.focus();
           onTerminalReady?.((data: string) =>
-            termAPI.writeTerminal(tabId, data),
+            termAPI.writeTerminal(tabId, data, { programmatic: true }),
           );
           onSessionReady?.(isNew);
           // Only send initialCommand for brand-new tmux sessions. When
@@ -149,7 +173,7 @@ export default function TerminalTab({
                 if (initCmdSentRef.current) return;
                 initCmdSentRef.current = true;
                 termAPI.offTerminalData(onData);
-                termAPI.writeTerminal(tabId, initialCommand);
+                termAPI.writeTerminal(tabId, initialCommand, { programmatic: true });
               }, 150);
             };
             termAPI.onTerminalData(onData);
@@ -159,7 +183,7 @@ export default function TerminalTab({
               initCmdSentRef.current = true;
               termAPI.offTerminalData(onData);
               if (idleTimer) clearTimeout(idleTimer);
-              termAPI.writeTerminal(tabId, initialCommand);
+              termAPI.writeTerminal(tabId, initialCommand, { programmatic: true });
             }, 3000);
           }
         });
@@ -335,7 +359,8 @@ export default function TerminalTab({
   }, [isActive]);
 
   return (
-    <div className="h-full w-full min-w-0 bg-zinc-950">
+    <div className="flex flex-col h-full w-full min-w-0 bg-zinc-950">
+    <div className="flex-1 min-h-0">
     <div
       ref={wrapperRef}
       className="relative m-3 min-w-0"
@@ -375,6 +400,25 @@ export default function TerminalTab({
         className="h-full w-full min-w-0 overflow-hidden"
         onClick={() => terminalRef.current?.focus()}
       />
+    </div>
+    </div>
+    <div className="flex items-center gap-3 px-2 h-5 border-t border-zinc-800 shrink-0">
+      {footer}
+      <div className="flex-1" />
+      <button
+        onClick={handleRefresh}
+        className="text-zinc-500 hover:text-zinc-300 transition-colors"
+        title="Refresh terminal"
+      >
+        <RotateCw className="w-3 h-3" />
+      </button>
+      <span
+        className="text-[10px] font-mono text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors truncate max-w-[180px]"
+        title={tabId}
+        onClick={() => navigator.clipboard.writeText(tabId)}
+      >
+        tmux: {tabId}
+      </span>
     </div>
 </div>
   );

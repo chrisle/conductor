@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useConfigStore } from '@/store/config'
 
 export interface ClaudeSettings {
   skipDangerousPermissions: boolean
@@ -6,26 +7,10 @@ export interface ClaudeSettings {
   disableBackgroundTasks: boolean
 }
 
-const STORAGE_KEY = 'conductor:claude-settings'
-
 const defaults: ClaudeSettings = {
   skipDangerousPermissions: false,
   autoPilotScanMs: 250,
   disableBackgroundTasks: true,
-}
-
-function load(): ClaudeSettings {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return { ...defaults, ...JSON.parse(raw) }
-  } catch { /* ignore */ }
-  return { ...defaults }
-}
-
-function save(settings: ClaudeSettings) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
-  } catch { /* ignore */ }
 }
 
 interface ClaudeSettingsStore extends ClaudeSettings {
@@ -33,11 +18,18 @@ interface ClaudeSettingsStore extends ClaudeSettings {
 }
 
 export const useClaudeSettings = create<ClaudeSettingsStore>((set) => ({
-  ...load(),
+  ...defaults,
   update: (patch) =>
     set((state) => {
       const next = { ...state, ...patch }
-      save(next)
+      useConfigStore.getState().setClaudeSettings(patch)
       return next
     }),
 }))
+
+// Hydrate from config store once ready
+useConfigStore.subscribe((state) => {
+  if (state.ready) {
+    useClaudeSettings.setState(state.config.claude)
+  }
+})

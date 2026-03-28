@@ -22,7 +22,11 @@ export function useThinkingDetect(tabId: string, groupId: string) {
       recentDataRef.current = recentDataRef.current.slice(-4096)
     }
 
-    const { thinking, time, done } = getThinkingState(stripAnsi(recentDataRef.current))
+    // Check only the recent tail for done detection to avoid stale matches.
+    // The thinking pattern (timer + tokens) also uses the tail so old
+    // thinking lines that scrolled off don't produce false positives.
+    const tail = recentDataRef.current.slice(-1024)
+    const { thinking, time, done } = getThinkingState(stripAnsi(tail))
 
     if (thinking) {
       // Cancel any pending "not thinking" timer and go green immediately
@@ -41,6 +45,8 @@ export function useThinkingDetect(tabId: string, groupId: string) {
         offTimerRef.current = null
       }
       thinkingRef.current = false
+      // Clear the buffer so the done message doesn't block future detection
+      recentDataRef.current = ''
       updateTab(groupId, tabId, { isThinking: false, thinkingTime: undefined })
     } else if (thinkingRef.current) {
       // Reset the debounce timer on every data arrival — same-line overwrites
@@ -50,6 +56,7 @@ export function useThinkingDetect(tabId: string, groupId: string) {
       offTimerRef.current = setTimeout(() => {
         offTimerRef.current = null
         thinkingRef.current = false
+        recentDataRef.current = ''
         updateTab(groupId, tabId, { isThinking: false, thinkingTime: undefined })
       }, 3000)
     }

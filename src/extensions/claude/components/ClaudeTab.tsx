@@ -9,6 +9,7 @@ import { useClaudeSettings } from '../contexts/useClaudeSettings'
 import { buildClaudeCommand } from '../contexts/buildClaudeCommand'
 import { setAutoPilot as setAutoPilotWs } from '@/lib/terminal-api'
 import { useTabsStore } from '@/store/tabs'
+import { useWorkSessionsStore } from '@/store/work-sessions'
 
 // Extract a Jira ticket key (e.g. "PROJ-123") from the tab title.
 function extractTicketKey(title: string): string | null {
@@ -38,13 +39,17 @@ export default function ClaudeTab({ tabId, groupId, isActive, tab }: TabProps): 
   const sessionId = useSessionDetect(tab.initialCommand, projectPath)
   const onPtyData = usePtyHandlers(tabId, groupId)
 
-  // Persist the detected session ID back to the ticket binding so
+  // Persist the detected session ID back to the work session so
   // "Open in Claude" can resume the same session next time.
   useEffect(() => {
     if (!sessionId) return
     const ticketKey = extractTicketKey(tab.title)
     if (!ticketKey) return
-    window.electronAPI.setTicketBinding(ticketKey, { claude_session_id: sessionId })
+    const sessionsStore = useWorkSessionsStore.getState()
+    const workSession = sessionsStore.getActiveSessionForTicket(ticketKey)
+    if (workSession) {
+      sessionsStore.updateSession(workSession.id, { claudeSessionId: sessionId })
+    }
   }, [sessionId, tab.title])
 
   const handleTerminalReady = useCallback((write: (data: string) => void) => {
@@ -90,35 +95,19 @@ export default function ClaudeTab({ tabId, groupId, isActive, tab }: TabProps): 
     }, 500)
   }, [sessionId, disableBackgroundTasks])
 
-  return (
-    <div className="flex flex-col h-full w-full min-w-0 bg-zinc-950">
-      <div className="flex-1 min-h-0">
-        <TerminalTab
-          tabId={tabId}
-          groupId={groupId}
-          isActive={isActive}
-          tab={{ ...tab, initialCommand: buildClaudeCommand(tab.initialCommand || 'claude\n', settings) }}
-          preventScreenClear={preventScreenClear}
-          onPtyData={onPtyData}
-          onTerminalReady={handleTerminalReady}
-          onSessionReady={() => updateTab(groupId, tabId, { hasTmuxSession: true })}
-          interceptKeys={interceptKeys}
-        />
-      </div>
-
-      <div className="flex items-center gap-3 px-2 h-5 border-t border-zinc-800 shrink-0">
-        <Toggle on={autoPilot} onToggle={() => setAutoPilot(!autoPilot)} label="Auto-pilot" />
-        <Toggle on={preventScreenClear} onToggle={() => setPreventScreenClear(!preventScreenClear)} label="Prevent clear" color="#06b6d4" />
-        <Toggle
-          on={disableBackgroundTasks}
-          onToggle={handleToggleBackgroundTasks}
-          label="No bg tasks"
-          color="#ef4444"
-        />
-
-        <div className="flex-1" />
-
-        {sessionId && (
+  const footer = (
+    <>
+      <Toggle on={autoPilot} onToggle={() => setAutoPilot(!autoPilot)} label="Auto-pilot" />
+      <Toggle on={preventScreenClear} onToggle={() => setPreventScreenClear(!preventScreenClear)} label="Prevent clear" color="#06b6d4" />
+      <Toggle
+        on={disableBackgroundTasks}
+        onToggle={handleToggleBackgroundTasks}
+        label="No bg tasks"
+        color="#ef4444"
+      />
+      {sessionId && (
+        <>
+          <div className="w-px h-3 bg-zinc-700" />
           <span
             className="text-[10px] font-mono text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors truncate max-w-[180px]"
             title={sessionId}
@@ -126,8 +115,23 @@ export default function ClaudeTab({ tabId, groupId, isActive, tab }: TabProps): 
           >
             {sessionId.slice(0, 8)}
           </span>
-        )}
-      </div>
-    </div>
+        </>
+      )}
+    </>
+  )
+
+  return (
+    <TerminalTab
+      tabId={tabId}
+      groupId={groupId}
+      isActive={isActive}
+      tab={{ ...tab, initialCommand: buildClaudeCommand(tab.initialCommand || 'claude\n', settings) }}
+      preventScreenClear={preventScreenClear}
+      onPtyData={onPtyData}
+      onTerminalReady={handleTerminalReady}
+      onSessionReady={() => updateTab(groupId, tabId, { hasTmuxSession: true })}
+      interceptKeys={interceptKeys}
+      footer={footer}
+    />
   )
 }

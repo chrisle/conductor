@@ -17,4 +17,6 @@ export interface TerminalTabExtraProps {
   onSessionReady?: (isNew: boolean) => void;
   /** Intercept key events before the terminal processes them. Return true to prevent default handling. */
   interceptKeys?: (e: React.KeyboardEvent, write: (data: string) => void) => boolean;
+  /** Optional footer rendered below the terminal */
+  footer?: React.ReactNode;
 }

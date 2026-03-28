@@ -554,6 +554,31 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 			}
 			s.mu.Unlock()
 			log.Printf("[session %s] autopilot %v", s.id, enabled)
+		case "tmux-option":
+			// Set a tmux option on this session's tmux window.
+			// Data: { "key": "mouse", "value": "on" | "off" }
+			if tmuxPath == "" {
+				break
+			}
+			var opt struct {
+				Key   string `json:"key"`
+				Value string `json:"value"`
+			}
+			json.Unmarshal(msg.Data, &opt)
+			// Whitelist allowed options to prevent arbitrary tmux commands.
+			allowed := map[string]bool{"mouse": true}
+			if !allowed[opt.Key] {
+				log.Printf("[session %s] tmux-option: rejected key %q", s.id, opt.Key)
+				break
+			}
+			tmuxName := sanitizeTmuxName(s.id)
+			setCmd := tmuxCmd("set-option", "-t", "="+tmuxName, opt.Key, opt.Value)
+			setCmd.Env = tmuxEnv()
+			if err := setCmd.Run(); err != nil {
+				log.Printf("[session %s] tmux-option %s=%s failed: %v", s.id, opt.Key, opt.Value, err)
+			} else {
+				log.Printf("[session %s] tmux-option %s=%s", s.id, opt.Key, opt.Value)
+			}
 		}
 	}
 }

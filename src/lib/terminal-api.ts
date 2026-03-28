@@ -12,6 +12,7 @@ export {
   resizeTerminal,
   killTerminal,
   setAutoPilot,
+  setTmuxOption,
   onTerminalData,
   offTerminalData,
   onTerminalExit,

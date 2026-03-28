@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Server, CheckCircle, XCircle, RefreshCw, RefreshCcw, Square, Play, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import type { TabProps } from '@/extensions/types'
 
@@ -229,7 +230,16 @@ export default function TerminalServiceTab({ isActive }: TabProps): React.ReactE
               <RefreshCw className={`w-3.5 h-3.5 ${sessionsLoading ? 'animate-spin' : ''}`} />
             </Button>
           </div>
-          {sessions.length === 0 ? (
+          {sessionsLoading && sessions.length === 0 ? (
+            <div className="space-y-1">
+              {[...Array(2)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between rounded bg-zinc-900 px-2 py-1.5 border border-zinc-800">
+                  <Skeleton className="h-3.5 w-32" />
+                  <Skeleton className="h-5 w-5 rounded" />
+                </div>
+              ))}
+            </div>
+          ) : sessions.length === 0 ? (
             <p className="text-xs text-zinc-600">No active sessions</p>
           ) : (
             <div className="space-y-1">
