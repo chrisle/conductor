@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { X, Plus, FileText, FolderOpen, FilePlus2, Folder } from 'lucide-react'
+import { X, Plus, FileText, FolderOpen, FilePlus2, Folder, RotateCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -317,6 +317,15 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [isFocused, group.activeTabId])
 
+  function refreshTab(tab: Tab) {
+    if (tab.type === 'terminal' || tab.type === 'claude') {
+      killTerminal(tab.id)
+    }
+    useTabsStore.getState().updateTab(groupId, tab.id, {
+      refreshKey: (tab.refreshKey || 0) + 1,
+    })
+  }
+
   function closeTab(tabId: string) {
     const tab = group.tabs.find(t => t.id === tabId)
     if (tab && (tab.type === 'terminal' || tab.type === 'claude')) {
@@ -396,61 +405,90 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
         >
         <div className="flex items-end min-w-0">
           {group.tabs.map((tab, index) => (
-            <div
-              key={tab.id}
-              draggable
-              onDragStart={e => handleTabDragStart(e, tab, index)}
-              onDragOver={e => handleTabDragOver(e, index)}
-              onDragLeave={() => setDragOverTabIndex(null)}
-              onDrop={e => handleTabDrop(e, index)}
-              onClick={() => {
-                setActiveTab(groupId, tab.id)
-                setFocusedGroup(groupId)
-              }}
-              className={cn(
-                'flex items-center gap-1.5 px-3 h-8 cursor-pointer select-none border-r border-zinc-700/40 shrink-0 max-w-[180px] group/tab transition-colors',
-                tab.id === group.activeTabId
-                  ? 'bg-zinc-950 text-zinc-50 border-b-2 border-b-blue-400'
-                  : 'bg-zinc-900/60 text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-200',
-                dragOverTabIndex === index && 'border-l-2 border-l-blue-400',
-                tab.id === group.activeTabId && tab.isThinking && 'tab-thinking-bar'
-              )}
-            >
-              <TabIcon type={tab.type} />
-              {renamingTabId === tab.id ? (
-                <input
-                  ref={renameInputRef}
-                  className="text-xs flex-1 min-w-0 bg-transparent border border-zinc-600 rounded px-1 outline-none text-zinc-100"
-                  value={renameValue}
-                  onChange={e => setRenameValue(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') commitRename()
-                    if (e.key === 'Escape') setRenamingTabId(null)
-                    e.stopPropagation()
-                  }}
-                  onBlur={commitRename}
-                  onClick={e => e.stopPropagation()}
-                />
-              ) : (
-                <span
-                  className="text-xs truncate flex-1"
-                  onDoubleClick={e => { e.stopPropagation(); startRename(tab) }}
-                >
-                  {tab.isDirty ? '● ' : ''}{tab.title}
-                </span>
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={e => handleCloseTab(e, tab.id)}
+            <ContextMenu key={tab.id}>
+              <ContextMenuTrigger asChild>
+              <div
+                draggable
+                onDragStart={e => handleTabDragStart(e, tab, index)}
+                onDragOver={e => handleTabDragOver(e, index)}
+                onDragLeave={() => setDragOverTabIndex(null)}
+                onDrop={e => handleTabDrop(e, index)}
+                onClick={() => {
+                  setActiveTab(groupId, tab.id)
+                  setFocusedGroup(groupId)
+                }}
                 className={cn(
-                  'shrink-0 w-4 h-4 opacity-0 group-hover/tab:opacity-100 hover:bg-zinc-700 transition-all',
-                  tab.id === group.activeTabId && 'opacity-60'
+                  'flex items-center gap-1.5 px-3 h-8 cursor-pointer select-none border-r border-zinc-700/40 shrink-0 max-w-[180px] group/tab transition-colors',
+                  tab.id === group.activeTabId
+                    ? 'bg-zinc-950 text-zinc-50 border-b-2 border-b-blue-400'
+                    : 'bg-zinc-900/60 text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-200',
+                  dragOverTabIndex === index && 'border-l-2 border-l-blue-400',
+                  tab.id === group.activeTabId && tab.isThinking && 'tab-thinking-bar'
                 )}
               >
-                <X className="w-2.5 h-2.5" />
-              </Button>
-            </div>
+                <TabIcon type={tab.type} />
+                {renamingTabId === tab.id ? (
+                  <input
+                    ref={renameInputRef}
+                    className="text-xs flex-1 min-w-0 bg-transparent border border-zinc-600 rounded px-1 outline-none text-zinc-100"
+                    value={renameValue}
+                    onChange={e => setRenameValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') commitRename()
+                      if (e.key === 'Escape') setRenamingTabId(null)
+                      e.stopPropagation()
+                    }}
+                    onBlur={commitRename}
+                    onClick={e => e.stopPropagation()}
+                  />
+                ) : (
+                  <span
+                    className="text-xs truncate flex-1"
+                    onDoubleClick={e => { e.stopPropagation(); startRename(tab) }}
+                  >
+                    {tab.isDirty ? '● ' : ''}{tab.title}
+                  </span>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={e => handleCloseTab(e, tab.id)}
+                  className={cn(
+                    'shrink-0 w-4 h-4 opacity-0 group-hover/tab:opacity-100 hover:bg-zinc-700 transition-all',
+                    tab.id === group.activeTabId && 'opacity-60'
+                  )}
+                >
+                  <X className="w-2.5 h-2.5" />
+                </Button>
+              </div>
+              </ContextMenuTrigger>
+              <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
+                {(tab.type === 'terminal' || tab.type === 'claude') && (
+                  <>
+                    <ContextMenuItem
+                      className="gap-2 text-xs cursor-pointer"
+                      onClick={() => refreshTab(tab)}
+                    >
+                      <RotateCw className="w-3.5 h-3.5" />
+                      Refresh Terminal
+                    </ContextMenuItem>
+                    <CtxMenuSeparator />
+                  </>
+                )}
+                <ContextMenuItem
+                  className="gap-2 text-xs cursor-pointer"
+                  onClick={() => startRename(tab)}
+                >
+                  Rename
+                </ContextMenuItem>
+                <ContextMenuItem
+                  className="gap-2 text-xs cursor-pointer text-red-400 focus:text-red-300"
+                  onClick={() => closeTab(tab.id)}
+                >
+                  Close
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           ))}
 
           {/* New tab dropdown */}
@@ -484,7 +522,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
             if (!Component) return null
             return (
               <div
-                key={tab.id}
+                key={`${tab.id}-${tab.refreshKey || 0}`}
                 className={cn('absolute inset-0', tab.id !== group.activeTabId && 'hidden')}
               >
                 <Component

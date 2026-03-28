@@ -1,14 +1,35 @@
 import React, { useEffect, useState } from 'react'
 import type { TabProps } from '@/extensions/types'
 
+const MIME: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+  gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+  bmp: 'image/bmp', ico: 'image/x-icon', avif: 'image/avif',
+}
+
 export default function ImageTab({ tab }: TabProps): React.ReactElement {
   const [src, setSrc] = useState<string | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (!tab.filePath) return
-    // Use a file:// URL for local images
-    setSrc(`file://${tab.filePath}`)
+    let revoked = false
+
+    window.electronAPI.readFileBinary(tab.filePath).then(result => {
+      if (revoked) return
+      if (!result.success || !result.data) {
+        setError('Failed to load image')
+        return
+      }
+      const ext = tab.filePath!.split('.').pop()?.toLowerCase() || ''
+      const mime = MIME[ext] || 'image/png'
+      const bytes = new Uint8Array(result.data)
+      let binary = ''
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+      setSrc(`data:${mime};base64,${btoa(binary)}`)
+    })
+
+    return () => { revoked = true }
   }, [tab.filePath])
 
   if (error) {
