@@ -6,11 +6,13 @@ import { fileExplorerExtension } from './file-explorer'
 import { projectExtension } from './project'
 import { settingsExtension } from './settings'
 import { jiraExtension } from './jira'
+import { workSessionsExtension } from './work-sessions'
 
 export function initializeExtensions(): void {
   // Registration order determines menu item order and activity bar icon order
   extensionRegistry.register(projectExtension)
   extensionRegistry.register(jiraExtension)
+  extensionRegistry.register(workSessionsExtension)
   extensionRegistry.register(claudeExtension)
   extensionRegistry.register(fileExplorerExtension)
   extensionRegistry.register(terminalExtension)

@@ -1,26 +1,12 @@
 import type { Extension, TabRegistration, NewTabMenuItem } from './types'
-
-const DISABLED_KEY = 'conductor:extensions:disabled'
-
-function loadDisabled(): Set<string> {
-  try {
-    const raw = localStorage.getItem(DISABLED_KEY)
-    return raw ? new Set(JSON.parse(raw)) : new Set()
-  } catch {
-    return new Set()
-  }
-}
-
-function saveDisabled(set: Set<string>) {
-  localStorage.setItem(DISABLED_KEY, JSON.stringify([...set]))
-}
+import { useConfigStore } from '@/store/config'
 
 class ExtensionRegistry {
   private extensions: Map<string, Extension> = new Map()
   private builtinIds: Set<string> = new Set()
   private tabTypes: Map<string, TabRegistration> = new Map()
   private fileExtMap: Map<string, string> = new Map()
-  private disabledIds: Set<string> = loadDisabled()
+  private disabledIds: Set<string> = new Set()
   private listeners: Set<() => void> = new Set()
 
   register(extension: Extension, builtin = true): void {
@@ -69,6 +55,10 @@ class ExtensionRegistry {
     }
   }
 
+  hydrateDisabled(disabled: string[]): void {
+    this.disabledIds = new Set(disabled)
+  }
+
   isBuiltin(id: string): boolean {
     return this.builtinIds.has(id)
   }
@@ -89,7 +79,7 @@ class ExtensionRegistry {
       this.disabledIds.add(id)
       this.unregisterTabs(ext)
     }
-    saveDisabled(this.disabledIds)
+    useConfigStore.getState().setDisabledExtensions([...this.disabledIds])
     this.notifyListeners()
   }
 
@@ -151,3 +141,10 @@ class ExtensionRegistry {
 }
 
 export const extensionRegistry = new ExtensionRegistry()
+
+// Hydrate disabled extensions from config store once ready
+useConfigStore.subscribe((state) => {
+  if (state.ready) {
+    extensionRegistry.hydrateDisabled(state.config.extensions.disabled)
+  }
+})

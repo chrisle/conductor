@@ -1,12 +1,18 @@
-import { Briefcase } from 'lucide-react'
+import { Settings } from 'lucide-react'
 import type { Extension } from '../types'
-import ProjectSidebar from './ProjectSidebar'
+import ProjectSettingsTab from './ProjectSettingsTab'
 
 export const projectExtension: Extension = {
   id: 'project',
   name: 'Projects',
   description: 'Open and manage workspace projects',
   version: '1.0.0',
-  icon: Briefcase,
-  sidebar: ProjectSidebar
+  tabs: [
+    {
+      type: 'project-settings',
+      label: 'Project Settings',
+      icon: Settings,
+      component: ProjectSettingsTab,
+    },
+  ],
 }

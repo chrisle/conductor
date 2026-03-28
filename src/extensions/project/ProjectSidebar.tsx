@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
-import { Save, Plus, FolderOpen, Circle, MoreHorizontal, GripVertical, Pencil, Trash2 } from 'lucide-react'
+import { Save, Plus, FolderOpen, Circle, MoreHorizontal, GripVertical } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
@@ -18,6 +18,8 @@ import {
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
 import { useProjectStore } from '@/store/project'
+import { useTabsStore } from '@/store/tabs'
+import { useLayoutStore } from '@/store/layout'
 import {
   openProjectDialog,
   saveProject,
@@ -25,8 +27,7 @@ import {
   switchWorkspace,
   addWorkspace,
   deleteWorkspace,
-  renameWorkspace,
-  renameProject
+  renameWorkspace
 } from '@/lib/project-io'
 import SidebarLayout from '@/components/Sidebar/SidebarLayout'
 
@@ -36,11 +37,6 @@ export default function ProjectSidebar({ groupId }: { groupId: string }): React.
     activeWorkspace, workspaceNames, dirtyWorkspaces,
     isAnyDirty, isWorkspaceDirty, reorderWorkspace
   } = useProjectStore()
-
-  // Project name editing state
-  const [editingName, setEditingName] = useState(false)
-  const [nameValue, setNameValue] = useState('')
-  const nameInputRef = useRef<HTMLInputElement>(null)
 
   // Dirty confirmation dialog state
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -56,18 +52,12 @@ export default function ProjectSidebar({ groupId }: { groupId: string }): React.
   // Delete confirmation dialog state
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; workspace: string }>({ open: false, workspace: '' })
 
+  const { addTab, setActiveTab, groups } = useTabsStore()
+  const { focusedGroupId } = useLayoutStore()
+
   // Drag state
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dropIndex, setDropIndex] = useState<number | null>(null)
-
-  useEffect(() => {
-    if (editingName) {
-      setTimeout(() => {
-        nameInputRef.current?.focus()
-        nameInputRef.current?.select()
-      }, 50)
-    }
-  }, [editingName])
 
   useEffect(() => {
     if (renameDialog.open) {
@@ -77,31 +67,6 @@ export default function ProjectSidebar({ groupId }: { groupId: string }): React.
       }, 50)
     }
   }, [renameDialog.open])
-
-  function handleStartEditName() {
-    if (!name) return
-    setNameValue(name)
-    setEditingName(true)
-  }
-
-  async function handleSaveName() {
-    setEditingName(false)
-    const trimmed = nameValue.trim()
-    if (trimmed && trimmed !== name) {
-      await renameProject(trimmed)
-    }
-    setNameValue('')
-  }
-
-  function handleCancelEditName() {
-    setEditingName(false)
-    setNameValue('')
-  }
-
-  function handleNameKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter') handleSaveName()
-    if (e.key === 'Escape') handleCancelEditName()
-  }
 
   async function handleSave() {
     if (filePath) await saveProject(filePath)
@@ -220,7 +185,16 @@ export default function ProjectSidebar({ groupId }: { groupId: string }): React.
         { icon: Save, label: 'Save', onClick: handleSave, disabled: !hasAnyDirty && !!filePath },
         { icon: FolderOpen, label: 'Open...', onClick: () => openProjectDialog() },
       ]}
-      onSettings={name ? handleStartEditName : undefined}
+      onSettings={name ? () => {
+        const targetGroup = focusedGroupId || groupId
+        const group = groups[targetGroup]
+        const existing = group?.tabs.find(t => t.type === 'project-settings')
+        if (existing) {
+          setActiveTab(targetGroup, existing.id)
+        } else {
+          addTab(targetGroup, { type: 'project-settings', title: 'Project Settings' })
+        }
+      } : undefined}
     >
       {/* Workspaces */}
       <div className="flex items-center justify-between px-3 py-1.5">
@@ -362,36 +336,6 @@ export default function ProjectSidebar({ groupId }: { groupId: string }): React.
             </Button>
             <Button className="text-xs bg-blue-600 hover:bg-blue-500 text-white" onClick={handleRenameSave}
               disabled={!renameValue.trim() || renameValue.trim() === renameDialog.workspace}>
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Rename project dialog */}
-      <Dialog open={editingName} onOpenChange={(open) => !open && handleCancelEditName()}>
-        <DialogContent className="bg-zinc-900 border-zinc-700 max-w-sm" hideClose>
-          <VisuallyHidden><DialogTitle>Project Settings</DialogTitle></VisuallyHidden>
-          <div className="space-y-3">
-            <div className="text-sm text-zinc-300 font-medium">Project Settings</div>
-            <div className="space-y-1.5">
-              <label className="text-[11px] text-zinc-400 font-medium">Title</label>
-              <input
-                ref={nameInputRef}
-                className="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1.5 text-xs text-zinc-200 outline-none focus:border-blue-500"
-                value={nameValue}
-                onChange={e => setNameValue(e.target.value)}
-                onKeyDown={handleNameKeyDown}
-                placeholder="Project name"
-              />
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="ghost" className="text-xs text-zinc-400 hover:text-zinc-200" onClick={handleCancelEditName}>
-              Cancel
-            </Button>
-            <Button className="text-xs bg-blue-600 hover:bg-blue-500 text-white" onClick={handleSaveName}
-              disabled={!nameValue.trim() || nameValue.trim() === name}>
               Save
             </Button>
           </DialogFooter>
