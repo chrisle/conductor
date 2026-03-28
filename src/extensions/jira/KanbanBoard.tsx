@@ -6,6 +6,7 @@ import { KanbanColumn } from './KanbanColumn'
 import type { PendingTicket } from './KanbanColumn'
 import type { Ticket, Epic, TicketStatus, JiraConfig } from './jira-api'
 import type { ThinkingState } from '@/lib/terminal-detection'
+import type { WorkSession } from '@/types/work-session'
 
 const COLUMNS: { title: string; status: TicketStatus }[] = [
   { title: 'Backlog', status: 'backlog' },
@@ -27,9 +28,10 @@ interface KanbanBoardProps {
   onStartWork: (ticket: Ticket) => void
   onRefresh: () => void
   onCreateTicket?: (status: TicketStatus, epicKey: string | null) => void
+  workSessions?: WorkSession[]
 }
 
-export function KanbanBoard({ tickets, epics, config, jiraBaseUrl, pendingTickets = [], tmuxSessions, sessionThinking, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh, onCreateTicket }: KanbanBoardProps) {
+export function KanbanBoard({ tickets, epics, config, jiraBaseUrl, pendingTickets = [], tmuxSessions, sessionThinking, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh, onCreateTicket, workSessions = [] }: KanbanBoardProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   const epicKeys = epics.map((e) => e.key)
@@ -44,7 +46,7 @@ export function KanbanBoard({ tickets, epics, config, jiraBaseUrl, pendingTicket
     })
   }
 
-  const columnProps = { config, jiraBaseUrl, tmuxSessions, sessionThinking, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh }
+  const columnProps = { config, jiraBaseUrl, tmuxSessions, sessionThinking, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh, workSessions }
 
   return (
     <div className="h-full overflow-auto p-4 space-y-6 min-w-0">

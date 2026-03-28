@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { RefreshCw, Search } from "lucide-react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { RefreshCw, Search, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { KanbanBoard } from "./KanbanBoard";
 import { CreateTicketDialog } from "./CreateTicketDialog";
@@ -10,31 +10,32 @@ import type { TabProps } from "../types";
 import type { PendingTicket } from "./KanbanColumn";
 import type { TicketStatus } from "./jira-api";
 import { useSessionThinking } from "./useSessionThinking";
+import { useWorkSessionsStore } from "@/store/work-sessions";
+import { useProjectStore } from "@/store/project";
 import {
   loadConfig,
   fetchTickets,
   fetchEpics,
   fetchDevelopmentInfo,
   createJiraTicket,
+  transitionTicket,
   type Ticket,
   type Epic,
   type JiraConfig,
 } from "./jira-api";
 
-// Persistent cache so the board renders instantly on app restart
-const CACHE_PREFIX = 'conductor:jira-board:'
+// Persistent cache so the board renders instantly on app restart (file-based via IPC)
+let _boardCachePromise: Map<string, Promise<{ tickets: Ticket[]; epics: Epic[] } | null>> = new Map()
 
-function loadBoardCache(projectKey: string): { tickets: Ticket[]; epics: Epic[] } | null {
-  try {
-    const raw = localStorage.getItem(CACHE_PREFIX + projectKey)
-    return raw ? JSON.parse(raw) : null
-  } catch { return null }
+function loadBoardCache(projectKey: string): Promise<{ tickets: Ticket[]; epics: Epic[] } | null> {
+  if (!_boardCachePromise.has(projectKey)) {
+    _boardCachePromise.set(projectKey, window.electronAPI.loadCache('jira', projectKey))
+  }
+  return _boardCachePromise.get(projectKey)!
 }
 
 function saveBoardCache(projectKey: string, tickets: Ticket[], epics: Epic[]) {
-  try {
-    localStorage.setItem(CACHE_PREFIX + projectKey, JSON.stringify({ tickets, epics }))
-  } catch { /* quota exceeded — ignore */ }
+  window.electronAPI.saveCache('jira', projectKey, { tickets, epics })
 }
 
 export default function JiraBoardTab({
@@ -44,15 +45,17 @@ export default function JiraBoardTab({
   tab,
 }: TabProps): React.ReactElement {
   const projectKey = tab.content || tab.title?.replace(/ Board$/, "") || "";
-  const [cached] = useState(() => loadBoardCache(projectKey));
   const [config] = useState<JiraConfig | null>(loadConfig);
-  const [tickets, setTickets] = useState<Ticket[]>(cached?.tickets ?? []);
-  const [epics, setEpics] = useState<Epic[]>(cached?.epics ?? []);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [epics, setEpics] = useState<Epic[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("");
   const [tmuxSessions, setTmuxSessions] = useState<Set<string>>(new Set());
   const sessionThinking = useSessionThinking([...tmuxSessions]);
+  const workSessions = useWorkSessionsStore(s => s.sessions);
+  const [liveUpdate, setLiveUpdate] = useState(true);
+  const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [pendingTickets, setPendingTickets] = useState<PendingTicket[]>([]);
   const [createDialog, setCreateDialog] = useState<{
     open: boolean;
@@ -126,11 +129,38 @@ export default function JiraBoardTab({
     }
   }, [config, projectKey]);
 
+  // Load cached board data for instant render, then fetch fresh data
   useEffect(() => {
-    if (config && projectKey) {
-      loadData();
-    }
+    if (!config || !projectKey) return;
+    loadBoardCache(projectKey).then(cached => {
+      if (cached) {
+        setTickets(cached.tickets);
+        setEpics(cached.epics);
+      }
+    });
+    loadData();
   }, [config, projectKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Live polling — refresh every 30s when enabled and tab is active
+  const POLL_INTERVAL = 30
+  useEffect(() => {
+    if (!liveUpdate || !isActive || !config || !projectKey) {
+      if (liveIntervalRef.current) {
+        clearInterval(liveIntervalRef.current)
+        liveIntervalRef.current = null
+      }
+      return
+    }
+    liveIntervalRef.current = setInterval(() => {
+      loadData()
+    }, POLL_INTERVAL * 1000)
+    return () => {
+      if (liveIntervalRef.current) {
+        clearInterval(liveIntervalRef.current)
+        liveIntervalRef.current = null
+      }
+    }
+  }, [liveUpdate, isActive, config, projectKey, loadData])
 
   const jiraBaseUrl = config
     ? `https://${config.domain.replace(/\.atlassian\.net$/, "")}.atlassian.net`
@@ -143,21 +173,18 @@ export default function JiraBoardTab({
 
   async function resolveWorktree(
     ticket: Ticket,
-  ): Promise<{
-    cwd: string;
-    binding: Awaited<ReturnType<typeof window.electronAPI.getTicketBinding>>;
-  }> {
-    const binding = await window.electronAPI.getTicketBinding(ticket.key);
+  ): Promise<{ cwd: string }> {
+    const sessionsStore = useWorkSessionsStore.getState();
+    const session = sessionsStore.getActiveSessionForTicket(ticket.key);
 
-    // Already have a worktree path in the binding
-    if (binding?.worktree_path) {
-      return { cwd: binding.worktree_path, binding };
+    // Already have a worktree path in an existing session
+    if (session?.worktree?.path) {
+      return { cwd: session.worktree.path };
     }
 
     // Try to find or create a worktree
     const repoPath = rootPath;
     if (repoPath) {
-      // Check existing worktrees for a branch matching the ticket key
       const worktrees = await window.electronAPI.worktreeList(repoPath);
       const branchLower = ticket.key.toLowerCase();
       const existing = worktrees.find((wt) =>
@@ -165,26 +192,48 @@ export default function JiraBoardTab({
       );
 
       if (existing) {
-        await window.electronAPI.setTicketBinding(ticket.key, {
-          worktree_path: existing.path,
-          branch_name: existing.branch,
-        });
-        return { cwd: existing.path, binding };
+        const worktree = { path: existing.path, branch: existing.branch, baseBranch: 'main' };
+        if (session) {
+          await sessionsStore.updateSession(session.id, { worktree });
+        } else {
+          await sessionsStore.createSession({
+            projectPath: useProjectStore.getState().filePath || '',
+            ticketKey: ticket.key,
+            jiraConnectionId: '',
+            worktree,
+            tmuxSessionId: tmuxSessionName(ticket.key),
+            claudeSessionId: null,
+            prUrl: null,
+            status: 'active',
+          });
+        }
+        return { cwd: existing.path };
       }
 
       // Create a new worktree
       const branchName = ticket.key.toLowerCase();
       const result = await window.electronAPI.worktreeAdd(repoPath, branchName);
       if (result.success && result.path) {
-        await window.electronAPI.setTicketBinding(ticket.key, {
-          worktree_path: result.path,
-          branch_name: branchName,
-        });
-        return { cwd: result.path, binding };
+        const worktree = { path: result.path, branch: branchName, baseBranch: 'main' };
+        if (session) {
+          await sessionsStore.updateSession(session.id, { worktree });
+        } else {
+          await sessionsStore.createSession({
+            projectPath: useProjectStore.getState().filePath || '',
+            ticketKey: ticket.key,
+            jiraConnectionId: '',
+            worktree,
+            tmuxSessionId: tmuxSessionName(ticket.key),
+            claudeSessionId: null,
+            prUrl: null,
+            status: 'active',
+          });
+        }
+        return { cwd: result.path };
       }
     }
 
-    return { cwd: rootPath || "", binding };
+    return { cwd: rootPath || "" };
   }
 
   async function newSession(ticket: Ticket) {
@@ -230,6 +279,10 @@ export default function JiraBoardTab({
       autoPilot: true,
     });
     setTimeout(loadTmuxSessions, 1500);
+    // Auto-transition ticket to "In Progress" in Jira
+    if (config && ticket.status === 'backlog') {
+      transitionTicket(config, ticket.key, 'In Progress').catch(() => {})
+    }
   }
 
   function handleOpenCreateDialog(
@@ -321,6 +374,18 @@ export default function JiraBoardTab({
             />
           </div>
 
+          <button
+            onClick={() => setLiveUpdate(!liveUpdate)}
+            className={`flex items-center gap-1 h-7 rounded px-2 text-[11px] transition-colors ${
+              liveUpdate
+                ? 'bg-emerald-900/30 text-emerald-400 hover:bg-emerald-900/50'
+                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+            }`}
+            title={liveUpdate ? 'Live updates on' : 'Enable live updates'}
+          >
+            <Radio className={`w-3 h-3 ${liveUpdate ? 'animate-pulse' : ''}`} />
+          </button>
+
           <Button
             variant="ghost"
             size="icon"
@@ -357,6 +422,7 @@ export default function JiraBoardTab({
         pendingTickets={pendingTickets}
         tmuxSessions={tmuxSessions}
         sessionThinking={sessionThinking}
+        workSessions={workSessions}
         onOpenUrl={openUrl}
         onNewSession={newSession}
         onContinueSession={continueSession}

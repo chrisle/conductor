@@ -1,35 +1,50 @@
 // ── Config ──────────────────────────────────────────────────────────────────
 
+import { useConfigStore } from '@/store/config'
+import type { JiraConnection } from '@/types/app-config'
+
 export interface JiraConfig {
   domain: string   // e.g. "triodeofficial" for triodeofficial.atlassian.net
   email: string
   apiToken: string
 }
 
-const CONFIG_KEY = 'conductor:jira:config'
-
-const DEFAULT_CONFIG: JiraConfig = {
-  domain: 'triodeofficial',
-  email: 'REMOVED_EMAIL',
-  apiToken: 'REMOVED_SECRET',
+/** Convert a JiraConnection to the JiraConfig shape used by API functions */
+function connectionToConfig(conn: JiraConnection): JiraConfig {
+  return { domain: conn.domain, email: conn.email, apiToken: conn.apiToken }
 }
 
 export function loadConfig(): JiraConfig | null {
-  try {
-    const raw = localStorage.getItem(CONFIG_KEY)
-    if (!raw) return DEFAULT_CONFIG
-    return JSON.parse(raw)
-  } catch {
-    return DEFAULT_CONFIG
-  }
+  const conn = useConfigStore.getState().getActiveJiraConnection()
+  return conn ? connectionToConfig(conn) : null
 }
 
 export function saveConfig(config: JiraConfig): void {
-  localStorage.setItem(CONFIG_KEY, JSON.stringify(config))
+  const store = useConfigStore.getState()
+  const existing = store.getActiveJiraConnection()
+  if (existing) {
+    store.updateJiraConnection(existing.id, {
+      domain: config.domain,
+      email: config.email,
+      apiToken: config.apiToken,
+    })
+  } else {
+    store.addJiraConnection({
+      id: 'jira-' + config.domain,
+      name: config.domain,
+      domain: config.domain,
+      email: config.email,
+      apiToken: config.apiToken,
+    })
+  }
 }
 
 export function clearConfig(): void {
-  localStorage.removeItem(CONFIG_KEY)
+  const store = useConfigStore.getState()
+  const existing = store.getActiveJiraConnection()
+  if (existing) {
+    store.removeJiraConnection(existing.id)
+  }
 }
 
 function baseUrl(config: JiraConfig): string {
@@ -46,12 +61,28 @@ function authHeaders(config: JiraConfig): Record<string, string> {
 
 // ── Shared fetch helper ─────────────────────────────────────────────────────
 
+function formatJiraError(status: number, body: unknown, networkError?: string): string {
+  const parts = [`Jira API ${status}`]
+  if (body && typeof body === 'object') {
+    const b = body as { errorMessages?: string[]; errors?: Record<string, string> }
+    if (b.errorMessages?.length) parts.push(b.errorMessages.join('; '))
+    if (b.errors) {
+      const fieldErrors = Object.entries(b.errors)
+        .filter(([, v]) => v)
+        .map(([k, v]) => `${k}: ${v}`)
+      if (fieldErrors.length) parts.push(fieldErrors.join('; '))
+    }
+  }
+  if (networkError) parts.push(networkError)
+  return parts.join(' — ')
+}
+
 async function jiraGet(config: JiraConfig, path: string): Promise<unknown> {
   const res = await window.electronAPI.jiraFetch(
     `${baseUrl(config)}${path}`,
     authHeaders(config),
   )
-  if (!res.ok) throw new Error(`Jira API ${res.status}${res.error ? `: ${res.error}` : ''}`)
+  if (!res.ok) throw new Error(formatJiraError(res.status, res.body, res.error))
   return res.body
 }
 
@@ -106,6 +137,54 @@ export function projectBoardUrl(config: JiraConfig, project: JiraProject): strin
     default:
       return `${base}/jira/software/projects/${project.key}/${boardSuffix}`
   }
+}
+
+// ── Issue Types ────────────────────────────────────────────────────────────
+
+export interface JiraIssueType {
+  id: string
+  name: string
+  subtask: boolean
+}
+
+export async function fetchIssueTypes(config: JiraConfig, projectKey: string): Promise<JiraIssueType[]> {
+  const data = await jiraGet(config, `/rest/api/3/issue/createmeta/${projectKey}/issuetypes`) as {
+    issueTypes?: Array<{ id: string; name: string; subtask: boolean }>
+    values?: Array<{ id: string; name: string; subtask: boolean }>
+  }
+  return (data.values || data.issueTypes || []).map((t) => ({
+    id: t.id,
+    name: t.name,
+    subtask: t.subtask,
+  }))
+}
+
+/** Resolve an issue type name against a project's available types, returning the ID. */
+async function resolveIssueTypeId(
+  config: JiraConfig,
+  projectKey: string,
+  requestedName: string | undefined,
+): Promise<string> {
+  const types = await fetchIssueTypes(config, projectKey)
+  const nonSubtask = types.filter((t) => !t.subtask)
+
+  if (!nonSubtask.length) {
+    const names = types.map((t) => t.name).join(', ')
+    throw new Error(`No creatable issue types for project ${projectKey}. Available: ${names}`)
+  }
+
+  // Try exact match (case-insensitive)
+  const name = requestedName || 'Task'
+  const exact = nonSubtask.find((t) => t.name.toLowerCase() === name.toLowerCase())
+  if (exact) return exact.id
+
+  // Fallback: prefer Task-like, then Story, then first available
+  const fallback =
+    nonSubtask.find((t) => /task/i.test(t.name)) ||
+    nonSubtask.find((t) => /story/i.test(t.name)) ||
+    nonSubtask[0]
+
+  return fallback.id
 }
 
 // ── Tickets & Epics ─────────────────────────────────────────────────────────
@@ -252,7 +331,7 @@ async function jiraPost(config: JiraConfig, path: string, body: unknown): Promis
     { ...authHeaders(config), 'Content-Type': 'application/json' },
     JSON.stringify(body),
   )
-  if (!res.ok) throw new Error(`Jira API ${res.status}${res.error ? `: ${res.error}` : ''}`)
+  if (!res.ok) throw new Error(formatJiraError(res.status, res.body, res.error))
   return res.body
 }
 
@@ -289,6 +368,8 @@ export interface CreateTicketParams {
 }
 
 export async function createJiraTicket(config: JiraConfig, params: CreateTicketParams): Promise<Ticket> {
+  const issueTypeId = await resolveIssueTypeId(config, params.projectKey, params.issueType)
+
   const fields: Record<string, unknown> = {
     project: { key: params.projectKey },
     summary: params.summary,
@@ -302,7 +383,7 @@ export async function createJiraTicket(config: JiraConfig, params: CreateTicketP
         },
       ],
     },
-    issuetype: { name: params.issueType || 'Task' },
+    issuetype: { id: issueTypeId },
   }
 
   if (params.epicKey) {

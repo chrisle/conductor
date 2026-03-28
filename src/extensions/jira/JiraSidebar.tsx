@@ -5,17 +5,9 @@ import {
   Globe,
   ExternalLink,
   Plus,
-  X,
-  MoreHorizontal,
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { useSessionThinking } from "./useSessionThinking";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -42,6 +34,10 @@ import {
   projectBoardUrl,
 } from "./jira-api";
 import SidebarLayout from "@/components/Sidebar/SidebarLayout";
+import { useProjectStore } from "@/store/project";
+import { useConfigStore } from "@/store/config";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import { Pin } from "lucide-react";
 
 // Module-level cache so projects survive sidebar unmount/remount
 let cachedProjects: JiraProject[] | null = null;
@@ -123,6 +119,14 @@ export default function JiraSidebar({
   groupId: string;
 }): React.ReactElement {
   const [config, setConfig] = useState<JiraConfig | null>(loadConfig);
+  // Re-derive config when the config store finishes loading (async IPC)
+  const configReady = useConfigStore(s => s.ready);
+  useEffect(() => {
+    if (configReady && !config) {
+      const loaded = loadConfig();
+      if (loaded) setConfig(loaded);
+    }
+  }, [configReady]);
   const [projects, setProjects] = useState<JiraProject[]>(cachedProjects || []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -135,65 +139,10 @@ export default function JiraSidebar({
   });
   const [settingsTesting, setSettingsTesting] = useState(false);
   const [settingsError, setSettingsError] = useState("");
-  const [tmuxSessions, setTmuxSessions] = useState<string[]>([]);
-  const [killConfirm, setKillConfirm] = useState<string | null>(null);
-  const { addTab, setActiveTab, groups } = useTabsStore(); // groups used for existing-tab focus check
+  const { addTab, setActiveTab, groups } = useTabsStore();
   const { focusedGroupId } = useLayoutStore();
   const { rootPath } = useSidebarStore();
-
-  // Per-session thinking state — works whether the tab is open or closed.
-  const sessionThinking = useSessionThinking(tmuxSessions);
   const filterRef = useRef<HTMLInputElement>(null);
-
-  const loadTmuxSessions = useCallback(async () => {
-    try {
-      const res = await fetch("http://127.0.0.1:9800/api/tmux");
-      if (res.ok) {
-        const list: { name: string }[] = await res.json();
-        setTmuxSessions(list.map((s) => s.name));
-      }
-    } catch {
-      /* conductord not running */
-    }
-  }, []);
-
-  async function killTmuxSession(name: string) {
-    try {
-      await fetch(`http://127.0.0.1:9800/api/tmux/${name}`, {
-        method: "DELETE",
-      });
-      setTmuxSessions((prev) => prev.filter((s) => s !== name));
-    } catch {
-      /* ignore */
-    }
-    setKillConfirm(null);
-  }
-
-  function openSession(name: string) {
-    // Focus the tab if it already exists in any group
-    for (const [gId, group] of Object.entries(groups)) {
-      const existing = group.tabs.find((t) => t.id === name);
-      if (existing) {
-        setActiveTab(gId, name);
-        return;
-      }
-    }
-    // Otherwise open a new claude tab that attaches to the running tmux session
-    const targetGroup = focusedGroupId || groupId;
-    // Derive a friendly title: "t-NP3-130" → "Claude · NP3-130"
-    const ticketKey = name.replace(/^t-/, "");
-    addTab(targetGroup, {
-      id: name,
-      type: "claude",
-      title: `Claude · ${ticketKey}`,
-      filePath: rootPath || "",
-      // No initialCommand — conductord attaches to the existing session
-    });
-  }
-
-  useEffect(() => {
-    loadTmuxSessions();
-  }, []);
 
   const loadProjects = useCallback(
     async (force = false) => {
@@ -297,6 +246,9 @@ export default function JiraSidebar({
     }
   }
 
+  const jiraSpaceKeys = useProjectStore(s => s.jiraSpaceKeys);
+  const hasLinkedSpaces = jiraSpaceKeys.length > 0;
+
   if (!config) {
     return (
       <SidebarLayout title="Jira">
@@ -313,9 +265,19 @@ export default function JiraSidebar({
       )
     : projects;
 
+  // Linked projects (pinned at top when project has jiraSpaceKeys)
+  const linkedProjects = hasLinkedSpaces
+    ? projects.filter(p => jiraSpaceKeys.includes(p.key))
+    : [];
+
+  // Remaining projects (exclude linked when filtering is off)
+  const remainingFiltered = hasLinkedSpaces && !filter
+    ? filtered.filter(p => !jiraSpaceKeys.includes(p.key))
+    : filtered;
+
   // Group by projectTypeKey
   const grouped = new Map<string, JiraProject[]>();
-  for (const p of filtered) {
+  for (const p of remainingFiltered) {
     const type = p.projectTypeKey;
     if (!grouped.has(type)) grouped.set(type, []);
     grouped.get(type)!.push(p);
@@ -370,8 +332,14 @@ export default function JiraSidebar({
       )}
 
       {loading && projects.length === 0 && (
-        <div className="px-3 py-4 text-xs text-zinc-500">
-          Loading projects...
+        <div className="px-3 py-2 space-y-1">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="flex items-center gap-2 py-1.5">
+              <Skeleton className="h-4 w-4 rounded-sm shrink-0" />
+              <Skeleton className="h-3.5" style={{ width: `${40 + (i * 15) % 40}%` }} />
+              <Skeleton className="h-3 w-8 ml-auto shrink-0" />
+            </div>
+          ))}
         </div>
       )}
 
@@ -379,66 +347,75 @@ export default function JiraSidebar({
         <div className="px-3 py-4 text-xs text-zinc-500">No projects found</div>
       )}
 
-      {[...grouped.entries()].map(([type, typeProjects]) => (
-        <ProjectGroup
-          key={type}
-          label={typeLabels[type] || type}
-          projects={typeProjects}
-          onOpen={openBoard}
-          onOpenInConductor={openInConductorBrowser}
-          onOpenInSystemBrowser={openInSystemBrowser}
-          onOpenNewTab={(p) => openBoard(p, true)}
-        />
-      ))}
-
-      {/* Active tmux sessions */}
-      <div className="border-t border-zinc-800/60 mt-1" />
-      <SessionsGroup
-        sessions={tmuxSessions}
-        sessionThinking={sessionThinking}
-        onOpen={openSession}
-        onKill={setKillConfirm}
-        onRefresh={loadTmuxSessions}
-      />
-
-      {/* Kill session confirmation */}
-      <Dialog
-        open={killConfirm !== null}
-        onOpenChange={(open) => !open && setKillConfirm(null)}
-      >
-        <DialogContent
-          className="bg-zinc-900 border-zinc-700 max-w-xs"
-          hideClose
-        >
-          <VisuallyHidden>
-            <DialogTitle>Kill Session</DialogTitle>
-          </VisuallyHidden>
-          <div className="space-y-2">
-            <div className="text-sm font-medium text-zinc-200">
-              Kill session?
-            </div>
-            <div className="text-xs text-zinc-400">
-              <span className="font-mono text-zinc-300">{killConfirm}</span>{" "}
-              will be terminated. Any running process inside it will be lost.
-            </div>
+      {/* Linked spaces (pinned at top) */}
+      {linkedProjects.length > 0 && (
+        <div className="mb-1">
+          <div className="px-3 py-1.5 flex items-center gap-1">
+            <Pin className="w-3 h-3 text-blue-400" />
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-blue-400">
+              Linked
+            </span>
           </div>
-          <DialogFooter className="gap-2">
-            <Button
-              variant="ghost"
-              className="text-xs text-zinc-400 hover:text-zinc-200"
-              onClick={() => setKillConfirm(null)}
+          {linkedProjects.map(project => (
+            <button
+              key={project.id}
+              onClick={() => openBoard(project)}
+              className="w-full text-left px-3 py-1.5 pl-7 hover:bg-zinc-800/50 transition-colors group"
             >
-              Cancel
-            </Button>
-            <Button
-              className="text-xs bg-red-700 hover:bg-red-600 text-white"
-              onClick={() => killConfirm && killTmuxSession(killConfirm)}
-            >
-              Kill
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              <div className="flex items-center gap-2">
+                {project.avatarUrl && (
+                  <img src={project.avatarUrl} alt="" className="w-4 h-4 rounded-sm shrink-0" />
+                )}
+                <span className="text-xs text-zinc-300 group-hover:text-zinc-100 truncate">
+                  {project.name}
+                </span>
+                <span className="text-[10px] text-zinc-500 shrink-0 ml-auto">
+                  {project.key}
+                </span>
+              </div>
+            </button>
+          ))}
+          <div className="border-t border-zinc-800/60 mt-1" />
+        </div>
+      )}
+
+      {/* All projects (collapsed when linked spaces exist) */}
+      {hasLinkedSpaces ? (
+        <Collapsible defaultOpen={!hasLinkedSpaces}>
+          <CollapsibleTrigger className="w-full flex items-center gap-1 px-3 py-1.5 text-left hover:bg-zinc-800/30 transition-colors">
+            <ChevronRight className="w-3 h-3 text-zinc-500 transition-transform data-[state=open]:rotate-90" />
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+              All Projects
+            </span>
+            <span className="text-[10px] text-zinc-500 ml-auto">{remainingFiltered.length}</span>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            {[...grouped.entries()].map(([type, typeProjects]) => (
+              <ProjectGroup
+                key={type}
+                label={typeLabels[type] || type}
+                projects={typeProjects}
+                onOpen={openBoard}
+                onOpenInConductor={openInConductorBrowser}
+                onOpenInSystemBrowser={openInSystemBrowser}
+                onOpenNewTab={(p) => openBoard(p, true)}
+              />
+            ))}
+          </CollapsibleContent>
+        </Collapsible>
+      ) : (
+        [...grouped.entries()].map(([type, typeProjects]) => (
+          <ProjectGroup
+            key={type}
+            label={typeLabels[type] || type}
+            projects={typeProjects}
+            onOpen={openBoard}
+            onOpenInConductor={openInConductorBrowser}
+            onOpenInSystemBrowser={openInSystemBrowser}
+            onOpenNewTab={(p) => openBoard(p, true)}
+          />
+        ))
+      )}
 
       {/* Settings dialog */}
       <Dialog
@@ -610,116 +587,3 @@ function ProjectGroup({
   );
 }
 
-function SessionsGroup({
-  sessions,
-  sessionThinking,
-  onOpen,
-  onKill,
-  onRefresh,
-}: {
-  sessions: string[];
-  sessionThinking: Record<string, { thinking: boolean; time?: string }>;
-  onOpen: (name: string) => void;
-  onKill: (name: string) => void;
-  onRefresh: () => void;
-}) {
-  const [collapsed, setCollapsed] = useState(false);
-
-  const active = sessions.filter((s) => sessionThinking[s]?.thinking);
-  const idle = sessions.filter((s) => !sessionThinking[s]?.thinking);
-
-  const renderSession = (name: string) => {
-    const { thinking, time } = sessionThinking[name] ?? { thinking: false };
-    return (
-      <div
-        key={name}
-        className="flex items-center gap-2 px-3 py-1 pl-7 group hover:bg-zinc-800/50 transition-colors cursor-pointer"
-        onClick={() => onOpen(name)}
-      >
-        <span
-          className={`shrink-0 w-1.5 h-1.5 rounded-full ${thinking ? "bg-emerald-400 animate-pulse" : "bg-zinc-700"}`}
-        />
-        <span className={`text-xs truncate ${thinking ? "text-zinc-200" : "text-zinc-300"}`}>
-          {name}
-        </span>
-        {thinking && time && (
-          <span className="text-[10px] text-emerald-500/70 shrink-0 ml-auto mr-1">
-            {time}
-          </span>
-        )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              onClick={(e) => e.stopPropagation()}
-              className={`${thinking && time ? "" : "ml-auto"} opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-zinc-300 transition-all shrink-0 p-0.5 rounded`}
-              title="Session options"
-            >
-              <MoreHorizontal className="w-3.5 h-3.5" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-36">
-            <DropdownMenuItem
-              onClick={(e) => { e.stopPropagation(); onKill(name); }}
-              className="text-red-400 focus:text-red-400"
-            >
-              <X className="w-3 h-3 mr-2" />
-              Kill session
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    );
-  };
-
-  return (
-    <div>
-      <button
-        className="w-full flex items-center gap-1 px-3 py-1.5 text-left hover:bg-zinc-800/30 transition-colors"
-        onClick={() => setCollapsed(!collapsed)}
-      >
-        <ChevronRight
-          className={`w-3 h-3 text-zinc-500 transition-transform ${collapsed ? "" : "rotate-90"}`}
-        />
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-          TMUX Sessions
-        </span>
-        <span className="text-[10px] text-zinc-500 ml-auto">
-          {sessions.length}
-        </span>
-        <span
-          role="button"
-          onClick={(e) => { e.stopPropagation(); onRefresh(); }}
-          className="ml-1 text-zinc-600 hover:text-zinc-400 transition-colors"
-          title="Refresh sessions"
-        >
-          <RefreshCw className="w-3 h-3" />
-        </span>
-      </button>
-
-      {!collapsed && (
-        sessions.length === 0 ? (
-          <p className="px-7 pb-2 text-[11px] text-zinc-600">No active sessions</p>
-        ) : (
-          <>
-            {active.length > 0 && (
-              <>
-                <p className="px-7 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-600/70">
-                  In Progress
-                </p>
-                {active.map(renderSession)}
-              </>
-            )}
-            {idle.length > 0 && (
-              <>
-                <p className="px-7 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
-                  Idle
-                </p>
-                {idle.map(renderSession)}
-              </>
-            )}
-          </>
-        )
-      )}
-    </div>
-  );
-}

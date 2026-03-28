@@ -1,5 +1,5 @@
 import { memo, useState } from 'react'
-import { Bug, Bookmark, CircleCheck, ChevronDown, Loader2 } from 'lucide-react'
+import { Bug, Bookmark, CircleCheck, ChevronDown, Loader2, GitBranch, Pause, Play } from 'lucide-react'
 import ClaudeIcon from '@/components/ui/ClaudeIcon'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -8,10 +8,13 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { LinkContextMenu } from '@/components/ui/link-context-menu'
+import { useWorkSessionsStore } from '@/store/work-sessions'
 import type { Ticket, JiraConfig } from './jira-api'
 import { transitionTicket } from './jira-api'
+import type { WorkSession } from '@/types/work-session'
 
 interface TicketCardProps {
   ticket: Ticket
@@ -19,6 +22,7 @@ interface TicketCardProps {
   jiraBaseUrl: string
   hasSession: boolean
   isThinking: boolean
+  workSession?: WorkSession
   onOpenUrl: (url: string, title: string) => void
   onNewSession: (ticket: Ticket) => void
   onContinueSession: (ticket: Ticket) => void
@@ -32,6 +36,7 @@ export const TicketCard = memo(function TicketCard({
   jiraBaseUrl,
   hasSession,
   isThinking,
+  workSession,
   onOpenUrl,
   onNewSession,
   onContinueSession,
@@ -41,24 +46,43 @@ export const TicketCard = memo(function TicketCard({
   const [jiraLoading, setJiraLoading] = useState(false)
 
   const hasPRs = ticket.pullRequests.length > 0
+  const sessionActive = workSession?.status === 'active'
+  const sessionPaused = workSession?.status === 'paused'
 
   const cardClasses = hasPRs
     ? 'border-emerald-600/60 bg-emerald-950/30 hover:border-emerald-500/70'
-    : hasSession
+    : (hasSession || sessionActive)
       ? 'border-blue-700/50 bg-blue-950/30 hover:border-blue-600/60'
-      : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700'
+      : sessionPaused
+        ? 'border-amber-700/50 bg-amber-950/20 hover:border-amber-600/60'
+        : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700'
 
   const handleTransition = async (status: string) => {
     setJiraLoading(true)
     try {
       await transitionTicket(config, ticket.key, status)
-      // Wait a moment for Jira to settle, then refresh
+      // If completing via Jira "Done", also complete the work session
+      if (status === 'Done' && workSession) {
+        await useWorkSessionsStore.getState().completeSession(workSession.id)
+      }
       await new Promise((r) => setTimeout(r, 500))
       onRefresh()
     } catch (err) {
       console.error('Failed to transition ticket:', err)
     } finally {
       setJiraLoading(false)
+    }
+  }
+
+  const handlePause = async () => {
+    if (workSession) {
+      await useWorkSessionsStore.getState().pauseSession(workSession.id)
+    }
+  }
+
+  const handleResume = async () => {
+    if (workSession) {
+      await useWorkSessionsStore.getState().updateSession(workSession.id, { status: 'active' })
     }
   }
 
@@ -103,6 +127,17 @@ export const TicketCard = memo(function TicketCard({
           })}
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {/* Session status dot */}
+          {workSession && (
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                sessionActive ? 'bg-green-400 animate-pulse' :
+                sessionPaused ? 'bg-amber-400' :
+                'bg-zinc-500'
+              }`}
+              title={workSession.status}
+            />
+          )}
           {ticket.storyPoints != null && (
             <Badge variant="secondary" className="flex h-5 w-5 items-center justify-center rounded-full bg-zinc-800 px-0 text-[10px] text-zinc-400">
               {ticket.storyPoints}
@@ -113,6 +148,27 @@ export const TicketCard = memo(function TicketCard({
 
       {/* Summary */}
       <p className="mb-2 text-sm leading-snug text-zinc-200">{ticket.summary}</p>
+
+      {/* Work session info */}
+      {workSession?.worktree?.branch && (
+        <div className="mb-2 flex items-center gap-1.5">
+          <Badge variant="outline" className="h-4 px-1.5 gap-0.5 text-[10px] text-fuchsia-400 border-fuchsia-900/50 bg-fuchsia-950/20">
+            <GitBranch className="w-2.5 h-2.5" />
+            {workSession.worktree.branch}
+          </Badge>
+          {workSession.prUrl && (
+            <LinkContextMenu url={workSession.prUrl} title="PR">
+              <Badge
+                variant="secondary"
+                className="cursor-pointer text-[10px] bg-blue-900/50 text-blue-400 hover:bg-blue-800/50"
+                onClick={() => onOpenUrl(workSession.prUrl!, 'PR')}
+              >
+                PR
+              </Badge>
+            </LinkContextMenu>
+          )}
+        </div>
+      )}
 
       {/* Action buttons */}
       <div className="flex items-center gap-1.5">
@@ -129,11 +185,30 @@ export const TicketCard = memo(function TicketCard({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start">
-            {hasSession ? (
-              <DropdownMenuItem onSelect={() => onContinueSession(ticket)}>
-                <ClaudeIcon className="w-3 h-3 text-[#D97757]" />
-                Continue session
-              </DropdownMenuItem>
+            {sessionPaused ? (
+              <>
+                <DropdownMenuItem onSelect={handleResume}>
+                  <Play className="w-3 h-3 text-green-400" />
+                  Resume session
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => onContinueSession(ticket)}>
+                  <ClaudeIcon className="w-3 h-3 text-[#D97757]" />
+                  Open tab
+                </DropdownMenuItem>
+              </>
+            ) : hasSession || sessionActive ? (
+              <>
+                <DropdownMenuItem onSelect={() => onContinueSession(ticket)}>
+                  <ClaudeIcon className="w-3 h-3 text-[#D97757]" />
+                  Continue session
+                </DropdownMenuItem>
+                {workSession && (
+                  <DropdownMenuItem onSelect={handlePause}>
+                    <Pause className="w-3 h-3 text-amber-400" />
+                    Pause session
+                  </DropdownMenuItem>
+                )}
+              </>
             ) : (
               <>
                 <DropdownMenuItem onSelect={() => onNewSession(ticket)}>

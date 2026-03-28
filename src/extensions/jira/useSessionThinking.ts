@@ -69,7 +69,9 @@ export function useSessionThinking(sessions: string[]): Record<string, ThinkingS
         if (buf.length > 8192) buf = buf.slice(-8192)
         buffersRef.current.set(name, buf)
 
-        const { thinking, time, done } = getThinkingState(stripAnsi(buf))
+        // Check only the recent tail to avoid stale done/thinking matches
+        const tail = buf.slice(-1024)
+        const { thinking, time, done } = getThinkingState(stripAnsi(tail))
 
         if (thinking) {
           const existing = offTimersRef.current.get(name)
@@ -84,6 +86,7 @@ export function useSessionThinking(sessions: string[]): Record<string, ThinkingS
           const existing = offTimersRef.current.get(name)
           if (existing) { clearTimeout(existing); offTimersRef.current.delete(name) }
           thinkingRef.current.set(name, false)
+          buffersRef.current.set(name, '')
           setBgThinking(s => ({ ...s, [name]: { thinking: false } }))
         } else if (thinkingRef.current.get(name)) {
           const existing = offTimersRef.current.get(name)
@@ -91,6 +94,7 @@ export function useSessionThinking(sessions: string[]): Record<string, ThinkingS
           const timer = setTimeout(() => {
             offTimersRef.current.delete(name)
             thinkingRef.current.set(name, false)
+            buffersRef.current.set(name, '')
             setBgThinking(s => ({ ...s, [name]: { thinking: false } }))
           }, 3000)
           offTimersRef.current.set(name, timer)

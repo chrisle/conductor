@@ -10,8 +10,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { TicketCard } from './TicketCard'
 import { LinkContextMenu } from '@/components/ui/link-context-menu'
+import { useConfigStore } from '@/store/config'
 import type { Ticket, TicketStatus, JiraConfig } from './jira-api'
 import type { ThinkingState } from '@/lib/terminal-detection'
+import type { WorkSession } from '@/types/work-session'
 
 type SortMode = 'none' | 'modified_desc' | 'modified_asc'
 
@@ -36,6 +38,7 @@ interface KanbanColumnProps {
   onStartWork: (ticket: Ticket) => void
   onRefresh: () => void
   onCreateTicket?: (status: TicketStatus) => void
+  workSessions?: WorkSession[]
 }
 
 const STATUS_COLORS: Record<TicketStatus, string> = {
@@ -50,31 +53,25 @@ const SORT_LABELS: Record<SortMode, string> = {
   modified_asc: 'Modified (Oldest)',
 }
 
-const COMPACT_KEY = 'conductor:jira:compact'
-
-function loadCompact(): Set<string> {
-  try {
-    const raw = localStorage.getItem(COMPACT_KEY)
-    return raw ? new Set(JSON.parse(raw)) : new Set(['done'])
-  } catch {
-    return new Set(['done'])
-  }
+function getCompactColumns(): Set<string> {
+  const columns = useConfigStore.getState().config.ui.kanbanCompactColumns
+  return columns.length > 0 ? new Set(columns) : new Set(['done'])
 }
 
-function saveCompact(set: Set<string>) {
-  localStorage.setItem(COMPACT_KEY, JSON.stringify([...set]))
+function saveCompactColumns(set: Set<string>) {
+  useConfigStore.getState().setKanbanCompactColumns([...set])
 }
 
-export function KanbanColumn({ title, status, tickets, pendingTickets = [], config, jiraBaseUrl, tmuxSessions, sessionThinking, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh, onCreateTicket }: KanbanColumnProps) {
+export function KanbanColumn({ title, status, tickets, pendingTickets = [], config, jiraBaseUrl, tmuxSessions, sessionThinking, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh, onCreateTicket, workSessions = [] }: KanbanColumnProps) {
   const [sort, setSort] = useState<SortMode>('none')
-  const [compact, setCompact] = useState(() => loadCompact().has(status))
+  const [compact, setCompact] = useState(() => getCompactColumns().has(status))
 
   const toggleCompact = () => {
     const next = !compact
     setCompact(next)
-    const set = loadCompact()
+    const set = getCompactColumns()
     if (next) set.add(status); else set.delete(status)
-    saveCompact(set)
+    saveCompactColumns(set)
   }
 
   const columnTickets = useMemo(() => {
@@ -188,6 +185,7 @@ export function KanbanColumn({ title, status, tickets, pendingTickets = [], conf
                 jiraBaseUrl={jiraBaseUrl}
                 hasSession={tmuxSessions.has(`t-${ticket.key}`)}
                 isThinking={sessionThinking[`t-${ticket.key}`]?.thinking ?? false}
+                workSession={workSessions.find(s => s.ticketKey === ticket.key && s.status !== 'completed')}
                 onOpenUrl={onOpenUrl}
                 onNewSession={onNewSession}
                 onContinueSession={onContinueSession}
