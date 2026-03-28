@@ -1,10 +1,11 @@
-import { FolderOpen, FileText, BookOpen, FileSpreadsheet } from 'lucide-react'
+import { FolderOpen, FileText, BookOpen, FileSpreadsheet, Image } from 'lucide-react'
 import type { Extension } from '../types'
 import FileExplorerSidebar from './FileExplorerSidebar'
 import TextTab from './TextTab'
 import MarkdownTab from './MarkdownTab'
 import WordTab from './WordTab'
 import ExcelTab from './ExcelTab'
+import ImageTab from './ImageTab'
 
 export const fileExplorerExtension: Extension = {
   id: 'file-explorer',
@@ -49,6 +50,13 @@ export const fileExplorerExtension: Extension = {
       icon: FileSpreadsheet,
       component: ExcelTab,
       fileExtensions: ['.xlsx', '.xls', '.csv']
+    },
+    {
+      type: 'image',
+      label: 'Image',
+      icon: Image,
+      component: ImageTab,
+      fileExtensions: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico', '.avif']
     }
   ]
 }

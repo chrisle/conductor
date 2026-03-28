@@ -11,6 +11,7 @@ import {
 import { TicketCard } from './TicketCard'
 import { LinkContextMenu } from '@/components/ui/link-context-menu'
 import type { Ticket, TicketStatus, JiraConfig } from './jira-api'
+import type { ThinkingState } from '@/lib/terminal-detection'
 
 type SortMode = 'none' | 'modified_desc' | 'modified_asc'
 
@@ -28,6 +29,7 @@ interface KanbanColumnProps {
   config: JiraConfig
   jiraBaseUrl: string
   tmuxSessions: Set<string>
+  sessionThinking: Record<string, ThinkingState>
   onOpenUrl: (url: string, title: string) => void
   onNewSession: (ticket: Ticket) => void
   onContinueSession: (ticket: Ticket) => void
@@ -63,7 +65,7 @@ function saveCompact(set: Set<string>) {
   localStorage.setItem(COMPACT_KEY, JSON.stringify([...set]))
 }
 
-export function KanbanColumn({ title, status, tickets, pendingTickets = [], config, jiraBaseUrl, tmuxSessions, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh, onCreateTicket }: KanbanColumnProps) {
+export function KanbanColumn({ title, status, tickets, pendingTickets = [], config, jiraBaseUrl, tmuxSessions, sessionThinking, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh, onCreateTicket }: KanbanColumnProps) {
   const [sort, setSort] = useState<SortMode>('none')
   const [compact, setCompact] = useState(() => loadCompact().has(status))
 
@@ -185,6 +187,7 @@ export function KanbanColumn({ title, status, tickets, pendingTickets = [], conf
                 config={config}
                 jiraBaseUrl={jiraBaseUrl}
                 hasSession={tmuxSessions.has(`t-${ticket.key}`)}
+                isThinking={sessionThinking[`t-${ticket.key}`]?.thinking ?? false}
                 onOpenUrl={onOpenUrl}
                 onNewSession={onNewSession}
                 onContinueSession={onContinueSession}

@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { KanbanColumn } from './KanbanColumn'
 import type { PendingTicket } from './KanbanColumn'
 import type { Ticket, Epic, TicketStatus, JiraConfig } from './jira-api'
+import type { ThinkingState } from '@/lib/terminal-detection'
 
 const COLUMNS: { title: string; status: TicketStatus }[] = [
   { title: 'Backlog', status: 'backlog' },
@@ -19,6 +20,7 @@ interface KanbanBoardProps {
   jiraBaseUrl: string
   pendingTickets?: PendingTicket[]
   tmuxSessions: Set<string>
+  sessionThinking: Record<string, ThinkingState>
   onOpenUrl: (url: string, title: string) => void
   onNewSession: (ticket: Ticket) => void
   onContinueSession: (ticket: Ticket) => void
@@ -27,7 +29,7 @@ interface KanbanBoardProps {
   onCreateTicket?: (status: TicketStatus, epicKey: string | null) => void
 }
 
-export function KanbanBoard({ tickets, epics, config, jiraBaseUrl, pendingTickets = [], tmuxSessions, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh, onCreateTicket }: KanbanBoardProps) {
+export function KanbanBoard({ tickets, epics, config, jiraBaseUrl, pendingTickets = [], tmuxSessions, sessionThinking, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh, onCreateTicket }: KanbanBoardProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   const epicKeys = epics.map((e) => e.key)
@@ -42,10 +44,10 @@ export function KanbanBoard({ tickets, epics, config, jiraBaseUrl, pendingTicket
     })
   }
 
-  const columnProps = { config, jiraBaseUrl, tmuxSessions, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh }
+  const columnProps = { config, jiraBaseUrl, tmuxSessions, sessionThinking, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh }
 
   return (
-    <div className="h-full overflow-y-auto p-4 space-y-6">
+    <div className="h-full overflow-auto p-4 space-y-6 min-w-0">
       {epics.map((epic) => {
         const epicTickets = tickets.filter((t) => t.epicKey === epic.key)
         if (epicTickets.length === 0 && !pendingTickets.some(p => p.epicKey === epic.key)) return null
@@ -76,7 +78,7 @@ export function KanbanBoard({ tickets, epics, config, jiraBaseUrl, pendingTicket
               </CollapsibleTrigger>
 
               <CollapsibleContent>
-                <div className={`grid grid-cols-3 gap-4`}>
+                <div className={`grid gap-4`} style={{ gridTemplateColumns: 'repeat(3, minmax(280px, 1fr))' }}>
                   {COLUMNS.map((col) => (
                     <KanbanColumn
                       key={col.status}

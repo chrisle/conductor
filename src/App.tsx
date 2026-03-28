@@ -7,10 +7,12 @@ import { useSidebarStore } from './store/sidebar'
 import { useTabsStore } from './store/tabs'
 import { useLayoutStore } from './store/layout'
 import { useProjectStore } from './store/project'
-import { initializeDefaultProject } from './lib/project-io'
+import { useUIStore } from './store/ui'
+import { initializeDefaultProject, saveProject, autosaveLayout } from './lib/project-io'
 
 function App(): React.ReactElement {
   const [goToOpen, setGoToOpen] = useState(false)
+  const zoom = useUIStore(s => s.zoom)
 
   // Load persisted favorites from disk on startup
   useEffect(() => {
@@ -26,21 +28,32 @@ function App(): React.ReactElement {
     initializeDefaultProject()
   }, [])
 
-  // Mark workspace dirty when tabs or layout change
+  // Auto-save when tabs or layout change (debounced)
   useEffect(() => {
     let initialized = false
-    // Skip the first state (initial setup)
-    const unsubTabs = useTabsStore.subscribe(() => {
+    let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+    const scheduleAutoSave = () => {
       if (!initialized) return
-      useProjectStore.getState().markWorkspaceDirty()
-    })
-    const unsubLayout = useLayoutStore.subscribe(() => {
-      if (!initialized) return
-      useProjectStore.getState().markWorkspaceDirty()
-    })
-    // Delay enabling to avoid marking dirty during initial setup
+      const { filePath } = useProjectStore.getState()
+      if (saveTimer) clearTimeout(saveTimer)
+      saveTimer = setTimeout(() => {
+        if (filePath) {
+          saveProject(filePath).catch(() => {})
+        } else {
+          autosaveLayout()
+        }
+      }, 500)
+    }
+
+    const unsubTabs = useTabsStore.subscribe(scheduleAutoSave)
+    const unsubLayout = useLayoutStore.subscribe(scheduleAutoSave)
     requestAnimationFrame(() => { initialized = true })
-    return () => { unsubTabs(); unsubLayout() }
+    return () => {
+      unsubTabs()
+      unsubLayout()
+      if (saveTimer) clearTimeout(saveTimer)
+    }
   }, [])
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -48,6 +61,12 @@ function App(): React.ReactElement {
     if (e.key === 'g' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault()
       setGoToOpen(prev => !prev)
+    }
+    // Zoom: Cmd+= / Cmd+- / Cmd+0
+    if (e.metaKey || e.ctrlKey) {
+      if (e.key === '=' || e.key === '+') { e.preventDefault(); useUIStore.getState().zoomIn() }
+      else if (e.key === '-') { e.preventDefault(); useUIStore.getState().zoomOut() }
+      else if (e.key === '0') { e.preventDefault(); useUIStore.getState().resetZoom() }
     }
   }, [])
 
@@ -57,7 +76,15 @@ function App(): React.ReactElement {
   }, [handleKeyDown])
 
   return (
-    <div className="flex flex-col h-full w-full bg-zinc-950 overflow-hidden">
+    <div
+      className="flex flex-col h-full w-full bg-zinc-950 overflow-hidden"
+      style={{
+        transform: `scale(${zoom})`,
+        transformOrigin: 'top left',
+        width: `${100 / zoom}%`,
+        height: `${100 / zoom}%`,
+      }}
+    >
       <TitleBar />
       <div className="flex-1 overflow-hidden">
         <MainLayout />

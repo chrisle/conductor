@@ -208,3 +208,41 @@ webview {
   background-size: 200% 100%;
   animation: thinking-sweep 1.5s ease-in-out infinite;
 }
+
+/* Thinking halo — chasing light around the full border (used on ticket cards) */
+@property --halo-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes halo-rotate {
+  to { --halo-angle: 360deg; }
+}
+
+.thinking-halo {
+  position: relative;
+}
+
+.thinking-halo::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  padding: 1px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--halo-angle),
+    transparent 0deg,
+    #3b82f6 50deg,
+    #93c5fd 70deg,
+    #3b82f6 90deg,
+    transparent 140deg
+  );
+  animation: halo-rotate 1.5s linear infinite;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}

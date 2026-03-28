@@ -85,7 +85,9 @@ export function useSessionThinking(sessions: string[]): Record<string, ThinkingS
           if (existing) { clearTimeout(existing); offTimersRef.current.delete(name) }
           thinkingRef.current.set(name, false)
           setBgThinking(s => ({ ...s, [name]: { thinking: false } }))
-        } else if (thinkingRef.current.get(name) && !offTimersRef.current.has(name)) {
+        } else if (thinkingRef.current.get(name)) {
+          const existing = offTimersRef.current.get(name)
+          if (existing) clearTimeout(existing)
           const timer = setTimeout(() => {
             offTimersRef.current.delete(name)
             thinkingRef.current.set(name, false)

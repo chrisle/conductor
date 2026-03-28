@@ -11,6 +11,7 @@ export {
   writeTerminal,
   resizeTerminal,
   killTerminal,
+  setAutoPilot,
   onTerminalData,
   offTerminalData,
   onTerminalExit,

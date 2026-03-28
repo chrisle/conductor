@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -52,6 +53,46 @@ type session struct {
 
 	// Currently attached WebSocket (nil if detached)
 	conn *websocket.Conn
+
+	// Autopilot: auto-respond to yes/no prompts even when no tab is open.
+	autoPilot  bool
+	apBuf      []byte // recent PTY output for prompt scanning (max 4 KB)
+	apLastMs   int64  // unix ms of last auto-response (throttle)
+}
+
+// ---------------------------------------------------------------------------
+// Autopilot helpers
+// ---------------------------------------------------------------------------
+
+var ansiEscape = regexp.MustCompile(`\x1b(\[[0-9;]*[A-Za-z]|\][^\x07]*\x07|[()][0-9A-Za-z]|\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e])`)
+
+func stripAnsi(s string) string {
+	return ansiEscape.ReplaceAllString(s, "")
+}
+
+var (
+	apReYes1       = regexp.MustCompile(`(?s)1\.?\s*Yes`)
+	apReYN1        = regexp.MustCompile(`(?im)\(Y/n\)\s*$`)
+	apReYN2        = regexp.MustCompile(`(?im)\(y/N\)\s*$`)
+	apReYN3        = regexp.MustCompile(`(?im)\[y/n\]\s*$`)
+	apReYN4        = regexp.MustCompile(`(?im)\[Y/n\]\s*$`)
+	apReConfirm    = regexp.MustCompile(`(?i)confirm\? \(y/n\)`)
+	apRePressEnter = regexp.MustCompile(`(?i)press enter to continue`)
+	apReContinue   = regexp.MustCompile(`(?i)continue\? \[y/n\]`)
+	apReAllow      = regexp.MustCompile(`(?i)Allow.*\(y/n\)`)
+)
+
+func matchPrompt(text string) string {
+	if apReYes1.MatchString(text)       { return "\r" }
+	if apReYN1.MatchString(text)        { return "y\r" }
+	if apReYN2.MatchString(text)        { return "y\r" }
+	if apReYN3.MatchString(text)        { return "y\r" }
+	if apReYN4.MatchString(text)        { return "y\r" }
+	if apReConfirm.MatchString(text)    { return "y\r" }
+	if apRePressEnter.MatchString(text) { return "\r" }
+	if apReContinue.MatchString(text)   { return "y\r" }
+	if apReAllow.MatchString(text)      { return "y\r" }
+	return ""
 }
 
 var (
@@ -216,6 +257,11 @@ func newSession(id, cwd string) (*session, bool, error) {
 			if err := createCmd.Run(); err != nil {
 				return nil, false, fmt.Errorf("tmux new-session: %w", err)
 			}
+			// Enable mouse mode so scroll events are handled as scrollback
+			// instead of being translated to arrow key sequences.
+			mouseCmd := tmuxCmd("set-option", "-t", "="+tmuxName, "mouse", "on")
+			mouseCmd.Env = tmuxEnv()
+			_ = mouseCmd.Run()
 			log.Printf("[session %s] created tmux session '%s'", id, tmuxName)
 		} else {
 			log.Printf("[session %s] attaching to existing tmux session '%s'", id, tmuxName)
@@ -284,6 +330,24 @@ func (s *session) readLoop() {
 				}
 			}
 			conn := s.conn
+
+			// Autopilot: accumulate output and scan for prompts
+			var apResponse string
+			if s.autoPilot {
+				s.apBuf = append(s.apBuf, data...)
+				if len(s.apBuf) > 4096 {
+					s.apBuf = s.apBuf[len(s.apBuf)-4096:]
+				}
+				now := time.Now().UnixMilli()
+				if now-s.apLastMs >= 250 {
+					stripped := stripAnsi(string(s.apBuf))
+					apResponse = matchPrompt(stripped)
+					if apResponse != "" {
+						s.apLastMs = now
+						s.apBuf = nil
+					}
+				}
+			}
 			s.mu.Unlock()
 
 			// Forward to attached client
@@ -293,6 +357,15 @@ func (s *session) readLoop() {
 					s.conn = nil
 					s.mu.Unlock()
 				}
+			}
+
+			// Send autopilot response after a short delay (mimics human think time)
+			if apResponse != "" {
+				resp := apResponse
+				go func() {
+					time.Sleep(150 * time.Millisecond)
+					s.write([]byte(resp))
+				}()
 			}
 		}
 		if err != nil {
@@ -471,6 +544,16 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 			}
 		case "kill":
 			s.kill()
+		case "autopilot":
+			var enabled bool
+			json.Unmarshal(msg.Data, &enabled)
+			s.mu.Lock()
+			s.autoPilot = enabled
+			if !enabled {
+				s.apBuf = nil
+			}
+			s.mu.Unlock()
+			log.Printf("[session %s] autopilot %v", s.id, enabled)
 		}
 	}
 }

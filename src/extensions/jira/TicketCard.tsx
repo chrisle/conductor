@@ -18,6 +18,7 @@ interface TicketCardProps {
   config: JiraConfig
   jiraBaseUrl: string
   hasSession: boolean
+  isThinking: boolean
   onOpenUrl: (url: string, title: string) => void
   onNewSession: (ticket: Ticket) => void
   onContinueSession: (ticket: Ticket) => void
@@ -30,6 +31,7 @@ export const TicketCard = memo(function TicketCard({
   config,
   jiraBaseUrl,
   hasSession,
+  isThinking,
   onOpenUrl,
   onNewSession,
   onContinueSession,
@@ -42,7 +44,9 @@ export const TicketCard = memo(function TicketCard({
 
   const cardClasses = hasPRs
     ? 'border-emerald-600/60 bg-emerald-950/30 hover:border-emerald-500/70'
-    : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700'
+    : hasSession
+      ? 'border-blue-700/50 bg-blue-950/30 hover:border-blue-600/60'
+      : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700'
 
   const handleTransition = async (status: string) => {
     setJiraLoading(true)
@@ -59,7 +63,7 @@ export const TicketCard = memo(function TicketCard({
   }
 
   return (
-    <div className={`relative rounded-lg border p-3 transition-colors ${cardClasses}`}>
+    <div className={`relative rounded-lg border p-3 transition-colors ${cardClasses}${isThinking ? ' thinking-halo' : ''}`}>
       {/* Header: Key + PRs + Story Points */}
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">

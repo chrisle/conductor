@@ -30,6 +30,8 @@ export default function TerminalTab({
   watchers,
   onPtyData,
   onTerminalReady,
+  onSessionReady,
+  interceptKeys,
 }: TabProps & TerminalTabExtraProps): React.ReactElement {
   const cwd = tab.filePath;
   const initialCommand = tab.initialCommand;
@@ -132,6 +134,7 @@ export default function TerminalTab({
           onTerminalReady?.((data: string) =>
             termAPI.writeTerminal(tabId, data),
           );
+          onSessionReady?.(isNew);
           // Only send initialCommand for brand-new tmux sessions. When
           // reattaching to an existing session the process is already running.
           if (initialCommand && isNew && !initCmdSentRef.current) {
@@ -176,19 +179,22 @@ export default function TerminalTab({
         processWatchers(term, start, end);
       });
 
-      // Track user scroll-up via wheel events only
+      // Track user scroll-up via wheel events.
+      // We set the flag immediately on scroll-up and clear it only when
+      // the user actively scrolls back to the bottom (no timeout race).
       const el = containerRef.current;
       const onWheel = (e: WheelEvent) => {
         if (e.deltaY < 0) {
           userScrolledUpRef.current = true;
-        } else {
-          setTimeout(() => {
+        } else if (e.deltaY > 0) {
+          // Check synchronously after Ghostty processes the scroll
+          requestAnimationFrame(() => {
             if (disposed) return;
             const buf = term.buffer.active;
             if (buf.viewportY >= buf.baseY) {
               userScrolledUpRef.current = false;
             }
-          }, 50);
+          });
         }
       };
       el?.addEventListener("wheel", onWheel);
@@ -211,9 +217,14 @@ export default function TerminalTab({
           if (!data) return;
         }
 
+        // Snapshot viewport position before write — term.write() can
+        // move the viewport on its own in some cases.
+        const buf = term.buffer.active;
+        const wasAtBottom = buf.viewportY >= buf.baseY;
+
         term.write(data);
 
-        if (!userScrolledUpRef.current) {
+        if (!userScrolledUpRef.current && wasAtBottom) {
           term.scrollToBottom();
         }
 
@@ -318,18 +329,26 @@ export default function TerminalTab({
         fitAndScroll();
       }, 50);
       setTimeout(fitAndScroll, 200);
+    } else if (!isActive && terminalRef.current) {
+      terminalRef.current.blur();
     }
   }, [isActive]);
 
   return (
+    <div className="h-full w-full min-w-0 bg-zinc-950">
     <div
       ref={wrapperRef}
-      className="h-full w-full min-w-0 bg-zinc-950 relative p-3"
+      className="relative m-3 min-w-0"
+      style={{ width: 'calc(100% - 1.5rem)', height: 'calc(100% - 1.5rem)' }}
       onKeyDownCapture={(e) => {
         if ((e.metaKey || e.ctrlKey) && e.key === "f") {
           e.preventDefault();
           e.stopPropagation();
           setShowSearch(true);
+        }
+        // Allow extensions to intercept keys (e.g. Shift+Enter → Alt+Enter)
+        if (interceptKeys?.(e, (data) => termAPI.writeTerminal(tabId, data))) {
+          return;
         }
         // Prevent browser from using Tab/Shift+Tab for focus navigation;
         // forward them as terminal escape sequences instead.
@@ -357,5 +376,6 @@ export default function TerminalTab({
         onClick={() => terminalRef.current?.focus()}
       />
     </div>
+</div>
   );
 }

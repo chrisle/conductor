@@ -187,6 +187,9 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   const [dropZone, setDropZone] = useState<DropZone>(null)
   const [dragOverTabIndex, setDragOverTabIndex] = useState<number | null>(null)
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
+  const [renamingTabId, setRenamingTabId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const renameInputRef = useRef<HTMLInputElement>(null)
   const tabBarRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const dragIndexRef = useRef<number | null>(null)
@@ -341,6 +344,19 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     setFocusedGroup(groupId)
   }
 
+  function startRename(tab: Tab) {
+    setRenamingTabId(tab.id)
+    setRenameValue(tab.title)
+    setTimeout(() => renameInputRef.current?.select(), 0)
+  }
+
+  function commitRename() {
+    if (renamingTabId && renameValue.trim()) {
+      useTabsStore.getState().updateTab(groupId, renamingTabId, { title: renameValue.trim() })
+    }
+    setRenamingTabId(null)
+  }
+
   // Get menu items from plugin registry
   const menuItems = extensionRegistry.getNewTabMenuItems()
 
@@ -401,9 +417,28 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
               )}
             >
               <TabIcon type={tab.type} />
-              <span className="text-xs truncate flex-1">
-                {tab.isDirty ? '● ' : ''}{tab.title}
-              </span>
+              {renamingTabId === tab.id ? (
+                <input
+                  ref={renameInputRef}
+                  className="text-xs flex-1 min-w-0 bg-transparent border border-zinc-600 rounded px-1 outline-none text-zinc-100"
+                  value={renameValue}
+                  onChange={e => setRenameValue(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') commitRename()
+                    if (e.key === 'Escape') setRenamingTabId(null)
+                    e.stopPropagation()
+                  }}
+                  onBlur={commitRename}
+                  onClick={e => e.stopPropagation()}
+                />
+              ) : (
+                <span
+                  className="text-xs truncate flex-1"
+                  onDoubleClick={e => { e.stopPropagation(); startRename(tab) }}
+                >
+                  {tab.isDirty ? '● ' : ''}{tab.title}
+                </span>
+              )}
               <Button
                 variant="ghost"
                 size="icon"

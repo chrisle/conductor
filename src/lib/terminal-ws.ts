@@ -113,6 +113,13 @@ export function resizeTerminal(id: string, cols: number, rows: number): Promise<
   return Promise.resolve()
 }
 
+export function setAutoPilot(id: string, enabled: boolean): void {
+  const ws = sockets.get(id)
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'autopilot', data: enabled }))
+  }
+}
+
 export function killTerminal(id: string): Promise<void> {
   // Just close the WebSocket — the tmux session keeps running so the user
   // can continue it later. Explicit session destruction is handled via the

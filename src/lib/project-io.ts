@@ -505,10 +505,60 @@ export async function createNewProject(projectName: string, directory: string): 
   return true
 }
 
+// --- Auto-save layout to localStorage (for unsaved projects) ---
+const AUTOSAVE_KEY = 'conductor:autosave-layout'
+
+export function autosaveLayout(): void {
+  try {
+    const sidebar = useSidebarStore.getState()
+    const activityBar = useActivityBarStore.getState()
+    const data = {
+      workspace: serializeWorkspace(),
+      sidebar: {
+        rootPath: sidebar.rootPath,
+        expandedPaths: Array.from(sidebar.expandedPaths),
+      },
+      activeExtensionId: activityBar.activeExtensionId,
+    }
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data))
+  } catch { /* quota exceeded — ignore */ }
+}
+
+function restoreAutosavedLayout(): boolean {
+  try {
+    const raw = localStorage.getItem(AUTOSAVE_KEY)
+    if (!raw) return false
+    const data = JSON.parse(raw)
+    if (!data.workspace?.layout || !data.workspace?.groups) return false
+
+    const project: ConductorProject = {
+      version: 2,
+      name: 'Untitled Project',
+      activeWorkspace: 'default',
+      workspaces: { default: data.workspace },
+      workspaceOrder: ['default'],
+      sidebar: data.sidebar || { rootPath: null, expandedPaths: [] },
+      activeExtensionId: data.activeExtensionId ?? null,
+    }
+    restoreProject(project)
+    return true
+  } catch { return false }
+}
+
 /** Initialize a default in-memory project if none is loaded */
 export function initializeDefaultProject(): void {
   const project = useProjectStore.getState()
   if (project.filePath || project.name) return // already loaded
+
+  // Try to restore the last autosaved layout
+  if (restoreAutosavedLayout()) {
+    useProjectStore.setState({
+      name: 'Untitled Project',
+      activeWorkspace: 'default',
+      workspaceNames: ['default'],
+    })
+    return
+  }
 
   const wsName = 'Untitled Workspace'
   useProjectStore.setState({

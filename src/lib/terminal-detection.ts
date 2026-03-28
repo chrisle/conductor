@@ -16,8 +16,8 @@ export function stripAnsi(s: string): string {
 //   "(53s · ↓ 778 tokens)"   ← seconds-only, down-arrow variant
 const THINKING_RE = /\((?:(\d+m)\s+)?(\d+s)\s*·\s*[↑↓]\s*[\d.]+[kmb]?\s+tokens/i
 
-// Detect Claude finished — "Cooked for 8m 57s" means it's done, not thinking.
-const DONE_RE = /cooked\s+for\b/i
+// Detect Claude finished — any past-tense verb ("…ed for …Xs") completion line
+const DONE_RE = /ed\s+for\b.*\d+s/i
 
 export interface ThinkingState {
   thinking: boolean
@@ -30,9 +30,13 @@ export interface ThinkingState {
 export function getThinkingState(screenText: string): ThinkingState {
   const stripped = stripAnsi(screenText)
   if (DONE_RE.test(stripped)) return { thinking: false, done: true }
-  const match = THINKING_RE.exec(stripped)
-  if (!match) return { thinking: false }
-  const time = match[1] ? `${match[1]} ${match[2]}` : match[2]
+  // Use the last match so same-line rewrites return the most recent time value
+  const globalRe = new RegExp(THINKING_RE.source, THINKING_RE.flags + 'g')
+  let lastMatch: RegExpExecArray | null = null
+  let m: RegExpExecArray | null
+  while ((m = globalRe.exec(stripped)) !== null) lastMatch = m
+  if (!lastMatch) return { thinking: false }
+  const time = lastMatch[1] ? `${lastMatch[1]} ${lastMatch[2]}` : lastMatch[2]
   return { thinking: true, time }
 }
 

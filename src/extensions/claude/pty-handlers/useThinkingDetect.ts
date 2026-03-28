@@ -42,8 +42,11 @@ export function useThinkingDetect(tabId: string, groupId: string) {
       }
       thinkingRef.current = false
       updateTab(groupId, tabId, { isThinking: false, thinkingTime: undefined })
-    } else if (thinkingRef.current && !offTimerRef.current) {
-      // Debounce: only go gray after 3 s of sustained absence
+    } else if (thinkingRef.current) {
+      // Reset the debounce timer on every data arrival — same-line overwrites
+      // keep sending data without matching THINKING_RE, so we must extend the
+      // grace period on each chunk rather than setting the timer only once.
+      if (offTimerRef.current) clearTimeout(offTimerRef.current)
       offTimerRef.current = setTimeout(() => {
         offTimerRef.current = null
         thinkingRef.current = false

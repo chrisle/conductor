@@ -9,6 +9,7 @@ import { useSidebarStore } from "@/store/sidebar";
 import type { TabProps } from "../types";
 import type { PendingTicket } from "./KanbanColumn";
 import type { TicketStatus } from "./jira-api";
+import { useSessionThinking } from "./useSessionThinking";
 import {
   loadConfig,
   fetchTickets,
@@ -20,19 +21,38 @@ import {
   type JiraConfig,
 } from "./jira-api";
 
+// Persistent cache so the board renders instantly on app restart
+const CACHE_PREFIX = 'conductor:jira-board:'
+
+function loadBoardCache(projectKey: string): { tickets: Ticket[]; epics: Epic[] } | null {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + projectKey)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+function saveBoardCache(projectKey: string, tickets: Ticket[], epics: Epic[]) {
+  try {
+    localStorage.setItem(CACHE_PREFIX + projectKey, JSON.stringify({ tickets, epics }))
+  } catch { /* quota exceeded — ignore */ }
+}
+
 export default function JiraBoardTab({
   tabId,
   groupId,
   isActive,
   tab,
 }: TabProps): React.ReactElement {
+  const projectKey = tab.content || tab.title?.replace(/ Board$/, "") || "";
+  const [cached] = useState(() => loadBoardCache(projectKey));
   const [config] = useState<JiraConfig | null>(loadConfig);
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [epics, setEpics] = useState<Epic[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>(cached?.tickets ?? []);
+  const [epics, setEpics] = useState<Epic[]>(cached?.epics ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("");
   const [tmuxSessions, setTmuxSessions] = useState<Set<string>>(new Set());
+  const sessionThinking = useSessionThinking([...tmuxSessions]);
   const [pendingTickets, setPendingTickets] = useState<PendingTicket[]>([]);
   const [createDialog, setCreateDialog] = useState<{
     open: boolean;
@@ -62,9 +82,6 @@ export default function JiraBoardTab({
     } catch { /* conductord not running */ }
   }, [])
 
-  // tab.content holds the project key; fall back to title for old saved files
-  const projectKey = tab.content || tab.title?.replace(/ Board$/, "") || "";
-
   const loadData = useCallback(async () => {
     if (!config || !projectKey) return;
     setLoading(true);
@@ -82,6 +99,7 @@ export default function JiraBoardTab({
 
       setTickets(ticketData);
       setEpics(epicData);
+      saveBoardCache(projectKey, ticketData, epicData);
       loadTmuxSessions();
 
       // Fetch PRs for active tickets in background
@@ -331,26 +349,21 @@ export default function JiraBoardTab({
         </div>
       )}
 
-      {loading && tickets.length === 0 ? (
-        <div className="flex h-full items-center justify-center">
-          <RefreshCw className="w-5 h-5 text-zinc-500 animate-spin" />
-        </div>
-      ) : (
-        <KanbanBoard
-          tickets={filteredTickets}
-          epics={epics}
-          config={config}
-          jiraBaseUrl={jiraBaseUrl}
-          pendingTickets={pendingTickets}
-          tmuxSessions={tmuxSessions}
-          onOpenUrl={openUrl}
-          onNewSession={newSession}
-          onContinueSession={continueSession}
-          onStartWork={startWork}
-          onRefresh={loadData}
-          onCreateTicket={handleOpenCreateDialog}
-        />
-      )}
+      <KanbanBoard
+        tickets={filteredTickets}
+        epics={epics}
+        config={config}
+        jiraBaseUrl={jiraBaseUrl}
+        pendingTickets={pendingTickets}
+        tmuxSessions={tmuxSessions}
+        sessionThinking={sessionThinking}
+        onOpenUrl={openUrl}
+        onNewSession={newSession}
+        onContinueSession={continueSession}
+        onStartWork={startWork}
+        onRefresh={loadData}
+        onCreateTicket={handleOpenCreateDialog}
+      />
 
       <CreateTicketDialog
         open={createDialog.open}

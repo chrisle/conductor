@@ -625,6 +625,52 @@ function SessionsGroup({
 }) {
   const [collapsed, setCollapsed] = useState(false);
 
+  const active = sessions.filter((s) => sessionThinking[s]?.thinking);
+  const idle = sessions.filter((s) => !sessionThinking[s]?.thinking);
+
+  const renderSession = (name: string) => {
+    const { thinking, time } = sessionThinking[name] ?? { thinking: false };
+    return (
+      <div
+        key={name}
+        className="flex items-center gap-2 px-3 py-1 pl-7 group hover:bg-zinc-800/50 transition-colors cursor-pointer"
+        onClick={() => onOpen(name)}
+      >
+        <span
+          className={`shrink-0 w-1.5 h-1.5 rounded-full ${thinking ? "bg-emerald-400 animate-pulse" : "bg-zinc-700"}`}
+        />
+        <span className={`text-xs truncate ${thinking ? "text-zinc-200" : "text-zinc-300"}`}>
+          {name}
+        </span>
+        {thinking && time && (
+          <span className="text-[10px] text-emerald-500/70 shrink-0 ml-auto mr-1">
+            {time}
+          </span>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              onClick={(e) => e.stopPropagation()}
+              className={`${thinking && time ? "" : "ml-auto"} opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-zinc-300 transition-all shrink-0 p-0.5 rounded`}
+              title="Session options"
+            >
+              <MoreHorizontal className="w-3.5 h-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-36">
+            <DropdownMenuItem
+              onClick={(e) => { e.stopPropagation(); onKill(name); }}
+              className="text-red-400 focus:text-red-400"
+            >
+              <X className="w-3 h-3 mr-2" />
+              Kill session
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    );
+  };
+
   return (
     <div>
       <button
@@ -642,70 +688,38 @@ function SessionsGroup({
         </span>
         <span
           role="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRefresh();
-          }}
+          onClick={(e) => { e.stopPropagation(); onRefresh(); }}
           className="ml-1 text-zinc-600 hover:text-zinc-400 transition-colors"
           title="Refresh sessions"
         >
           <RefreshCw className="w-3 h-3" />
         </span>
       </button>
-      {!collapsed &&
-        (sessions.length === 0 ? (
-          <p className="px-7 pb-2 text-[11px] text-zinc-600">
-            No active sessions
-          </p>
+
+      {!collapsed && (
+        sessions.length === 0 ? (
+          <p className="px-7 pb-2 text-[11px] text-zinc-600">No active sessions</p>
         ) : (
-          sessions.map((name) => {
-            const { thinking, time } = sessionThinking[name] ?? { thinking: false };
-            return (
-              <div
-                key={name}
-                className="flex items-center gap-2 px-3 py-1 pl-7 group hover:bg-zinc-800/50 transition-colors cursor-pointer"
-                onClick={() => onOpen(name)}
-              >
-                <span
-                  className={`shrink-0 w-1.5 h-1.5 rounded-full ${thinking ? "bg-emerald-400 animate-pulse" : "bg-zinc-700"}`}
-                />
-                <span
-                  className={`text-xs truncate ${thinking ? "text-zinc-200" : "text-zinc-300"}`}
-                >
-                  {name}
-                </span>
-                {thinking && time && (
-                  <span className="text-[10px] text-emerald-500/70 shrink-0 ml-auto mr-1">
-                    {time}
-                  </span>
-                )}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      onClick={(e) => e.stopPropagation()}
-                      className={`${thinking && time ? "" : "ml-auto"} opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-zinc-300 transition-all shrink-0 p-0.5 rounded`}
-                      title="Session options"
-                    >
-                      <MoreHorizontal className="w-3.5 h-3.5" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-36">
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onKill(name);
-                      }}
-                      className="text-red-400 focus:text-red-400"
-                    >
-                      <X className="w-3 h-3 mr-2" />
-                      Kill session
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            );
-          })
-        ))}
+          <>
+            {active.length > 0 && (
+              <>
+                <p className="px-7 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-600/70">
+                  In Progress
+                </p>
+                {active.map(renderSession)}
+              </>
+            )}
+            {idle.length > 0 && (
+              <>
+                <p className="px-7 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+                  Idle
+                </p>
+                {idle.map(renderSession)}
+              </>
+            )}
+          </>
+        )
+      )}
     </div>
   );
 }

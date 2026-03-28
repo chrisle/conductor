@@ -15,6 +15,7 @@ export interface Tab {
   content?: string
   initialCommand?: string
   autoPilot?: boolean
+  hasTmuxSession?: boolean
 }
 
 export interface TabGroup {
