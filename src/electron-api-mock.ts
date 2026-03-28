@@ -98,6 +98,16 @@ const mock: ElectronAPI = {
   saveFavorites: noopAsync,
   gitBranch: async () => null,
 
+  // App config
+  loadConfig: async () => null,
+  saveConfig: noopAsync,
+  patchConfig: async (patch: any) => patch,
+
+  // Cache
+  loadCache: async () => null,
+  saveCache: noopAsync,
+  invalidateCache: noopAsync,
+
   // Terminal — backed by conductord WebSocket
   createTerminal: createTerminalWS,
   writeTerminal: writeTerminalWS,
@@ -119,6 +129,14 @@ const mock: ElectronAPI = {
   setTicketBinding: noopAsync,
   getAllTicketBindings: async () => ({}),
   removeTicketBinding: noopAsync,
+
+  // Work sessions
+  createWorkSession: async (session: any) => session,
+  updateWorkSession: async () => null,
+  getWorkSession: async () => null,
+  getWorkSessionsByTicket: async () => [],
+  getAllWorkSessions: async () => [],
+  deleteWorkSession: noopAsync,
 
   // Projects
   selectDirectory: async () => null,

@@ -27,6 +27,16 @@ const electronAPI = {
   loadFavorites: () => ipcRenderer.invoke('favorites:load'),
   saveFavorites: (favorites: string[]) => ipcRenderer.invoke('favorites:save', favorites),
 
+  // App config
+  loadConfig: () => ipcRenderer.invoke('config:load'),
+  saveConfig: (config: any) => ipcRenderer.invoke('config:save', config),
+  patchConfig: (patch: any) => ipcRenderer.invoke('config:patch', patch),
+
+  // Cache
+  loadCache: (namespace: string, key: string, maxAgeMs?: number) => ipcRenderer.invoke('cache:load', namespace, key, maxAgeMs),
+  saveCache: (namespace: string, key: string, data: any) => ipcRenderer.invoke('cache:save', namespace, key, data),
+  invalidateCache: (namespace: string, key: string) => ipcRenderer.invoke('cache:invalidate', namespace, key),
+
   // Terminal
   createTerminal: (id: string, cwd?: string) => ipcRenderer.invoke('terminal:create', id, cwd),
   writeTerminal: (id: string, data: string) => ipcRenderer.invoke('terminal:write', id, data),
@@ -53,6 +63,14 @@ const electronAPI = {
   setTicketBinding: (ticketKey: string, data: any) => ipcRenderer.invoke('tickets:setBinding', ticketKey, data),
   getAllTicketBindings: () => ipcRenderer.invoke('tickets:getAllBindings'),
   removeTicketBinding: (ticketKey: string) => ipcRenderer.invoke('tickets:removeBinding', ticketKey),
+
+  // Work sessions
+  createWorkSession: (session: any) => ipcRenderer.invoke('sessions:create', session),
+  updateWorkSession: (id: string, patch: any) => ipcRenderer.invoke('sessions:update', id, patch),
+  getWorkSession: (id: string) => ipcRenderer.invoke('sessions:get', id),
+  getWorkSessionsByTicket: (ticketKey: string) => ipcRenderer.invoke('sessions:getByTicket', ticketKey),
+  getAllWorkSessions: (filter?: { status?: string; projectPath?: string }) => ipcRenderer.invoke('sessions:getAll', filter),
+  deleteWorkSession: (id: string) => ipcRenderer.invoke('sessions:delete', id),
 
   // Projects
   selectDirectory: () => ipcRenderer.invoke('project:selectDirectory'),

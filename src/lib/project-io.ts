@@ -55,10 +55,12 @@ export function serializeWorkspace(): Workspace {
     }
   }
 
+  const workspaceSettings = useProjectStore.getState().workspaceSettings
   return {
     layout: layout.root!,
     groups,
-    focusedGroupId: layout.focusedGroupId
+    focusedGroupId: layout.focusedGroupId,
+    settings: workspaceSettings,
   }
 }
 
@@ -84,7 +86,7 @@ export function serializeProject(): ConductorProject {
   workspaces[activeWs] = serializeWorkspace()
 
   return {
-    version: 2,
+    version: 3,
     name: project.name || 'Untitled Project',
     activeWorkspace: activeWs,
     workspaces,
@@ -93,7 +95,12 @@ export function serializeProject(): ConductorProject {
       rootPath: sidebar.rootPath,
       expandedPaths: Array.from(sidebar.expandedPaths)
     },
-    activeExtensionId: activityBar.activeExtensionId
+    activeExtensionId: activityBar.activeExtensionId,
+    jira: project.jiraSpaceKeys.length > 0 ? {
+      spaceKeys: project.jiraSpaceKeys,
+      connectionId: project.jiraConnectionId ?? undefined,
+    } : undefined,
+    settings: project.projectSettings,
   }
 }
 
@@ -111,6 +118,9 @@ function restoreWorkspace(workspace: Workspace): void {
     }
     tabsStore.removeGroup(groupId)
   }
+
+  // Restore workspace-level settings
+  useProjectStore.getState().setWorkspaceSettings(workspace.settings)
 
   // Restore groups and tabs
   const newGroups: Record<string, import('@/store/tabs').TabGroup> = {}
@@ -171,8 +181,21 @@ export function restoreProject(project: ConductorProject, projectDir?: string): 
 
   // Use persisted order if available, fall back to object keys
   const workspaceNames = project.workspaceOrder || Object.keys(project.workspaces)
-  useProjectStore.getState().setActiveWorkspace(wsName)
-  useProjectStore.getState().setWorkspaceNames(workspaceNames)
+  const projectStore = useProjectStore.getState()
+  projectStore.setActiveWorkspace(wsName)
+  projectStore.setWorkspaceNames(workspaceNames)
+
+  // Restore Jira config (v3+)
+  if (project.jira) {
+    projectStore.setJiraConfig(project.jira.spaceKeys, project.jira.connectionId)
+  }
+
+  // Restore settings
+  projectStore.setProjectSettings(project.settings)
+  const activeWorkspace = project.workspaces[wsName]
+  if (activeWorkspace) {
+    projectStore.setWorkspaceSettings(activeWorkspace.settings)
+  }
 }
 
 /** Save the current project to the given file path */
@@ -199,7 +222,7 @@ export async function saveProject(filePath: string): Promise<void> {
   workspaces[activeWs] = currentWorkspace
 
   const data: ConductorProject = {
-    version: 2,
+    version: 3,
     name: project.name || 'Untitled Project',
     activeWorkspace: activeWs,
     workspaces,
@@ -208,7 +231,12 @@ export async function saveProject(filePath: string): Promise<void> {
       rootPath: sidebar.rootPath,
       expandedPaths: Array.from(sidebar.expandedPaths)
     },
-    activeExtensionId: activityBar.activeExtensionId
+    activeExtensionId: activityBar.activeExtensionId,
+    jira: project.jiraSpaceKeys.length > 0 ? {
+      spaceKeys: project.jiraSpaceKeys,
+      connectionId: project.jiraConnectionId ?? undefined,
+    } : undefined,
+    settings: project.projectSettings,
   }
 
   await window.electronAPI.writeFile(filePath, JSON.stringify(data, null, 2))
@@ -249,7 +277,7 @@ export async function openProject(filePath: string): Promise<boolean> {
     // Handle v1 format (single workspace)
     if (raw.version === 1) {
       const project: ConductorProject = {
-        version: 2,
+        version: 3,
         name: raw.name || fileBaseName,
         activeWorkspace: 'default',
         workspaces: {
@@ -481,7 +509,7 @@ export async function createNewProject(projectName: string, directory: string): 
   const filePath = `${directory}/${projectName}.conductor`
 
   const data: ConductorProject = {
-    version: 2,
+    version: 3,
     name: projectName,
     activeWorkspace: 'default',
     workspaces: {
@@ -492,7 +520,7 @@ export async function createNewProject(projectName: string, directory: string): 
       rootPath: directory,
       expandedPaths: []
     },
-    activeExtensionId: null
+    activeExtensionId: null,
   }
 
   const result = await window.electronAPI.writeFile(filePath, JSON.stringify(data, null, 2))
@@ -532,7 +560,7 @@ function restoreAutosavedLayout(): boolean {
     if (!data.workspace?.layout || !data.workspace?.groups) return false
 
     const project: ConductorProject = {
-      version: 2,
+      version: 3,
       name: 'Untitled Project',
       activeWorkspace: 'default',
       workspaces: { default: data.workspace },

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { LayoutNode } from './layout'
+import type { ProjectSettings } from '@/types/project-settings'
 
 export interface SerializedTab {
   id: string
@@ -24,11 +25,12 @@ export interface Workspace {
   layout: LayoutNode
   groups: Record<string, SerializedTabGroup>
   focusedGroupId: string | null
+  settings?: ProjectSettings
 }
 
 /** The serialized format written to .conductor files */
 export interface ConductorProject {
-  version: 2
+  version: 2 | 3
   name: string
   activeWorkspace: string
   workspaces: Record<string, Workspace>
@@ -38,6 +40,11 @@ export interface ConductorProject {
     expandedPaths: string[]
   }
   activeExtensionId: string | null
+  jira?: {
+    spaceKeys: string[]
+    connectionId?: string
+  }
+  settings?: ProjectSettings
 }
 
 interface ProjectState {
@@ -47,8 +54,15 @@ interface ProjectState {
   workspaceNames: string[]
   dirtyWorkspaces: Set<string>
   recentProjects: Array<{ name: string; path: string }>
+  jiraSpaceKeys: string[]
+  jiraConnectionId: string | null
+  projectSettings: ProjectSettings | undefined
+  workspaceSettings: ProjectSettings | undefined
 
   setProject: (filePath: string, name: string) => void
+  setJiraConfig: (spaceKeys: string[], connectionId?: string) => void
+  setProjectSettings: (settings: ProjectSettings | undefined) => void
+  setWorkspaceSettings: (settings: ProjectSettings | undefined) => void
   setName: (name: string) => void
   clearProject: () => void
   setActiveWorkspace: (name: string) => void
@@ -71,10 +85,21 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   workspaceNames: [],
   dirtyWorkspaces: new Set<string>(),
   recentProjects: [],
+  jiraSpaceKeys: [],
+  jiraConnectionId: null,
+  projectSettings: undefined,
+  workspaceSettings: undefined,
+
+  setProjectSettings: (settings) => set({ projectSettings: settings }),
+  setWorkspaceSettings: (settings) => set({ workspaceSettings: settings }),
 
   setProject: (filePath, name) => {
     set({ filePath, name, dirtyWorkspaces: new Set() })
     get().addRecentProject(name, filePath)
+  },
+
+  setJiraConfig: (spaceKeys, connectionId) => {
+    set({ jiraSpaceKeys: spaceKeys, jiraConnectionId: connectionId ?? null })
   },
 
   setName: (name) => {
@@ -85,7 +110,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   clearProject: () => set({
     filePath: null, name: null, activeWorkspace: null,
-    workspaceNames: [], dirtyWorkspaces: new Set()
+    workspaceNames: [], dirtyWorkspaces: new Set(),
+    jiraSpaceKeys: [], jiraConnectionId: null,
+    projectSettings: undefined, workspaceSettings: undefined,
   }),
 
   setActiveWorkspace: (name) => set({ activeWorkspace: name }),

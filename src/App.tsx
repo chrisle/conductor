@@ -8,11 +8,19 @@ import { useTabsStore } from './store/tabs'
 import { useLayoutStore } from './store/layout'
 import { useProjectStore } from './store/project'
 import { useUIStore } from './store/ui'
+import { useConfigStore } from './store/config'
+import { useWorkSessionsStore } from './store/work-sessions'
 import { initializeDefaultProject, saveProject, autosaveLayout } from './lib/project-io'
 
 function App(): React.ReactElement {
   const [goToOpen, setGoToOpen] = useState(false)
   const zoom = useUIStore(s => s.zoom)
+
+  // Initialize config and work sessions stores
+  useEffect(() => {
+    useConfigStore.getState().initialize()
+    useWorkSessionsStore.getState().initialize()
+  }, [])
 
   // Load persisted favorites from disk on startup
   useEffect(() => {

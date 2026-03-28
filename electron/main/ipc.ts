@@ -125,6 +125,87 @@ export function registerIpcHandlers(): void {
     fs.writeFileSync(favoritesPath, JSON.stringify(favorites), 'utf-8')
   })
 
+  // App config persistence
+  const configPath = path.join(app.getPath('userData'), 'config.json')
+
+  function loadAppConfig(): any {
+    try {
+      if (fs.existsSync(configPath)) {
+        return JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+      }
+    } catch {}
+    return null
+  }
+
+  function saveAppConfig(config: any): void {
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
+  }
+
+  function deepMerge(target: any, source: any): any {
+    const result = { ...target }
+    for (const key of Object.keys(source)) {
+      if (
+        source[key] !== null &&
+        typeof source[key] === 'object' &&
+        !Array.isArray(source[key]) &&
+        typeof result[key] === 'object' &&
+        !Array.isArray(result[key])
+      ) {
+        result[key] = deepMerge(result[key], source[key])
+      } else {
+        result[key] = source[key]
+      }
+    }
+    return result
+  }
+
+  ipcMain.handle('config:load', () => {
+    return loadAppConfig()
+  })
+
+  ipcMain.handle('config:save', (_event, config: any) => {
+    saveAppConfig(config)
+  })
+
+  ipcMain.handle('config:patch', (_event, patch: any) => {
+    const existing = loadAppConfig() || {}
+    const merged = deepMerge(existing, patch)
+    saveAppConfig(merged)
+    return merged
+  })
+
+  // File-based cache with TTL
+  const cacheDir = path.join(app.getPath('userData'), 'cache')
+
+  ipcMain.handle('cache:load', (_event, namespace: string, key: string, maxAgeMs?: number) => {
+    try {
+      const filePath = path.join(cacheDir, namespace, `${key}.json`)
+      if (!fs.existsSync(filePath)) return null
+      if (maxAgeMs != null) {
+        const stat = fs.statSync(filePath)
+        if (Date.now() - stat.mtimeMs > maxAgeMs) return null
+      }
+      return JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle('cache:save', (_event, namespace: string, key: string, data: any) => {
+    try {
+      const dir = path.join(cacheDir, namespace)
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(path.join(dir, `${key}.json`), JSON.stringify(data), 'utf-8')
+    } catch {}
+  })
+
+  ipcMain.handle('cache:invalidate', (_event, namespace: string, key: string) => {
+    try {
+      const filePath = path.join(cacheDir, namespace, `${key}.json`)
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
+    } catch {}
+  })
+
   ipcMain.handle('git:branch', (_event, dirPath: string) => {
     return new Promise<string | null>((resolve) => {
       execFile('git', ['-C', dirPath, 'branch', '--show-current'], (err, stdout) => {
@@ -327,6 +408,89 @@ export function registerIpcHandlers(): void {
     saveTicketBindings(bindings)
   })
 
+  // Work sessions (lifecycle-aware replacement for ticket bindings)
+  const workSessionsPath = path.join(app.getPath('userData'), 'work-sessions.json')
+
+  function loadWorkSessions(): { version: 1; sessions: any[] } {
+    try {
+      if (fs.existsSync(workSessionsPath)) {
+        return JSON.parse(fs.readFileSync(workSessionsPath, 'utf-8'))
+      }
+    } catch {}
+    // Auto-migrate from ticket-bindings.json if it exists
+    if (fs.existsSync(ticketBindingsPath)) {
+      try {
+        const bindings = JSON.parse(fs.readFileSync(ticketBindingsPath, 'utf-8'))
+        const sessions = Object.entries(bindings).map(([ticketKey, data]: [string, any]) => ({
+          id: `migrated-${ticketKey}`,
+          projectPath: '',
+          ticketKey,
+          jiraConnectionId: '',
+          worktree: data.worktree_path ? {
+            path: data.worktree_path,
+            branch: data.branch_name || '',
+            baseBranch: 'main',
+          } : null,
+          tmuxSessionId: null,
+          claudeSessionId: data.claude_session_id || null,
+          prUrl: data.pr_url || null,
+          status: 'active' as const,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }))
+        const file = { version: 1 as const, sessions }
+        fs.writeFileSync(workSessionsPath, JSON.stringify(file, null, 2), 'utf-8')
+        fs.renameSync(ticketBindingsPath, ticketBindingsPath + '.bak')
+        return file
+      } catch {}
+    }
+    return { version: 1, sessions: [] }
+  }
+
+  function saveWorkSessions(file: { version: 1; sessions: any[] }): void {
+    fs.writeFileSync(workSessionsPath, JSON.stringify(file, null, 2), 'utf-8')
+  }
+
+  ipcMain.handle('sessions:create', (_event, session: any) => {
+    const file = loadWorkSessions()
+    file.sessions.push(session)
+    saveWorkSessions(file)
+    return session
+  })
+
+  ipcMain.handle('sessions:update', (_event, id: string, patch: any) => {
+    const file = loadWorkSessions()
+    const idx = file.sessions.findIndex((s: any) => s.id === id)
+    if (idx === -1) return null
+    file.sessions[idx] = { ...file.sessions[idx], ...patch, updatedAt: new Date().toISOString() }
+    saveWorkSessions(file)
+    return file.sessions[idx]
+  })
+
+  ipcMain.handle('sessions:get', (_event, id: string) => {
+    const file = loadWorkSessions()
+    return file.sessions.find((s: any) => s.id === id) || null
+  })
+
+  ipcMain.handle('sessions:getByTicket', (_event, ticketKey: string) => {
+    const file = loadWorkSessions()
+    return file.sessions.filter((s: any) => s.ticketKey === ticketKey)
+  })
+
+  ipcMain.handle('sessions:getAll', (_event, filter?: { status?: string; projectPath?: string }) => {
+    const file = loadWorkSessions()
+    let sessions = file.sessions
+    if (filter?.status) sessions = sessions.filter((s: any) => s.status === filter.status)
+    if (filter?.projectPath) sessions = sessions.filter((s: any) => s.projectPath === filter.projectPath)
+    return sessions
+  })
+
+  ipcMain.handle('sessions:delete', (_event, id: string) => {
+    const file = loadWorkSessions()
+    file.sessions = file.sessions.filter((s: any) => s.id !== id)
+    saveWorkSessions(file)
+  })
+
   // Claude CLI ticket generation (via conductord)
   ipcMain.handle('claude:generateTicket', async (_event, description: string, projectKey: string, epicSummary?: string) => {
     const epicContext = epicSummary ? ` under the epic "${epicSummary}"` : ''
@@ -377,9 +541,9 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
   ipcMain.handle('jira:fetch', async (_event, url: string, headers: Record<string, string>) => {
     try {
       const res = await fetch(url, { headers })
-      if (!res.ok) return { ok: false, status: res.status, body: null }
-      const body = await res.json()
-      return { ok: true, status: res.status, body }
+      const contentType = res.headers.get('content-type') || ''
+      const body = contentType.includes('json') ? await res.json() : null
+      return { ok: res.ok, status: res.status, body }
     } catch (err) {
       return { ok: false, status: 0, body: null, error: String(err) }
     }

@@ -1,16 +1,9 @@
 import { create } from 'zustand'
+import { useConfigStore } from './config'
 
-const ZOOM_KEY = 'conductor:zoom'
 const ZOOM_MIN = 0.5
 const ZOOM_MAX = 2.0
 const ZOOM_STEP = 0.05
-
-function loadZoom(): number {
-  try {
-    const v = parseFloat(localStorage.getItem(ZOOM_KEY) || '1')
-    return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, isNaN(v) ? 1 : v))
-  } catch { return 1 }
-}
 
 interface UIState {
   zoom: number
@@ -21,12 +14,12 @@ interface UIState {
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
-  zoom: loadZoom(),
+  zoom: 1,
 
   setZoom: (zoom) => {
     const clamped = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom))
-    localStorage.setItem(ZOOM_KEY, String(clamped))
     set({ zoom: clamped })
+    useConfigStore.getState().setZoom(clamped)
   },
 
   zoomIn: () => {
@@ -41,3 +34,11 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   resetZoom: () => get().setZoom(1),
 }))
+
+// Hydrate zoom from config store once it's ready
+useConfigStore.subscribe((state) => {
+  if (state.ready) {
+    const zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, state.config.ui.zoom))
+    useUIStore.setState({ zoom })
+  }
+})

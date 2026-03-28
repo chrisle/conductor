@@ -1,6 +1,8 @@
 /// <reference types="vite/client" />
 
 import type { IpcRendererEvent } from 'electron'
+import type { AppConfig, DeepPartial } from './types/app-config'
+import type { WorkSession } from './types/work-session'
 
 interface TicketBinding {
   claude_session_id: string | null
@@ -41,6 +43,16 @@ interface ElectronAPI {
   saveFavorites: (favorites: string[]) => Promise<void>
   gitBranch: (path: string) => Promise<string | null>
 
+  // App config
+  loadConfig: () => Promise<AppConfig | null>
+  saveConfig: (config: AppConfig) => Promise<void>
+  patchConfig: (patch: DeepPartial<AppConfig>) => Promise<AppConfig>
+
+  // Cache
+  loadCache: (namespace: string, key: string, maxAgeMs?: number) => Promise<any>
+  saveCache: (namespace: string, key: string, data: any) => Promise<void>
+  invalidateCache: (namespace: string, key: string) => Promise<void>
+
   // Terminal
   createTerminal: (id: string, cwd?: string) => Promise<void>
   writeTerminal: (id: string, data: string) => Promise<void>
@@ -62,6 +74,14 @@ interface ElectronAPI {
   setTicketBinding: (ticketKey: string, data: Partial<TicketBinding>) => Promise<void>
   getAllTicketBindings: () => Promise<Record<string, TicketBinding>>
   removeTicketBinding: (ticketKey: string) => Promise<void>
+
+  // Work sessions
+  createWorkSession: (session: WorkSession) => Promise<WorkSession>
+  updateWorkSession: (id: string, patch: Partial<WorkSession>) => Promise<WorkSession | null>
+  getWorkSession: (id: string) => Promise<WorkSession | null>
+  getWorkSessionsByTicket: (ticketKey: string) => Promise<WorkSession[]>
+  getAllWorkSessions: (filter?: { status?: string; projectPath?: string }) => Promise<WorkSession[]>
+  deleteWorkSession: (id: string) => Promise<void>
 
   // Projects
   selectDirectory: () => Promise<string | null>
