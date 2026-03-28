@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import Editor from '@monaco-editor/react'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useTabsStore } from '@/store/tabs'
 import type { TabProps } from '@/extensions/types'
 
@@ -65,8 +66,40 @@ export default function TextTab({ tabId, groupId, isActive, tab }: TabProps): Re
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full text-zinc-500 text-sm">
-        Loading...
+      <div className="h-full w-full p-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-3 w-8" />
+          <Skeleton className="h-4 w-3/4" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-3 w-8" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-3 w-8" />
+          <Skeleton className="h-4 w-5/6" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-3 w-8" />
+          <Skeleton className="h-4 w-2/3" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-3 w-8" />
+          <Skeleton className="h-4 w-1/3" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-3 w-8" />
+          <Skeleton className="h-4 w-4/5" />
+        </div>
+        <Skeleton className="h-4 w-0" />
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-3 w-8" />
+          <Skeleton className="h-4 w-2/5" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-3 w-8" />
+          <Skeleton className="h-4 w-3/5" />
+        </div>
       </div>
     )
   }

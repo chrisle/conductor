@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import * as XLSX from 'xlsx'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { TabProps } from '@/extensions/types'
 
 interface SheetData {
@@ -48,8 +49,31 @@ export default function ExcelTab({ tabId, groupId, isActive, tab }: TabProps): R
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full text-zinc-500 text-sm">
-        Loading...
+      <div className="flex flex-col h-full w-full">
+        <div className="flex-1 overflow-hidden p-0">
+          <table className="w-full border-collapse text-xs">
+            <thead>
+              <tr>
+                <th className="bg-zinc-800 px-3 py-1.5 border-r border-b border-zinc-700 w-12"><Skeleton className="h-3 w-4" /></th>
+                {[...Array(5)].map((_, i) => (
+                  <th key={i} className="bg-zinc-800 px-3 py-1.5 border-r border-b border-zinc-700"><Skeleton className="h-3 w-16" /></th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[...Array(8)].map((_, ri) => (
+                <tr key={ri}>
+                  <td className="bg-zinc-900/50 px-3 py-1.5 border-r border-b border-zinc-800/50"><Skeleton className="h-3 w-4" /></td>
+                  {[...Array(5)].map((_, ci) => (
+                    <td key={ci} className="px-3 py-1.5 border-r border-b border-zinc-800/50">
+                      <Skeleton className="h-3" style={{ width: `${40 + ((ri * 3 + ci * 7) % 40)}%` }} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     )
   }

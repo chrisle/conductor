@@ -15,6 +15,7 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useSidebarStore, type FileEntry } from '@/store/sidebar'
 import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
@@ -265,11 +266,18 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
       {expanded && entry.isDirectory && (
         <div>
           {isLoading && (
-            <div
-              className="text-zinc-600 text-xs py-[3px]"
-              style={{ paddingLeft: `${8 + indent + 20}px` }}
-            >
-              Loading...
+            <div className="space-y-0.5">
+              {[...Array(3)].map((_, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-1.5 py-[3px]"
+                  style={{ paddingLeft: `${8 + indent + 12}px` }}
+                >
+                  <Skeleton className="h-3 w-3 rounded-sm shrink-0" />
+                  <Skeleton className="h-3.5 w-3.5 rounded-sm shrink-0" />
+                  <Skeleton className="h-3" style={{ width: `${40 + (i * 20)}%` }} />
+                </div>
+              ))}
             </div>
           )}
           {children.map(child => (

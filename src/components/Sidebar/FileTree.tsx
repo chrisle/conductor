@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Skeleton } from '@/components/ui/skeleton'
 import FileTreeNode from './FileTreeNode'
 import { useSidebarStore, type FileEntry } from '@/store/sidebar'
 
@@ -78,8 +79,14 @@ export default function FileTree({ groupId }: FileTreeProps): React.ReactElement
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-16 text-zinc-600 text-[13px] ">
-        Loading...
+      <div className="py-1 px-2 space-y-1">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="flex items-center gap-1.5 py-[3px]" style={{ paddingLeft: `${(i % 3) * 12}px` }}>
+            <Skeleton className="h-3 w-3 rounded-sm shrink-0" />
+            <Skeleton className="h-3.5 w-3.5 rounded-sm shrink-0" />
+            <Skeleton className="h-3" style={{ width: `${50 + ((i * 23) % 40)}%` }} />
+          </div>
+        ))}
       </div>
     )
   }

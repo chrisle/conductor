@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { RefreshCw } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useSidebarStore } from '@/store/sidebar'
@@ -77,6 +78,20 @@ export default function ClaudeSidebar({ groupId }: { groupId: string }): React.R
       ]}
       onSettings={() => setOptionsOpen(true)}
     >
+      {loading && sessions.length === 0 && (
+        <div className="px-3 py-2 space-y-1">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="py-1.5 border-b border-zinc-700/30 space-y-1">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-3.5 w-16" />
+                <Skeleton className="h-3 w-10" />
+              </div>
+              <Skeleton className="h-3 w-4/5" />
+            </div>
+          ))}
+        </div>
+      )}
+
       {sessions.length === 0 && !loading && (
         <div className="px-3 py-4 text-xs text-zinc-500">
           {rootPath ? 'No sessions found' : 'Open a project first'}

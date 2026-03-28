@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import mammoth from 'mammoth'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { TabProps } from '@/extensions/types'
 
 export default function WordTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
@@ -33,8 +34,20 @@ export default function WordTab({ tabId, groupId, isActive, tab }: TabProps): Re
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full text-zinc-500 text-sm">
-        Loading...
+      <div className="h-full w-full overflow-hidden p-8">
+        <div className="max-w-3xl mx-auto space-y-4">
+          <Skeleton className="h-7 w-2/5" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-4/5" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-0" />
+          <Skeleton className="h-5 w-1/3" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-4 w-5/6" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-2/3" />
+        </div>
       </div>
     )
   }
