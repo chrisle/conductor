@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { useUIStore } from '../store/ui'
 
 function resetStore() {
-  localStorage.clear()
   useUIStore.setState({ zoom: 1 })
 }
 
@@ -27,9 +26,9 @@ describe('useUIStore zoom', () => {
       expect(useUIStore.getState().zoom).toBe(2.0)
     })
 
-    it('persists the value to localStorage', () => {
+    it('persists the value via config store', () => {
       useUIStore.getState().setZoom(1.25)
-      expect(localStorage.getItem('conductor:zoom')).toBe('1.25')
+      expect(window.electronAPI.patchConfig).toHaveBeenCalledWith({ ui: { zoom: 1.25 } })
     })
   })
 

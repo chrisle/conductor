@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { useConfigStore } from '../store/config'
 import {
   loadConfig,
   saveConfig,
@@ -9,8 +10,6 @@ import {
   type JiraProject,
 } from '../extensions/jira/jira-api'
 
-const CONFIG_KEY = 'conductor:jira:config'
-
 const testConfig: JiraConfig = {
   domain: 'mycompany',
   email: 'dev@mycompany.com',
@@ -19,17 +18,16 @@ const testConfig: JiraConfig = {
 
 describe('loadConfig / saveConfig / clearConfig', () => {
   beforeEach(() => {
-    localStorage.clear()
-  })
-  afterEach(() => {
-    localStorage.clear()
+    // Reset config store to empty jiraConnections
+    useConfigStore.setState({
+      config: { ...useConfigStore.getState().config, jiraConnections: [] },
+      ready: true,
+    })
   })
 
-  it('returns the default config when nothing is stored', () => {
+  it('returns null when no connections exist', () => {
     const config = loadConfig()
-    expect(config).not.toBeNull()
-    // Default config always has a domain set
-    expect(typeof config!.domain).toBe('string')
+    expect(config).toBeNull()
   })
 
   it('round-trips a saved config', () => {
@@ -38,19 +36,20 @@ describe('loadConfig / saveConfig / clearConfig', () => {
     expect(loaded).toEqual(testConfig)
   })
 
-  it('clears the config from localStorage', () => {
+  it('clears the config', () => {
     saveConfig(testConfig)
     clearConfig()
-    expect(localStorage.getItem(CONFIG_KEY)).toBeNull()
-    // After clear, loadConfig falls back to default (not null)
     const loaded = loadConfig()
-    expect(loaded).not.toBeNull()
+    expect(loaded).toBeNull()
   })
 
-  it('returns default when localStorage contains invalid JSON', () => {
-    localStorage.setItem(CONFIG_KEY, '{bad json')
+  it('updates existing connection on second save', () => {
+    saveConfig(testConfig)
+    const updated = { ...testConfig, email: 'new@mycompany.com' }
+    saveConfig(updated)
     const loaded = loadConfig()
-    expect(loaded).not.toBeNull()
+    expect(loaded?.email).toBe('new@mycompany.com')
+    expect(useConfigStore.getState().config.jiraConnections.length).toBe(1)
   })
 })
 
