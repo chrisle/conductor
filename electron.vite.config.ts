@@ -37,8 +37,8 @@ export default defineConfig({
       alias: {
         '@renderer': resolve('src'),
         '@': resolve('src'),
-        '@conductor/extension-sdk': resolve('packages/conductor-extension-sdk/src/index.ts'),
-        '@np3/jira': resolve('packages/np3-jira/src/index.ts')
+        '@conductor/extension-sdk': resolve('../conductor-extension-sdk/src/index.ts'),
+        '@np3/jira': resolve('../np3-jira/src/index.ts')
       }
     },
     plugins: [react()]
