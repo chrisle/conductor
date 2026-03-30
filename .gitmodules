@@ -1,0 +1,6 @@
+[submodule "packages/conductor-extension-sdk"]
+	path = packages/conductor-extension-sdk
+	url = https://github.com/chrisle/conductor-extension-sdk.git
+[submodule "packages/np3-jira"]
+	path = packages/np3-jira
+	url = https://github.com/chrisle/np3-jira.git

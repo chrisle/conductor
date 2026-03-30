@@ -16,10 +16,14 @@
     "baseUrl": ".",
     "paths": {
       "@renderer/*": ["./src/*"],
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@conductor/extension-sdk": ["./packages/conductor-extension-sdk/src/index.ts"],
+      "@np3/jira": ["./packages/np3-jira/src/index.ts"]
     }
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "packages/np3-jira/src/**/*",
+    "packages/conductor-extension-sdk/src/**/*"
   ]
 }

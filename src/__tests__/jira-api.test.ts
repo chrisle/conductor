@@ -8,7 +8,7 @@ import {
   projectBoardUrl,
   type JiraConfig,
   type JiraProject,
-} from '../extensions/jira/jira-api'
+} from '@np3/jira'
 
 const testConfig: JiraConfig = {
   domain: 'mycompany',

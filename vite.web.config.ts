@@ -9,7 +9,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@renderer': resolve('src'),
-      '@': resolve('src')
+      '@': resolve('src'),
+      '@conductor/extension-sdk': resolve('packages/conductor-extension-sdk/src/index.ts'),
+      '@np3/jira': resolve('packages/np3-jira/src/index.ts')
     }
   },
   server: {
