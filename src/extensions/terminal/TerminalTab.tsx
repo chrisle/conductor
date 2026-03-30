@@ -54,6 +54,7 @@ export default function TerminalTab({
   const watchLastFireRef = useRef<Map<string, number>>(new Map());
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error' | null>('connecting');
   const resolvedSettings = useResolvedSettings();
   const sessionReadyRef = useRef(false);
 
@@ -148,6 +149,7 @@ export default function TerminalTab({
         termAPI.createTerminal(tabId, cwd).then(({ isNew }) => {
           termAPI.resizeTerminal(tabId, cols, rows);
           sessionReadyRef.current = true;
+          setConnectionStatus('connected');
           // Apply tmux mouse setting from resolved project/workspace config
           termAPI.setTmuxOption(tabId, 'mouse', resolvedSettings.terminal.tmuxMouse ? 'on' : 'off');
           // Show the terminal now that the PTY is connected and focus it
@@ -185,6 +187,12 @@ export default function TerminalTab({
               if (idleTimer) clearTimeout(idleTimer);
               termAPI.writeTerminal(tabId, initialCommand, { programmatic: true });
             }, 3000);
+          }
+        }).catch((err) => {
+          console.error(`[terminal] failed to create session ${tabId}:`, err);
+          setConnectionStatus('error');
+          if (containerRef.current) {
+            containerRef.current.style.visibility = "visible";
           }
         });
       }, 50);
@@ -394,6 +402,28 @@ export default function TerminalTab({
             terminalRef.current?.focus();
           }}
         />
+      )}
+      {connectionStatus !== 'connected' && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+          {connectionStatus === 'connecting' && (
+            <div className="flex items-center gap-2 text-zinc-500 text-xs">
+              <div className="w-3 h-3 border-2 border-zinc-600 border-t-zinc-400 rounded-full animate-spin" />
+              Connecting to conductord...
+            </div>
+          )}
+          {connectionStatus === 'error' && (
+            <div className="flex flex-col items-center gap-2 pointer-events-auto">
+              <span className="text-red-400 text-xs">Failed to connect to conductord</span>
+              <button
+                onClick={handleRefresh}
+                className="flex items-center gap-1.5 text-[11px] text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded border border-zinc-700 hover:border-zinc-600 transition-colors"
+              >
+                <RotateCw className="w-3 h-3" />
+                Retry
+              </button>
+            </div>
+          )}
+        </div>
       )}
       <div
         ref={containerRef}

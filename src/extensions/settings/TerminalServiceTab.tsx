@@ -1,31 +1,46 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import { Server, CheckCircle, XCircle, RefreshCw, RefreshCcw, Square, Play, X } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { Server, CheckCircle, XCircle, RefreshCw, RefreshCcw, Square, Play, X, Trash2, ShieldCheck, ShieldAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import type { TabProps } from '@/extensions/types'
 
-interface SessionInfo {
-  id: string
-  dead: boolean
+interface TmuxSession {
+  name: string
+  connected: boolean
+  command: string
+  cwd: string
+  created: number
+  activity: number
+}
+
+function shortPath(p: string): string {
+  return p.replace(/^\/Users\/[^/]+/, '~')
+}
+
+function timeAgo(epoch: number): string {
+  if (!epoch) return ''
+  const diff = Math.floor(Date.now() / 1000) - epoch
+  if (diff < 60) return 'just now'
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  return `${Math.floor(diff / 86400)}d ago`
 }
 
 export default function TerminalServiceTab({ isActive }: TabProps): React.ReactElement {
   const [serviceInstalled, setServiceInstalled] = useState<boolean | null>(null)
   const [serviceRunning, setServiceRunning] = useState<boolean | null>(null)
+  const [fullDiskAccess, setFullDiskAccess] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const [sessions, setSessions] = useState<SessionInfo[]>([])
+  const [sessions, setSessions] = useState<TmuxSession[]>([])
   const [sessionsLoading, setSessionsLoading] = useState(false)
 
   const loadSessions = useCallback(async () => {
     setSessionsLoading(true)
     try {
-      const res = await fetch('http://127.0.0.1:9800/api/tmux')
-      if (res.ok) {
-        const list: { name: string }[] = await res.json()
-        setSessions(list.map(s => ({ id: s.name, dead: false })))
-      }
+      const list: TmuxSession[] = await window.electronAPI.conductordGetTmuxSessions()
+      setSessions(list)
     } catch {
       setSessions([])
     } finally {
@@ -33,12 +48,34 @@ export default function TerminalServiceTab({ isActive }: TabProps): React.ReactE
     }
   }, [])
 
-  async function killSession(id: string) {
+  const { connected, orphaned } = useMemo(() => {
+    const connected: TmuxSession[] = []
+    const orphaned: TmuxSession[] = []
+    for (const s of sessions) {
+      if (s.connected) connected.push(s)
+      else orphaned.push(s)
+    }
+    return { connected, orphaned }
+  }, [sessions])
+
+  async function killSession(name: string) {
     try {
-      await fetch(`http://127.0.0.1:9800/api/tmux/${id}`, { method: 'DELETE' })
-      setSessions(prev => prev.filter(s => s.id !== id))
+      await window.electronAPI.conductordKillTmuxSession(name)
+      setSessions(prev => prev.filter(s => s.name !== name))
     } catch {
-      setMessage({ type: 'error', text: `Failed to kill session ${id}` })
+      setMessage({ type: 'error', text: `Failed to kill session ${name}` })
+    }
+  }
+
+  async function killOrphaned() {
+    try {
+      const data = await window.electronAPI.conductordKillOrphanedTmux()
+      if (data.ok) {
+        setMessage({ type: 'success', text: `Killed ${data.killed} orphaned session${data.killed === 1 ? '' : 's'}` })
+        loadSessions()
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Failed to kill orphaned sessions' })
     }
   }
 
@@ -51,10 +88,17 @@ export default function TerminalServiceTab({ isActive }: TabProps): React.ReactE
     }
 
     try {
-      const res = await fetch('http://127.0.0.1:9800/health')
-      setServiceRunning(res.ok)
+      const ok = await window.electronAPI.conductordHealth()
+      setServiceRunning(ok)
     } catch {
       setServiceRunning(false)
+    }
+
+    try {
+      const fda = await window.electronAPI.hasFullDiskAccess()
+      setFullDiskAccess(fda)
+    } catch {
+      setFullDiskAccess(null)
     }
   }
 
@@ -64,6 +108,14 @@ export default function TerminalServiceTab({ isActive }: TabProps): React.ReactE
       loadSessions()
     }
   }, [isActive, loadSessions])
+
+  // Re-check status when the window regains focus (e.g., after granting FDA in System Settings)
+  useEffect(() => {
+    if (!isActive) return
+    const onFocus = () => checkStatus()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [isActive])
 
   async function handleInstall() {
     setLoading(true)
@@ -211,24 +263,62 @@ export default function TerminalServiceTab({ isActive }: TabProps): React.ReactE
               )}
             </div>
           </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-zinc-400">Full Disk Access</span>
+            <div className="flex items-center gap-1.5">
+              {fullDiskAccess === false && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => window.electronAPI.openFullDiskAccessSettings()}
+                  className="h-6 px-2 text-[10px] text-amber-500 hover:text-amber-400"
+                  title="Open System Settings to grant Full Disk Access"
+                >
+                  Grant access
+                </Button>
+              )}
+              {fullDiskAccess === null ? (
+                <span className="text-zinc-600">...</span>
+              ) : fullDiskAccess ? (
+                <ShieldCheck className="w-4 h-4 text-green-500" />
+              ) : (
+                <ShieldAlert className="w-4 h-4 text-amber-500" />
+              )}
+            </div>
+          </div>
         </div>
 
         <Separator className="bg-zinc-800" />
 
-        {/* Running sessions */}
+        {/* Tmux sessions */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-zinc-400">Active sessions</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={loadSessions}
-              disabled={sessionsLoading}
-              className="h-6 w-6 text-zinc-500 hover:text-zinc-300"
-              title="Refresh sessions"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${sessionsLoading ? 'animate-spin' : ''}`} />
-            </Button>
+            <span className="text-sm text-zinc-400">Tmux sessions</span>
+            <div className="flex items-center gap-1">
+              {orphaned.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={killOrphaned}
+                  className="h-6 px-2 text-[10px] text-zinc-500 hover:text-red-400"
+                  title={`Kill ${orphaned.length} orphaned session${orphaned.length === 1 ? '' : 's'}`}
+                >
+                  <Trash2 className="w-3 h-3 mr-1" />
+                  Kill {orphaned.length} orphaned
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={loadSessions}
+                disabled={sessionsLoading}
+                className="h-6 w-6 text-zinc-500 hover:text-zinc-300"
+                title="Refresh sessions"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${sessionsLoading ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
           </div>
           {sessionsLoading && sessions.length === 0 ? (
             <div className="space-y-1">
@@ -240,16 +330,31 @@ export default function TerminalServiceTab({ isActive }: TabProps): React.ReactE
               ))}
             </div>
           ) : sessions.length === 0 ? (
-            <p className="text-xs text-zinc-600">No active sessions</p>
+            <p className="text-xs text-zinc-600">No tmux sessions</p>
           ) : (
             <div className="space-y-1">
-              {sessions.map(s => (
-                <div key={s.id} className="flex items-center justify-between rounded bg-zinc-900 px-2 py-1.5 border border-zinc-800">
-                  <span className="text-xs font-mono text-zinc-400 truncate">{s.id}</span>
+              {[...connected, ...orphaned].map(s => (
+                <div key={s.name} className="flex items-center gap-2 rounded bg-zinc-900 px-2 py-1.5 border border-zinc-800">
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.connected ? 'bg-emerald-500' : 'bg-zinc-600'}`}
+                    title={s.connected ? 'Connected' : 'Orphaned'}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-mono text-zinc-400 truncate">{s.name}</span>
+                      {s.command && (
+                        <span className="text-[10px] text-zinc-600 shrink-0">{s.command}</span>
+                      )}
+                    </div>
+                    {s.cwd && (
+                      <div className="text-[10px] text-zinc-600 truncate">{shortPath(s.cwd)}</div>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-zinc-700 shrink-0">{timeAgo(s.activity)}</span>
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => killSession(s.id)}
+                    onClick={() => killSession(s.name)}
                     className="h-5 w-5 shrink-0 text-zinc-600 hover:text-red-400"
                     title="Kill session"
                   >

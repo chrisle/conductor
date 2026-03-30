@@ -110,6 +110,8 @@ export default function SettingsSidebar({ groupId }: SettingsSidebarProps): Reac
     e => !externalExtensions.some(ext => ext.id === e.id)
   )
 
+  const settingsPanels = extensionRegistry.getSettingsPanels()
+
   const conductorDaemonItems = [
     { id: 'conductord-settings', label: 'Settings', icon: Server, tabType: 'settings-terminal-service' },
     { id: 'conductord-logs', label: 'Logs', icon: ScrollText, tabType: 'conductord-logs' },
@@ -119,6 +121,24 @@ export default function SettingsSidebar({ groupId }: SettingsSidebarProps): Reac
     <SidebarLayout title="Settings">
       <ScrollArea className="flex-1">
         <div className="py-1">
+          {/* Extension-contributed settings panels */}
+          {settingsPanels.map(({ extension, panel: Panel }) => (
+            <React.Fragment key={extension.id}>
+              <Collapsible defaultOpen>
+                <CollapsibleTrigger className="flex items-center gap-1 px-3 py-1.5 w-full group cursor-pointer">
+                  <ChevronRight className="w-3 h-3 text-zinc-500 transition-transform group-data-[state=open]:rotate-90" />
+                  <span className="text-[11px] text-zinc-400 uppercase tracking-wider font-medium">{extension.name}</span>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="px-3 py-2">
+                    <Panel />
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+              <Separator className="my-2 bg-zinc-700/50" />
+            </React.Fragment>
+          ))}
+
           {/* Conductor Daemon */}
           <Collapsible defaultOpen>
             <CollapsibleTrigger className="flex items-center gap-1 px-3 py-1.5 w-full group cursor-pointer">

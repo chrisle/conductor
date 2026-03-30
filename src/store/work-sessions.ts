@@ -10,7 +10,6 @@ interface WorkSessionsState {
   updateSession: (id: string, patch: Partial<WorkSession>) => Promise<WorkSession | null>
   getSessionForTicket: (ticketKey: string) => WorkSession | undefined
   getActiveSessionForTicket: (ticketKey: string) => WorkSession | undefined
-  pauseSession: (id: string) => Promise<void>
   completeSession: (id: string) => Promise<void>
   deleteSession: (id: string) => Promise<void>
 }
@@ -60,10 +59,6 @@ export const useWorkSessionsStore = create<WorkSessionsState>((set, get) => ({
 
   getActiveSessionForTicket: (ticketKey) => {
     return get().sessions.find(s => s.ticketKey === ticketKey && s.status === 'active')
-  },
-
-  pauseSession: async (id) => {
-    await get().updateSession(id, { status: 'paused' })
   },
 
   completeSession: async (id) => {

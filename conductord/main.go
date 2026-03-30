@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -12,11 +13,13 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"embed"
@@ -292,7 +295,7 @@ func newSession(id, cwd string) (*session, bool, error) {
 	go s.readLoop()
 
 	go func() {
-		s.cmd.Wait()
+		err := s.cmd.Wait()
 		// When tmux attach-session exits the underlying tmux session may still
 		// be alive (just detached). Remove from the in-memory map so the next
 		// WebSocket connection creates a fresh attach process.
@@ -303,7 +306,11 @@ func newSession(id, cwd string) (*session, bool, error) {
 		if conn != nil {
 			conn.Close()
 		}
-		log.Printf("[session %s] attach process exited", id)
+		if err != nil {
+			log.Printf("[session %s] attach process exited with error: %v", id, err)
+		} else {
+			log.Printf("[session %s] attach process exited (status 0)", id)
+		}
 
 		sessionsMu.Lock()
 		delete(sessions, id)
@@ -475,6 +482,19 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 
 	sessionsMu.Lock()
 	s, exists := sessions[id]
+	// If the session exists but its PTY process is dead, discard it and
+	// create a fresh attach. This avoids reattaching a stale session whose
+	// underlying tmux attach-session has already exited.
+	if exists {
+		s.mu.Lock()
+		dead := s.dead
+		s.mu.Unlock()
+		if dead {
+			delete(sessions, id)
+			exists = false
+			log.Printf("[session %s] discarded dead session, will recreate", id)
+		}
+	}
 	isNew := false
 	if !exists && id != "" {
 		s, isNew, err = newSession(id, cwd)
@@ -629,18 +649,62 @@ func handleSessions(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(list)
 }
 
-func handleHealth(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+func hasFullDiskAccess() bool {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	_, err = os.ReadDir(filepath.Join(home, "Library", "Safari"))
+	return err == nil
 }
 
-// handleTmuxSessions lists live tmux session names or kills one.
-//   GET  /api/tmux          → [{"name":"t-NP-123"}, ...]
-//   DELETE /api/tmux/{name} → kills the tmux session
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":         "ok",
+		"fullDiskAccess": hasFullDiskAccess(),
+	})
+}
+
+// handleTmuxSessions lists live tmux sessions with details, or kills one.
+//
+//	GET  /api/tmux               → [{name, connected, command, cwd, created, activity}, ...]
+//	DELETE /api/tmux/{name}      → kills a single tmux session
+//	DELETE /api/tmux?orphaned=1  → kills all tmux sessions with no active conductord connection
 func handleTmuxSessions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if r.Method == http.MethodDelete {
+		// Bulk-kill orphaned sessions
+		if r.URL.Query().Get("orphaned") != "" {
+			if tmuxPath == "" {
+				json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "killed": 0})
+				return
+			}
+			out, err := tmuxCmd("ls", "-F", "#{session_name}").Output()
+			if err != nil {
+				json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "killed": 0})
+				return
+			}
+			killed := 0
+			sessionsMu.Lock()
+			connectedSet := make(map[string]bool, len(sessions))
+			for id := range sessions {
+				connectedSet[sanitizeTmuxName(id)] = true
+			}
+			sessionsMu.Unlock()
+			for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+				if line != "" && !connectedSet[line] {
+					tmuxCmd("kill-session", "-t", "="+line).Run()
+					log.Printf("[tmux] killed orphaned session '%s' via API", line)
+					killed++
+				}
+			}
+			json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "killed": killed})
+			return
+		}
+
+		// Single session kill
 		name := strings.TrimPrefix(r.URL.Path, "/api/tmux/")
 		if name == "" || tmuxPath == "" {
 			json.NewEncoder(w).Encode(map[string]bool{"ok": false})
@@ -656,20 +720,69 @@ func handleTmuxSessions(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode([]interface{}{})
 		return
 	}
-	out, err := tmuxCmd("ls", "-F", "#{session_name}").Output()
+
+	// Get session list with timestamps
+	out, err := tmuxCmd("ls", "-F", "#{session_name}\t#{session_created}\t#{session_activity}").Output()
 	if err != nil {
-		// tmux exits non-zero when there are no sessions
 		json.NewEncoder(w).Encode([]interface{}{})
 		return
 	}
-	type entry struct {
-		Name string `json:"name"`
+
+	// Build a set of connected session names
+	sessionsMu.Lock()
+	connectedSet := make(map[string]bool, len(sessions))
+	for id := range sessions {
+		connectedSet[sanitizeTmuxName(id)] = true
 	}
+	sessionsMu.Unlock()
+
+	type entry struct {
+		Name      string `json:"name"`
+		Connected bool   `json:"connected"`
+		Command   string `json:"command"`
+		Cwd       string `json:"cwd"`
+		Created   int64  `json:"created"`
+		Activity  int64  `json:"activity"`
+	}
+
 	var list []entry
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if line != "" {
-			list = append(list, entry{Name: line})
+		if line == "" {
+			continue
 		}
+		parts := strings.SplitN(line, "\t", 3)
+		name := parts[0]
+
+		var created, activity int64
+		if len(parts) >= 2 {
+			fmt.Sscanf(parts[1], "%d", &created)
+		}
+		if len(parts) >= 3 {
+			fmt.Sscanf(parts[2], "%d", &activity)
+		}
+
+		// Get pane info (command + cwd)
+		var command, cwd string
+		paneOut, paneErr := tmuxCmd("list-panes", "-t", "="+name, "-F", "#{pane_current_command}\t#{pane_current_path}").Output()
+		if paneErr == nil {
+			paneLine := strings.SplitN(strings.TrimSpace(string(paneOut)), "\n", 2)[0]
+			paneParts := strings.SplitN(paneLine, "\t", 2)
+			if len(paneParts) >= 1 {
+				command = paneParts[0]
+			}
+			if len(paneParts) >= 2 {
+				cwd = paneParts[1]
+			}
+		}
+
+		list = append(list, entry{
+			Name:      name,
+			Connected: connectedSet[name],
+			Command:   command,
+			Cwd:       cwd,
+			Created:   created,
+			Activity:  activity,
+		})
 	}
 	json.NewEncoder(w).Encode(list)
 }
@@ -821,24 +934,56 @@ func cors(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// defaultSocketPath returns the default Unix socket path (~/.conductor/conductord.sock).
+func defaultSocketPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = os.TempDir()
+	}
+	return filepath.Join(home, ".conductor", "conductord.sock")
+}
+
+// healthCheckUnix connects to a Unix socket and sends an HTTP /health request.
+// Returns true if the server responds with 200 OK.
+func healthCheckUnix(sockPath string) bool {
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.DialTimeout("unix", sockPath, 2*time.Second)
+			},
+		},
+		Timeout: 3 * time.Second,
+	}
+	resp, err := client.Get("http://localhost/health")
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
+}
+
 func main() {
-	port := flag.Int("port", 9800, "port to listen on")
+	socketPath := flag.String("socket", defaultSocketPath(), "Unix socket path")
+	devPort := flag.Int("dev-port", 0, "optional TCP port for web dev mode (0 = disabled)")
 	flag.Parse()
 
 	// Extract bundled tmux (if available) and set tmuxPath.
 	initTmux()
 
-	addr := fmt.Sprintf("127.0.0.1:%d", *port)
+	// Ensure parent directory exists.
+	if err := os.MkdirAll(filepath.Dir(*socketPath), 0755); err != nil {
+		log.Fatalf("failed to create socket directory: %v", err)
+	}
 
-	// Check if another conductord instance is already running on this port.
-	// If so, exit cleanly to avoid a launchd restart loop.
-	resp, err := http.Get(fmt.Sprintf("http://%s/health", addr))
-	if err == nil {
-		resp.Body.Close()
-		if resp.StatusCode == http.StatusOK {
-			log.Printf("conductord already running on %s, exiting", addr)
+	// Check if another conductord instance is already running on this socket.
+	if _, err := os.Stat(*socketPath); err == nil {
+		if healthCheckUnix(*socketPath) {
+			log.Printf("conductord already running on %s, exiting", *socketPath)
 			os.Exit(0)
 		}
+		// Stale socket file — remove it.
+		log.Printf("removing stale socket file %s", *socketPath)
+		os.Remove(*socketPath)
 	}
 
 	http.HandleFunc("/ws/terminal", handleTerminal)
@@ -849,18 +994,35 @@ func main() {
 	http.HandleFunc("/api/exec", cors(handleExec))
 	http.HandleFunc("/health", cors(handleHealth))
 
-	// Try to bind with a raw listener first so we can detect EADDRINUSE
-	// and exit cleanly instead of crashing (avoids launchd restart loops).
-	ln, err := net.Listen("tcp", addr)
+	ln, err := net.Listen("unix", *socketPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "address already in use") {
-			log.Printf("port %d already in use, assuming another conductord is running — exiting cleanly", *port)
-			os.Exit(0)
-		}
 		log.Fatalf("listen error: %v", err)
 	}
+	os.Chmod(*socketPath, 0600)
 
-	log.Printf("conductord listening on %s", addr)
+	// Clean up socket file on shutdown.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		<-sigCh
+		log.Printf("shutting down, removing socket %s", *socketPath)
+		os.Remove(*socketPath)
+		os.Exit(0)
+	}()
+
+	// Optional TCP listener for web dev mode.
+	if *devPort > 0 {
+		devAddr := fmt.Sprintf("127.0.0.1:%d", *devPort)
+		devLn, err := net.Listen("tcp", devAddr)
+		if err != nil {
+			log.Printf("[dev] TCP listen on %s failed: %v (continuing with socket only)", devAddr, err)
+		} else {
+			log.Printf("[dev] also listening on %s", devAddr)
+			go http.Serve(devLn, nil)
+		}
+	}
+
+	log.Printf("conductord listening on %s", *socketPath)
 	if err := http.Serve(ln, nil); err != nil {
 		log.Fatalf("server error: %v", err)
 	}

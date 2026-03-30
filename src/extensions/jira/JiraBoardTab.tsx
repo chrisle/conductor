@@ -6,6 +6,7 @@ import { CreateTicketDialog } from "./CreateTicketDialog";
 import { useTabsStore } from "@/store/tabs";
 import { useLayoutStore } from "@/store/layout";
 import { useSidebarStore } from "@/store/sidebar";
+import { useConfigStore } from "@/store/config";
 import type { TabProps } from "../types";
 import type { PendingTicket } from "./KanbanColumn";
 import type { TicketStatus } from "./jira-api";
@@ -45,18 +46,30 @@ export default function JiraBoardTab({
   tab,
 }: TabProps): React.ReactElement {
   const projectKey = tab.content || tab.title?.replace(/ Board$/, "") || "";
-  const [config] = useState<JiraConfig | null>(loadConfig);
+  const [config, setConfig] = useState<JiraConfig | null>(loadConfig);
+
+  // If config wasn't available at mount (store still loading), pick it up once ready
+  const configReady = useConfigStore(s => s.ready);
+  useEffect(() => {
+    if (configReady && !config) {
+      setConfig(loadConfig());
+    }
+  }, [configReady]); // eslint-disable-line react-hooks/exhaustive-deps
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [epics, setEpics] = useState<Epic[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("");
-  const [tmuxSessions, setTmuxSessions] = useState<Set<string>>(new Set());
-  const sessionThinking = useSessionThinking([...tmuxSessions]);
   const workSessions = useWorkSessionsStore(s => s.sessions);
+  const activeSessionNames = workSessions
+    .filter(ws => ws.status === 'active' && ws.tmuxSessionId)
+    .map(ws => ws.tmuxSessionId!);
+  const sessionThinking = useSessionThinking(activeSessionNames);
   const [liveUpdate, setLiveUpdate] = useState(true);
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastBoardFpRef = useRef('');
   const [pendingTickets, setPendingTickets] = useState<PendingTicket[]>([]);
+  const filterInputRef = useRef<HTMLInputElement>(null);
   const [createDialog, setCreateDialog] = useState<{
     open: boolean;
     status: TicketStatus;
@@ -75,19 +88,24 @@ export default function JiraBoardTab({
     return `t-${ticketKey}`
   }
 
-  const loadTmuxSessions = useCallback(async () => {
+  const reconcileSessions = useCallback(async () => {
     try {
-      const res = await fetch("http://127.0.0.1:9800/api/tmux")
-      if (res.ok) {
-        const list: { name: string }[] = await res.json()
-        setTmuxSessions(new Set(list.map((s) => s.name)))
+      const list = await window.electronAPI.conductordGetTmuxSessions()
+      const liveNames = new Set(list.map((s) => s.name))
+
+      // Complete work sessions whose tmux session no longer exists (or never had one)
+      const sessionsStore = useWorkSessionsStore.getState()
+      for (const ws of sessionsStore.sessions) {
+        if (ws.status === 'active' && (!ws.tmuxSessionId || !liveNames.has(ws.tmuxSessionId))) {
+          sessionsStore.completeSession(ws.id)
+        }
       }
     } catch { /* conductord not running */ }
   }, [])
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (silent = false) => {
     if (!config || !projectKey) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError("");
     try {
       const [ticketData, epicData] = await Promise.all([
@@ -100,12 +118,7 @@ export default function JiraBoardTab({
         if (t.epicKey) t.epic = epicMap.get(t.epicKey);
       }
 
-      setTickets(ticketData);
-      setEpics(epicData);
-      saveBoardCache(projectKey, ticketData, epicData);
-      loadTmuxSessions();
-
-      // Fetch PRs for active tickets in background
+      // Fetch PRs for active tickets before updating state
       const activeTickets = ticketData.filter(
         (t) => t.status === "in_progress" || t.status === "done",
       );
@@ -116,30 +129,64 @@ export default function JiraBoardTab({
         }),
       );
 
-      setTickets((prev) => {
-        const prMap = new Map(prResults.map((r) => [r.key, r.prs]));
-        return prev.map((t) =>
-          prMap.has(t.key) ? { ...t, pullRequests: prMap.get(t.key)! } : t,
-        );
-      });
+      // Merge PR data into tickets
+      const prMap = new Map(prResults.map((r) => [r.key, r.prs]));
+      for (const t of ticketData) {
+        if (prMap.has(t.key)) t.pullRequests = prMap.get(t.key)!;
+      }
+
+      // Build fingerprint from the complete data — skip re-render if unchanged
+      const fp = ticketData.map(t =>
+        `${t.key}:${t.status}:${t.updatedAt}:${t.summary}:${t.priority}:${t.storyPoints}:${t.pullRequests.map(p => `${p.id}:${p.status}`).join(',')}`
+      ).sort().join('\n')
+        + '||' + epicData.map(e => `${e.key}:${e.summary}:${e.status}`).sort().join('\n');
+
+      // Always update cache with latest data (cheap disk write)
+      saveBoardCache(projectKey, ticketData, epicData);
+
+      if (fp !== lastBoardFpRef.current) {
+        lastBoardFpRef.current = fp;
+        setTickets(ticketData);
+        setEpics(epicData);
+      }
+      reconcileSessions();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [config, projectKey]);
 
   // Load cached board data for instant render, then fetch fresh data
+  const cacheAppliedRef = useRef(false);
   useEffect(() => {
     if (!config || !projectKey) return;
-    loadBoardCache(projectKey).then(cached => {
-      if (cached) {
-        setTickets(cached.tickets);
-        setEpics(cached.epics);
-      }
-    });
+    // Show cache instantly, but only before the first fresh fetch completes
+    if (!cacheAppliedRef.current) {
+      cacheAppliedRef.current = true;
+      loadBoardCache(projectKey).then(cached => {
+        if (cached && !lastBoardFpRef.current) {
+          setTickets(cached.tickets);
+          setEpics(cached.epics);
+        }
+      });
+    }
     loadData();
   }, [config, projectKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cmd+F focuses the filter input when this tab is active
+  useEffect(() => {
+    if (!isActive) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'f' && e.metaKey && !e.shiftKey) {
+        e.preventDefault()
+        filterInputRef.current?.focus()
+        filterInputRef.current?.select()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [isActive])
 
   // Live polling — refresh every 30s when enabled and tab is active
   const POLL_INTERVAL = 30
@@ -152,7 +199,7 @@ export default function JiraBoardTab({
       return
     }
     liveIntervalRef.current = setInterval(() => {
-      loadData()
+      loadData(true)
     }, POLL_INTERVAL * 1000)
     return () => {
       if (liveIntervalRef.current) {
@@ -247,8 +294,8 @@ export default function JiraBoardTab({
       filePath: cwd,
       initialCommand: `cd ${JSON.stringify(cwd)} && claude\n`,
     });
-    // Refresh tmux session list after a short delay so hasSession updates
-    setTimeout(loadTmuxSessions, 1500);
+    // Reconcile work sessions against live tmux after a short delay
+    setTimeout(reconcileSessions, 1500);
   }
 
   async function continueSession(ticket: Ticket) {
@@ -278,7 +325,7 @@ export default function JiraBoardTab({
       initialCommand: `cd ${JSON.stringify(cwd)} && claude --dangerously-skip-permissions '${escaped}'\n`,
       autoPilot: true,
     });
-    setTimeout(loadTmuxSessions, 1500);
+    setTimeout(reconcileSessions, 1500);
     // Auto-transition ticket to "In Progress" in Jira
     if (config && ticket.status === 'backlog') {
       transitionTicket(config, ticket.key, 'In Progress').catch(() => {})
@@ -367,6 +414,7 @@ export default function JiraBoardTab({
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-500" />
             <input
+              ref={filterInputRef}
               className="h-7 w-48 rounded bg-zinc-800/50 border border-zinc-600/50 pl-7 pr-2 text-xs text-zinc-200 outline-none focus:border-blue-500/60 placeholder-zinc-500"
               placeholder="Filter tickets..."
               value={filter}
@@ -420,7 +468,6 @@ export default function JiraBoardTab({
         config={config}
         jiraBaseUrl={jiraBaseUrl}
         pendingTickets={pendingTickets}
-        tmuxSessions={tmuxSessions}
         sessionThinking={sessionThinking}
         workSessions={workSessions}
         onOpenUrl={openUrl}

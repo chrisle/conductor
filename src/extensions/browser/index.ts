@@ -8,6 +8,7 @@ export const browserExtension: Extension = {
   name: 'Browser',
   description: 'Embedded web browser',
   version: '1.0.0',
+  icon: Globe,
   tabs: [
     {
       type: 'browser',

@@ -42,6 +42,10 @@ interface ElectronAPI {
   loadFavorites: () => Promise<string[]>
   saveFavorites: (favorites: string[]) => Promise<void>
   gitBranch: (path: string) => Promise<string | null>
+  gitLog: (path: string, maxCount?: number) => Promise<Array<{
+    hash: string; abbrev: string; parents: string[]; author: string;
+    email: string; date: string; subject: string; refs: string[]
+  }>>
 
   // App config
   loadConfig: () => Promise<AppConfig | null>
@@ -53,11 +57,13 @@ interface ElectronAPI {
   saveCache: (namespace: string, key: string, data: any) => Promise<void>
   invalidateCache: (namespace: string, key: string) => Promise<void>
 
-  // Terminal
-  createTerminal: (id: string, cwd?: string) => Promise<void>
+  // Terminal (bridged to conductord Unix socket via main process)
+  createTerminal: (id: string, cwd?: string) => Promise<{ isNew: boolean }>
   writeTerminal: (id: string, data: string) => Promise<void>
   resizeTerminal: (id: string, cols: number, rows: number) => Promise<void>
   killTerminal: (id: string) => Promise<void>
+  setAutoPilot: (id: string, enabled: boolean) => Promise<void>
+  setTmuxOption: (id: string, key: string, value: string) => Promise<void>
   onTerminalData: (callback: (event: IpcRendererEvent, id: string, data: string) => void) => void
   offTerminalData: (callback: (event: IpcRendererEvent, id: string, data: string) => void) => void
   onTerminalExit: (callback: (event: IpcRendererEvent, id: string) => void) => void
@@ -118,6 +124,15 @@ interface ElectronAPI {
   startConductord: () => Promise<{ success: boolean; error?: string }>
   stopConductord: () => Promise<{ success: boolean; error?: string }>
   restartConductord: () => Promise<{ success: boolean; error?: string }>
+  hasFullDiskAccess: () => Promise<boolean>
+  openFullDiskAccessSettings: () => Promise<void>
+
+  // Conductord REST proxy
+  conductordHealth: () => Promise<boolean>
+  conductordGetSessions: () => Promise<Array<{ id: string; dead: boolean }>>
+  conductordGetTmuxSessions: () => Promise<Array<{ name: string; connected: boolean; command: string; cwd: string; created: number; activity: number }>>
+  conductordKillTmuxSession: (name: string) => Promise<{ ok: boolean }>
+  conductordKillOrphanedTmux: () => Promise<{ ok: boolean; killed: number }>
 
   // Platform
   platform: string

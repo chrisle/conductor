@@ -43,7 +43,6 @@ export function serializeWorkspace(): Workspace {
           filePath: tab.filePath,
           url: tab.url,
           content: tab.content,
-          initialCommand: tab.initialCommand
         }
         if ((tab.type === 'terminal' || tab.type === 'claude') && terminalBuffers.has(tab.id)) {
           try {
@@ -136,7 +135,6 @@ function restoreWorkspace(workspace: Workspace): void {
         filePath: tab.filePath,
         url: tab.url,
         content: tab.content,
-        initialCommand: tab.initialCommand,
         _terminalHistory: tab.terminalHistory
       } as any))
     }
@@ -574,9 +572,17 @@ function restoreAutosavedLayout(): boolean {
 }
 
 /** Initialize a default in-memory project if none is loaded */
-export function initializeDefaultProject(): void {
+export async function initializeDefaultProject(): Promise<void> {
   const project = useProjectStore.getState()
   if (project.filePath || project.name) return // already loaded
+
+  // Try to reopen the last project
+  await useProjectStore.getState().loadRecentProjects()
+  const recent = useProjectStore.getState().recentProjects
+  if (recent.length > 0) {
+    const opened = await openProject(recent[0].path)
+    if (opened) return
+  }
 
   // Try to restore the last autosaved layout
   if (restoreAutosavedLayout()) {

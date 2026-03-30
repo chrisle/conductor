@@ -1,18 +1,12 @@
-import { Settings } from 'lucide-react'
+import { FolderKanban } from 'lucide-react'
 import type { Extension } from '../types'
-import ProjectSettingsTab from './ProjectSettingsTab'
+import ProjectSettingsPanel from './ProjectSettingsPanel'
 
 export const projectExtension: Extension = {
   id: 'project',
-  name: 'Projects',
+  name: 'Project',
   description: 'Open and manage workspace projects',
   version: '1.0.0',
-  tabs: [
-    {
-      type: 'project-settings',
-      label: 'Project Settings',
-      icon: Settings,
-      component: ProjectSettingsTab,
-    },
-  ],
+  icon: FolderKanban,
+  settingsPanel: ProjectSettingsPanel,
 }

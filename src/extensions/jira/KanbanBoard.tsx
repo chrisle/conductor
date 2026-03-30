@@ -20,7 +20,6 @@ interface KanbanBoardProps {
   config: JiraConfig
   jiraBaseUrl: string
   pendingTickets?: PendingTicket[]
-  tmuxSessions: Set<string>
   sessionThinking: Record<string, ThinkingState>
   onOpenUrl: (url: string, title: string) => void
   onNewSession: (ticket: Ticket) => void
@@ -31,7 +30,7 @@ interface KanbanBoardProps {
   workSessions?: WorkSession[]
 }
 
-export function KanbanBoard({ tickets, epics, config, jiraBaseUrl, pendingTickets = [], tmuxSessions, sessionThinking, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh, onCreateTicket, workSessions = [] }: KanbanBoardProps) {
+export function KanbanBoard({ tickets, epics, config, jiraBaseUrl, pendingTickets = [], sessionThinking, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh, onCreateTicket, workSessions = [] }: KanbanBoardProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   const epicKeys = epics.map((e) => e.key)
@@ -46,7 +45,7 @@ export function KanbanBoard({ tickets, epics, config, jiraBaseUrl, pendingTicket
     })
   }
 
-  const columnProps = { config, jiraBaseUrl, tmuxSessions, sessionThinking, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh, workSessions }
+  const columnProps = { config, jiraBaseUrl, sessionThinking, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh, workSessions }
 
   return (
     <div className="h-full overflow-auto p-4 space-y-6 min-w-0">

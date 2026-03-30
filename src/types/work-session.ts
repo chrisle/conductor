@@ -11,7 +11,7 @@ export interface WorkSession {
   tmuxSessionId: string | null
   claudeSessionId: string | null
   prUrl: string | null
-  status: 'active' | 'paused' | 'completed'
+  status: 'active' | 'completed'
   createdAt: string
   updatedAt: string
 }

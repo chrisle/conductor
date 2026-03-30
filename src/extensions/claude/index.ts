@@ -1,9 +1,23 @@
 import ClaudeIcon from '@/components/ui/ClaudeIcon'
 import type { Extension } from '../types'
 import ClaudeTab from './components/ClaudeTab'
-import ClaudeSidebar from './components/ClaudeSidebar'
+import ClaudeSettingsPanel from './components/ClaudeSettingsPanel'
 import { useTabsStore } from '@/store/tabs'
 import { useSidebarStore } from '@/store/sidebar'
+
+/** Generate a human-readable tmux session name like claude-1, claude-2, etc. */
+function nextClaudeSessionId(): string {
+  const groups = useTabsStore.getState().groups
+  const existing = new Set<string>()
+  for (const group of Object.values(groups)) {
+    for (const tab of group.tabs) {
+      if (tab.id.startsWith('claude-')) existing.add(tab.id)
+    }
+  }
+  let n = 1
+  while (existing.has(`claude-${n}`)) n++
+  return `claude-${n}`
+}
 
 export const claudeExtension: Extension = {
   id: 'claude',
@@ -11,7 +25,7 @@ export const claudeExtension: Extension = {
   description: 'AI assistant powered by Anthropic',
   version: '1.0.0',
   icon: ClaudeIcon,
-  sidebar: ClaudeSidebar,
+  settingsPanel: ClaudeSettingsPanel,
   tabs: [
     {
       type: 'claude',
@@ -29,9 +43,11 @@ export const claudeExtension: Extension = {
       action: (groupId: string) => {
         const cwd = useSidebarStore.getState().rootPath || undefined
         useTabsStore.getState().addTab(groupId, {
+          id: nextClaudeSessionId(),
           type: 'claude',
           title: 'Claude',
-          filePath: cwd
+          filePath: cwd,
+          initialCommand: 'claude\n',
         })
       },
       separator: 'before'
@@ -43,6 +59,7 @@ export const claudeExtension: Extension = {
       action: (groupId: string) => {
         const cwd = useSidebarStore.getState().rootPath || undefined
         useTabsStore.getState().addTab(groupId, {
+          id: nextClaudeSessionId(),
           type: 'claude',
           title: 'Claude',
           filePath: cwd,
@@ -57,6 +74,7 @@ export const claudeExtension: Extension = {
       action: (groupId: string) => {
         const cwd = useSidebarStore.getState().rootPath || undefined
         useTabsStore.getState().addTab(groupId, {
+          id: nextClaudeSessionId(),
           type: 'claude',
           title: 'Claude',
           filePath: cwd,

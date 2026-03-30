@@ -30,7 +30,6 @@ interface KanbanColumnProps {
   pendingTickets?: PendingTicket[]
   config: JiraConfig
   jiraBaseUrl: string
-  tmuxSessions: Set<string>
   sessionThinking: Record<string, ThinkingState>
   onOpenUrl: (url: string, title: string) => void
   onNewSession: (ticket: Ticket) => void
@@ -62,7 +61,7 @@ function saveCompactColumns(set: Set<string>) {
   useConfigStore.getState().setKanbanCompactColumns([...set])
 }
 
-export function KanbanColumn({ title, status, tickets, pendingTickets = [], config, jiraBaseUrl, tmuxSessions, sessionThinking, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh, onCreateTicket, workSessions = [] }: KanbanColumnProps) {
+export function KanbanColumn({ title, status, tickets, pendingTickets = [], config, jiraBaseUrl, sessionThinking, onOpenUrl, onNewSession, onContinueSession, onStartWork, onRefresh, onCreateTicket, workSessions = [] }: KanbanColumnProps) {
   const [sort, setSort] = useState<SortMode>('none')
   const [compact, setCompact] = useState(() => getCompactColumns().has(status))
 
@@ -183,7 +182,6 @@ export function KanbanColumn({ title, status, tickets, pendingTickets = [], conf
                 ticket={ticket}
                 config={config}
                 jiraBaseUrl={jiraBaseUrl}
-                hasSession={tmuxSessions.has(`t-${ticket.key}`)}
                 isThinking={sessionThinking[`t-${ticket.key}`]?.thinking ?? false}
                 workSession={workSessions.find(s => s.ticketKey === ticket.key && s.status !== 'completed')}
                 onOpenUrl={onOpenUrl}

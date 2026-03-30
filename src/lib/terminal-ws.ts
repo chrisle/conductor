@@ -1,6 +1,9 @@
 /**
- * WebSocket-based terminal transport via conductord.
- * Used by both Electron and web modes.
+ * Terminal transport via Electron IPC → conductord Unix socket.
+ *
+ * The Electron main process bridges WebSocket connections to conductord
+ * over a Unix domain socket. The renderer communicates through IPC only —
+ * no direct network connections.
  *
  * When tmux is available, conductord wraps each session in a named tmux
  * session so it survives app restarts. createTerminal resolves with
@@ -9,154 +12,83 @@
  * to send an initialCommand.
  */
 
-const CONDUCTORD_PORT = 9800
-const CONDUCTORD_URL = `ws://127.0.0.1:${CONDUCTORD_PORT}/ws/terminal`
-
-const sockets = new Map<string, WebSocket>()
-const decoders = new Map<string, TextDecoder>()
+const activeSessions = new Set<string>()
 const dataListeners = new Set<(event: any, id: string, data: string) => void>()
 const exitListeners = new Set<(event: any, id: string) => void>()
-// Tracks sockets that were intentionally closed (tab close / detach).
-// When onclose fires for these, we skip the exit event so the terminal
-// doesn't show "[Process exited]" just because the tab was closed.
-const intentionalClose = new Set<string>()
 
-export function createTerminal(id: string, cwd?: string): Promise<{ isNew: boolean }> {
-  return new Promise((resolve, reject) => {
-    const params = new URLSearchParams()
-    params.set('id', id)
-    if (cwd) params.set('cwd', cwd)
-    const ws = new WebSocket(`${CONDUCTORD_URL}?${params}`)
-    ws.binaryType = 'arraybuffer'
+// Bridge IPC events to local listener sets.
+// Registered once — the handlers filter by whether we're tracking the session.
+let ipcListenersRegistered = false
 
-    // Resolved once the session message arrives (gives us isNew)
-    let sessionResolved = false
+function ensureIpcListeners(): void {
+  if (ipcListenersRegistered) return
+  ipcListenersRegistered = true
 
-    ws.onopen = () => {
-      sockets.set(id, ws)
-      decoders.set(id, new TextDecoder('utf-8'))
-      // If conductord doesn't send a session message (old version), resolve
-      // with isNew:true as a safe default so initialCommand still runs.
-      setTimeout(() => {
-        if (!sessionResolved) {
-          sessionResolved = true
-          resolve({ isNew: true })
-        }
-      }, 2000)
+  window.electronAPI.onTerminalData((_event, id, data) => {
+    if (!activeSessions.has(id)) return
+    for (const cb of dataListeners) {
+      cb(null, id, data)
     }
+  })
 
-    ws.onmessage = (event) => {
-      // String messages are JSON control messages from conductord
-      if (typeof event.data === 'string') {
-        try {
-          const msg = JSON.parse(event.data)
-          if (msg.type === 'session') {
-            if (!sessionResolved) {
-              sessionResolved = true
-              resolve({ isNew: msg.isNew !== false })
-            }
-            return
-          }
-          if (msg.type === 'error') {
-            console.error('[conductord]', msg.data)
-            return
-          }
-        } catch {
-          // Not JSON — treat as terminal data
-        }
-        for (const cb of dataListeners) {
-          cb(null, id, event.data)
-        }
-        return
-      }
-
-      // Binary messages are terminal output
-      const decoder = decoders.get(id) || new TextDecoder('utf-8')
-      const data = decoder.decode(event.data, { stream: true })
-      for (const cb of dataListeners) {
-        cb(null, id, data)
-      }
-    }
-
-    ws.onclose = () => {
-      sockets.delete(id)
-      decoders.delete(id)
-      // Only fire exit listeners when the close was NOT initiated by us
-      // (i.e., the process actually died, not the user closing the tab)
-      if (!intentionalClose.has(id)) {
-        for (const cb of exitListeners) {
-          cb(null, id)
-        }
-      }
-      intentionalClose.delete(id)
-    }
-
-    ws.onerror = () => {
-      reject(new Error('conductord connection failed — is it running?'))
+  window.electronAPI.onTerminalExit((_event, id) => {
+    if (!activeSessions.has(id)) return
+    activeSessions.delete(id)
+    for (const cb of exitListeners) {
+      cb(null, id)
     }
   })
 }
 
+export function createTerminal(id: string, cwd?: string): Promise<{ isNew: boolean }> {
+  ensureIpcListeners()
+  activeSessions.add(id)
+  return window.electronAPI.createTerminal(id, cwd)
+}
+
 export function writeTerminal(id: string, data: string, opts?: { programmatic?: boolean }): Promise<void> {
-  const ws = sockets.get(id)
-  if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.resolve()
+  if (!activeSessions.has(id)) return Promise.resolve()
 
   // For programmatic writes, delay before sending \r or \n so the
   // receiving process has time to ingest preceding input.
   if (opts?.programmatic) {
     const idx = data.search(/[\r\n]/)
     if (idx > 0) {
-      ws.send(JSON.stringify({ type: 'input', data: data.slice(0, idx) }))
+      window.electronAPI.writeTerminal(id, data.slice(0, idx))
       return new Promise((resolve) => {
         setTimeout(() => {
-          ws.send(JSON.stringify({ type: 'input', data: data.slice(idx) }))
+          window.electronAPI.writeTerminal(id, data.slice(idx))
           resolve()
         }, 150)
       })
     }
   }
 
-  ws.send(JSON.stringify({ type: 'input', data }))
+  window.electronAPI.writeTerminal(id, data)
   return Promise.resolve()
 }
 
 export function resizeTerminal(id: string, cols: number, rows: number): Promise<void> {
-  const ws = sockets.get(id)
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'resize', data: { cols, rows } }))
-  }
+  window.electronAPI.resizeTerminal(id, cols, rows)
   return Promise.resolve()
 }
 
 export function setTmuxOption(id: string, key: string, value: string): void {
-  const ws = sockets.get(id)
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'tmux-option', data: { key, value } }))
-  }
+  window.electronAPI.setTmuxOption(id, key, value)
 }
 
 export function setAutoPilot(id: string, enabled: boolean): void {
-  const ws = sockets.get(id)
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'autopilot', data: enabled }))
-  }
+  window.electronAPI.setAutoPilot(id, enabled)
 }
 
 export function killTerminal(id: string): Promise<void> {
-  // Just close the WebSocket — the tmux session keeps running so the user
-  // can continue it later. Explicit session destruction is handled via the
-  // conductord REST API (DELETE /api/tmux/{name}).
-  const ws = sockets.get(id)
-  if (ws) {
-    intentionalClose.add(id)
-    ws.close()
-    sockets.delete(id)
-    decoders.delete(id)
-  }
+  activeSessions.delete(id)
+  window.electronAPI.killTerminal(id)
   return Promise.resolve()
 }
 
 export function onTerminalData(cb: (event: any, id: string, data: string) => void): void {
+  ensureIpcListeners()
   dataListeners.add(cb)
 }
 
@@ -165,6 +97,7 @@ export function offTerminalData(cb: (event: any, id: string, data: string) => vo
 }
 
 export function onTerminalExit(cb: (event: any, id: string) => void): void {
+  ensureIpcListeners()
   exitListeners.add(cb)
 }
 

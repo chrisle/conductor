@@ -108,6 +108,12 @@ class ExtensionRegistry {
     return this.getEnabledExtensions().filter(p => p.icon && p.sidebar)
   }
 
+  getSettingsPanels(): { extension: Extension; panel: NonNullable<Extension['settingsPanel']> }[] {
+    return this.getEnabledExtensions()
+      .filter(e => e.settingsPanel)
+      .map(e => ({ extension: e, panel: e.settingsPanel! }))
+  }
+
   getTabRegistration(type: string): TabRegistration | undefined {
     return this.tabTypes.get(type)
   }

@@ -20,6 +20,7 @@ const electronAPI = {
   writeFile: (path: string, content: string) => ipcRenderer.invoke('fs:writeFile', path, content),
   mkdir: (path: string) => ipcRenderer.invoke('fs:mkdir', path),
   gitBranch: (path: string) => ipcRenderer.invoke('git:branch', path),
+  gitLog: (path: string, maxCount?: number) => ipcRenderer.invoke('git:log', path, maxCount),
   rename: (oldPath: string, newPath: string) => ipcRenderer.invoke('fs:rename', oldPath, newPath),
   deleteFile: (path: string) => ipcRenderer.invoke('fs:delete', path),
   getHomeDir: () => ipcRenderer.invoke('fs:getHomeDir'),
@@ -37,12 +38,14 @@ const electronAPI = {
   saveCache: (namespace: string, key: string, data: any) => ipcRenderer.invoke('cache:save', namespace, key, data),
   invalidateCache: (namespace: string, key: string) => ipcRenderer.invoke('cache:invalidate', namespace, key),
 
-  // Terminal
+  // Terminal (bridged to conductord Unix socket via main process)
   createTerminal: (id: string, cwd?: string) => ipcRenderer.invoke('terminal:create', id, cwd),
   writeTerminal: (id: string, data: string) => ipcRenderer.invoke('terminal:write', id, data),
   resizeTerminal: (id: string, cols: number, rows: number) =>
     ipcRenderer.invoke('terminal:resize', id, cols, rows),
   killTerminal: (id: string) => ipcRenderer.invoke('terminal:kill', id),
+  setAutoPilot: (id: string, enabled: boolean) => ipcRenderer.invoke('terminal:setAutoPilot', id, enabled),
+  setTmuxOption: (id: string, key: string, value: string) => ipcRenderer.invoke('terminal:setTmuxOption', id, key, value),
   onTerminalData: (callback: (event: IpcRendererEvent, id: string, data: string) => void) =>
     ipcRenderer.on('terminal:data', callback),
   offTerminalData: (callback: (event: IpcRendererEvent, id: string, data: string) => void) =>
@@ -109,6 +112,15 @@ const electronAPI = {
   startConductord: () => ipcRenderer.invoke('conductord:start'),
   stopConductord: () => ipcRenderer.invoke('conductord:stop'),
   restartConductord: () => ipcRenderer.invoke('conductord:restart'),
+  hasFullDiskAccess: () => ipcRenderer.invoke('conductord:hasFullDiskAccess'),
+  openFullDiskAccessSettings: () => ipcRenderer.invoke('conductord:openFullDiskAccessSettings'),
+
+  // Conductord REST proxy (routes through main process -> Unix socket)
+  conductordHealth: () => ipcRenderer.invoke('conductord:health'),
+  conductordGetSessions: () => ipcRenderer.invoke('conductord:getSessions'),
+  conductordGetTmuxSessions: () => ipcRenderer.invoke('conductord:getTmuxSessions'),
+  conductordKillTmuxSession: (name: string) => ipcRenderer.invoke('conductord:killTmuxSession', name),
+  conductordKillOrphanedTmux: () => ipcRenderer.invoke('conductord:killOrphanedTmux'),
 
   // Platform
   platform: process.platform

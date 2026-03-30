@@ -36,6 +36,8 @@ export interface Extension {
   version?: string
   icon?: ComponentType<{ className?: string }>
   sidebar?: ComponentType<{ groupId: string }>
+  /** Optional settings panel rendered inside the Settings sidebar */
+  settingsPanel?: ComponentType
   tabs?: TabRegistration[]
   newTabMenuItems?: NewTabMenuItem[]
   onActivate?: () => void

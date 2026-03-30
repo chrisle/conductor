@@ -5,8 +5,8 @@ import os from 'os'
 import { execFile } from 'child_process'
 import { readDir, readFile, readFileBinary, writeFile, mkdirRecursive, deleteEntry } from './fs-handlers'
 import * as service from './service'
-
-const CONDUCTORD_URL = 'http://127.0.0.1:9800'
+import { conductordFetch } from './conductord-client'
+import { registerTerminalBridge } from './terminal-bridge'
 
 // Conductord log watchers: watchId -> { watcher, fd }
 const logWatchers = new Map<string, { watcher: fs.FSWatcher; offset: number; logPath: string }>()
@@ -211,6 +211,31 @@ export function registerIpcHandlers(): void {
       execFile('git', ['-C', dirPath, 'branch', '--show-current'], (err, stdout) => {
         resolve(err ? null : stdout.trim() || null)
       })
+    })
+  })
+
+  ipcMain.handle('git:log', (_event, dirPath: string, maxCount = 200) => {
+    const SEP = '\x1f' // unit separator
+    const format = ['%H', '%h', '%P', '%an', '%ae', '%aI', '%s', '%D'].join(SEP)
+    return new Promise<Array<{
+      hash: string; abbrev: string; parents: string[]; author: string;
+      email: string; date: string; subject: string; refs: string[]
+    }>>((resolve) => {
+      execFile('git', ['-C', dirPath, 'log', `--format=${format}`, `--max-count=${maxCount}`],
+        { maxBuffer: 1024 * 1024 * 4 },
+        (err, stdout) => {
+          if (err) { resolve([]); return }
+          const commits = stdout.trim().split('\n').filter(Boolean).map(line => {
+            const [hash, abbrev, parents, author, email, date, subject, refs] = line.split(SEP)
+            return {
+              hash, abbrev,
+              parents: parents ? parents.split(' ') : [],
+              author, email, date, subject,
+              refs: refs ? refs.split(', ').map(r => r.trim()).filter(Boolean) : []
+            }
+          })
+          resolve(commits)
+        })
     })
   })
 
@@ -503,17 +528,14 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
 {"summary": "concise ticket title", "description": "detailed description with acceptance criteria", "issueType": "Task|Bug|Story"}`
 
     try {
-      const res = await fetch(`${CONDUCTORD_URL}/api/exec`, {
+      const { body: result } = await conductordFetch('/api/exec', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           command: 'claude',
           args: ['-p', prompt, '--output-format', 'text'],
           timeout: 60,
         }),
-      })
-
-      const result = await res.json() as { success: boolean; stdout?: string; stderr?: string; error?: string }
+      }) as { body: { success: boolean; stdout?: string; stderr?: string; error?: string } }
 
       if (!result.success) {
         return { success: false, error: result.error || result.stderr || 'Command failed' }
@@ -712,4 +734,62 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
   ipcMain.handle('conductord:start', () => service.start())
   ipcMain.handle('conductord:stop', () => service.stop())
   ipcMain.handle('conductord:restart', () => service.restart())
+  ipcMain.handle('conductord:hasFullDiskAccess', async () => {
+    try {
+      const { body } = await conductordFetch('/health')
+      return body?.fullDiskAccess === true
+    } catch {
+      return false
+    }
+  })
+  ipcMain.handle('conductord:openFullDiskAccessSettings', () => service.openFullDiskAccessSettings())
+
+  // Conductord REST proxy (renderer can't reach Unix socket directly)
+  ipcMain.handle('conductord:health', async () => {
+    try {
+      const { status } = await conductordFetch('/health')
+      return status === 200
+    } catch {
+      return false
+    }
+  })
+
+  ipcMain.handle('conductord:getSessions', async () => {
+    try {
+      const { body } = await conductordFetch('/api/sessions')
+      return body
+    } catch {
+      return []
+    }
+  })
+
+  ipcMain.handle('conductord:getTmuxSessions', async () => {
+    try {
+      const { body } = await conductordFetch('/api/tmux')
+      return body
+    } catch {
+      return []
+    }
+  })
+
+  ipcMain.handle('conductord:killTmuxSession', async (_event, name: string) => {
+    try {
+      const { body } = await conductordFetch(`/api/tmux/${name}`, { method: 'DELETE' })
+      return body
+    } catch {
+      return { ok: false }
+    }
+  })
+
+  ipcMain.handle('conductord:killOrphanedTmux', async () => {
+    try {
+      const { body } = await conductordFetch('/api/tmux?orphaned=1', { method: 'DELETE' })
+      return body
+    } catch {
+      return { ok: false, killed: 0 }
+    }
+  })
+
+  // Terminal WebSocket bridge (renderer <-> conductord via Unix socket)
+  registerTerminalBridge()
 }

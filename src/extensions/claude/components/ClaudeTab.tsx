@@ -109,11 +109,11 @@ export default function ClaudeTab({ tabId, groupId, isActive, tab }: TabProps): 
         <>
           <div className="w-px h-3 bg-zinc-700" />
           <span
-            className="text-[10px] font-mono text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors truncate max-w-[180px]"
+            className="text-[10px] font-mono text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors truncate max-w-[220px]"
             title={sessionId}
             onClick={() => navigator.clipboard.writeText(sessionId)}
           >
-            {sessionId.slice(0, 8)}
+            Claude session: {sessionId.slice(0, 8)}
           </span>
         </>
       )}
@@ -125,7 +125,15 @@ export default function ClaudeTab({ tabId, groupId, isActive, tab }: TabProps): 
       tabId={tabId}
       groupId={groupId}
       isActive={isActive}
-      tab={{ ...tab, initialCommand: buildClaudeCommand(tab.initialCommand || 'claude\n', settings) }}
+      tab={{
+        ...tab,
+        // Only transform if an initialCommand was explicitly set by the caller.
+        // Restored tabs (from project file) have no initialCommand and should
+        // not auto-launch claude — the process is already running in tmux.
+        initialCommand: tab.initialCommand
+          ? buildClaudeCommand(tab.initialCommand, settings)
+          : undefined,
+      }}
       preventScreenClear={preventScreenClear}
       onPtyData={onPtyData}
       onTerminalReady={handleTerminalReady}

@@ -9,6 +9,7 @@ export const terminalExtension: Extension = {
   name: 'Terminal',
   description: 'Integrated terminal emulator',
   version: '1.0.0',
+  icon: Terminal,
   tabs: [
     {
       type: 'terminal',

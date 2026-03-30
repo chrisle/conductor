@@ -1,10 +1,11 @@
 /**
  * Mock electronAPI for running in a browser (dev-web mode).
- * Terminal is backed by conductord over WebSocket.
+ * Terminal is backed by conductord over WebSocket (requires -dev-port flag).
  * Other Electron APIs are stubbed.
  */
 
-const CONDUCTORD_URL = 'ws://127.0.0.1:9800/ws/terminal'
+const CONDUCTORD_WS = 'ws://127.0.0.1:9800/ws/terminal'
+const CONDUCTORD_HTTP = 'http://127.0.0.1:9800'
 
 const noop = () => {}
 const noopAsync = async () => {}
@@ -16,18 +17,37 @@ const terminalListeners = {
 
 const terminalSockets = new Map<string, WebSocket>()
 
-function createTerminalWS(id: string, cwd?: string): Promise<void> {
+function createTerminalWS(id: string, cwd?: string): Promise<{ isNew: boolean }> {
   return new Promise((resolve, reject) => {
-    const url = cwd ? `${CONDUCTORD_URL}?cwd=${encodeURIComponent(cwd)}` : CONDUCTORD_URL
-    const ws = new WebSocket(url)
+    const params = new URLSearchParams({ id })
+    if (cwd) params.set('cwd', cwd)
+    const ws = new WebSocket(`${CONDUCTORD_WS}?${params}`)
     ws.binaryType = 'arraybuffer'
+    let sessionResolved = false
 
     ws.onopen = () => {
       terminalSockets.set(id, ws)
-      resolve()
+      setTimeout(() => {
+        if (!sessionResolved) {
+          sessionResolved = true
+          resolve({ isNew: true })
+        }
+      }, 2000)
     }
 
     ws.onmessage = (event) => {
+      if (typeof event.data === 'string') {
+        try {
+          const msg = JSON.parse(event.data)
+          if (msg.type === 'session') {
+            if (!sessionResolved) {
+              sessionResolved = true
+              resolve({ isNew: msg.isNew !== false })
+            }
+            return
+          }
+        } catch { /* not JSON */ }
+      }
       const data = typeof event.data === 'string'
         ? event.data
         : new TextDecoder().decode(event.data)
@@ -44,7 +64,7 @@ function createTerminalWS(id: string, cwd?: string): Promise<void> {
     }
 
     ws.onerror = () => {
-      reject(new Error('conductord connection failed — is it running?'))
+      reject(new Error('conductord connection failed — is it running with -dev-port 9800?'))
     }
   })
 }
@@ -97,6 +117,7 @@ const mock: ElectronAPI = {
   loadFavorites: async () => [],
   saveFavorites: noopAsync,
   gitBranch: async () => null,
+  gitLog: async () => [],
 
   // App config
   loadConfig: async () => null,
@@ -108,11 +129,13 @@ const mock: ElectronAPI = {
   saveCache: noopAsync,
   invalidateCache: noopAsync,
 
-  // Terminal — backed by conductord WebSocket
+  // Terminal — backed by conductord WebSocket (dev-port mode)
   createTerminal: createTerminalWS,
   writeTerminal: writeTerminalWS,
   resizeTerminal: resizeTerminalWS,
   killTerminal: killTerminalWS,
+  setAutoPilot: noopAsync,
+  setTmuxOption: noopAsync,
   onTerminalData: (cb) => { terminalListeners.data.add(cb) },
   offTerminalData: (cb) => { terminalListeners.data.delete(cb) },
   onTerminalExit: (cb) => { terminalListeners.exit.add(cb) },
@@ -145,6 +168,9 @@ const mock: ElectronAPI = {
   loadRecentProjects: async () => [],
   saveRecentProjects: noopAsync,
 
+  // Claude
+  generateTicket: async () => ({ success: false, error: 'Not available in web mode' }),
+
   // Jira
   jiraFetch: async () => ({ ok: false, status: 0, body: null, error: 'Not available in web mode' }),
   jiraPost: async () => ({ ok: false, status: 0, body: null, error: 'Not available in web mode' }),
@@ -166,6 +192,43 @@ const mock: ElectronAPI = {
   isConductordInstalled: async () => false,
   installConductord: async () => ({ success: false, error: 'Not available in web mode' }),
   uninstallConductord: async () => ({ success: false, error: 'Not available in web mode' }),
+  startConductord: async () => ({ success: false, error: 'Not available in web mode' }),
+  stopConductord: async () => ({ success: false, error: 'Not available in web mode' }),
+  restartConductord: async () => ({ success: false, error: 'Not available in web mode' }),
+  hasFullDiskAccess: async () => false,
+  openFullDiskAccessSettings: noopAsync,
+
+  // Conductord REST proxy (dev-web mode uses direct HTTP)
+  conductordHealth: async () => {
+    try {
+      const res = await fetch(`${CONDUCTORD_HTTP}/health`)
+      return res.ok
+    } catch { return false }
+  },
+  conductordGetSessions: async () => {
+    try {
+      const res = await fetch(`${CONDUCTORD_HTTP}/api/sessions`)
+      return res.ok ? await res.json() : []
+    } catch { return [] }
+  },
+  conductordGetTmuxSessions: async () => {
+    try {
+      const res = await fetch(`${CONDUCTORD_HTTP}/api/tmux`)
+      return res.ok ? await res.json() : []
+    } catch { return [] }
+  },
+  conductordKillTmuxSession: async (name: string) => {
+    try {
+      const res = await fetch(`${CONDUCTORD_HTTP}/api/tmux/${name}`, { method: 'DELETE' })
+      return res.ok ? await res.json() : { ok: false }
+    } catch { return { ok: false } }
+  },
+  conductordKillOrphanedTmux: async () => {
+    try {
+      const res = await fetch(`${CONDUCTORD_HTTP}/api/tmux?orphaned=1`, { method: 'DELETE' })
+      return res.ok ? await res.json() : { ok: false, killed: 0 }
+    } catch { return { ok: false, killed: 0 } }
+  },
 
   // Platform
   platform: 'darwin',
@@ -174,6 +237,6 @@ const mock: ElectronAPI = {
 export function installElectronAPIMock() {
   if (!window.electronAPI) {
     ;(window as any).electronAPI = mock
-    console.log('[dev-web] Electron API mock installed (terminal via conductord)')
+    console.log('[dev-web] Electron API mock installed (terminal via conductord -dev-port)')
   }
 }

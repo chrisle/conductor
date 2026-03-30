@@ -58,7 +58,7 @@ function ZoomControl() {
 export default function Footer(): React.ReactElement {
   const { rootPath } = useSidebarStore()
   const [gitBranch, setGitBranch] = useState<string | null>(null)
-  const [conductord, setConductord] = useState<{ ok: boolean; sessions: number; tmux: number }>({ ok: false, sessions: 0, tmux: 0 })
+  const [conductord, setConductord] = useState<{ ok: boolean; tmux: number }>({ ok: false, tmux: 0 })
 
   useEffect(() => {
     if (!rootPath) return
@@ -76,17 +76,13 @@ export default function Footer(): React.ReactElement {
     let cancelled = false
     const poll = async () => {
       try {
-        const [healthRes, sessionsRes, tmuxRes] = await Promise.all([
-          fetch('http://127.0.0.1:9800/health'),
-          fetch('http://127.0.0.1:9800/api/sessions'),
-          fetch('http://127.0.0.1:9800/api/tmux'),
+        const [ok, tmuxList] = await Promise.all([
+          window.electronAPI.conductordHealth(),
+          window.electronAPI.conductordGetTmuxSessions(),
         ])
-        const ok = healthRes.ok
-        const sessionsList = ok ? await sessionsRes.json() : []
-        const tmuxList = ok ? await tmuxRes.json() : []
-        if (!cancelled) setConductord({ ok, sessions: sessionsList.length, tmux: tmuxList.length })
+        if (!cancelled) setConductord({ ok, tmux: tmuxList.length })
       } catch {
-        if (!cancelled) setConductord({ ok: false, sessions: 0, tmux: 0 })
+        if (!cancelled) setConductord({ ok: false, tmux: 0 })
       }
     }
     poll()
@@ -120,7 +116,7 @@ export default function Footer(): React.ReactElement {
       <Item>
         <Activity className={`w-2.5 h-2.5 ${conductord.ok ? 'text-emerald-500' : 'text-red-500'}`} />
         <span className={conductord.ok ? 'text-zinc-500' : 'text-red-500'}>
-          {conductord.ok ? `${conductord.sessions} sess · ${conductord.tmux} tmux` : 'conductord offline'}
+          {conductord.ok ? `${conductord.tmux} tmux` : 'conductord offline'}
         </span>
       </Item>
       <Separator orientation="vertical" className="h-3 bg-zinc-800" />

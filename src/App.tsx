@@ -70,6 +70,18 @@ function App(): React.ReactElement {
       e.preventDefault()
       setGoToOpen(prev => !prev)
     }
+    // Cmd+Shift+[ / Cmd+Shift+] — switch tabs in focused group
+    if (e.metaKey && e.shiftKey && (e.key === '[' || e.key === ']')) {
+      e.preventDefault()
+      const groupId = useLayoutStore.getState().focusedGroupId
+      if (!groupId) return
+      const group = useTabsStore.getState().groups[groupId]
+      if (!group || group.tabs.length < 2) return
+      const idx = group.tabs.findIndex(t => t.id === group.activeTabId)
+      const delta = e.key === '[' ? -1 : 1
+      const next = (idx + delta + group.tabs.length) % group.tabs.length
+      useTabsStore.getState().setActiveTab(groupId, group.tabs[next].id)
+    }
     // Zoom: Cmd+= / Cmd+- / Cmd+0
     if (e.metaKey || e.ctrlKey) {
       if (e.key === '=' || e.key === '+') { e.preventDefault(); useUIStore.getState().zoomIn() }
