@@ -23,9 +23,9 @@ describe('useSidebarStore', () => {
       expect(useSidebarStore.getState().width).toBe(300)
     })
 
-    it('clamps to minimum of 160', () => {
+    it('clamps to minimum of 220', () => {
       useSidebarStore.getState().setWidth(50)
-      expect(useSidebarStore.getState().width).toBe(160)
+      expect(useSidebarStore.getState().width).toBe(220)
     })
 
     it('clamps to maximum of 600', () => {

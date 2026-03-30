@@ -18,6 +18,9 @@ export interface AppConfig {
     autoPilotScanMs: number
     disableBackgroundTasks: boolean
   }
+  terminal: {
+    renderer: 'ghostty' | 'xterm'
+  }
   extensions: {
     disabled: string[]
   }
@@ -34,6 +37,9 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     skipDangerousPermissions: false,
     autoPilotScanMs: 250,
     disableBackgroundTasks: true,
+  },
+  terminal: {
+    renderer: 'xterm',
   },
   extensions: {
     disabled: [],

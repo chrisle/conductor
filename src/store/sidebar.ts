@@ -31,7 +31,7 @@ export const useSidebarStore = create<SidebarState>((set, get) => ({
   expandedPaths: new Set<string>(),
   favorites: [],
 
-  setWidth: (width) => set({ width: Math.max(160, Math.min(600, width)) }),
+  setWidth: (width) => set({ width: Math.max(220, Math.min(600, width)) }),
 
   toggleVisibility: () => set(state => ({ isVisible: !state.isVisible })),
 

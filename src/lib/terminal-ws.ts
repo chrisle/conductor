@@ -83,8 +83,7 @@ export function setAutoPilot(id: string, enabled: boolean): void {
 
 export function killTerminal(id: string): Promise<void> {
   activeSessions.delete(id)
-  window.electronAPI.killTerminal(id)
-  return Promise.resolve()
+  return window.electronAPI.killTerminal(id)
 }
 
 export function onTerminalData(cb: (event: any, id: string, data: string) => void): void {

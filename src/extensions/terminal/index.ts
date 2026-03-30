@@ -1,6 +1,7 @@
 import { Terminal } from 'lucide-react'
 import type { Extension } from '../types'
 import TerminalTab from './TerminalTab'
+import TerminalSettingsPanel from './TerminalSettingsPanel'
 import { useTabsStore } from '@/store/tabs'
 import { useSidebarStore } from '@/store/sidebar'
 
@@ -10,6 +11,7 @@ export const terminalExtension: Extension = {
   description: 'Integrated terminal emulator',
   version: '1.0.0',
   icon: Terminal,
+  settingsPanel: TerminalSettingsPanel,
   tabs: [
     {
       type: 'terminal',

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { GitBranch, Square, Trash2 } from 'lucide-react'
 import {
   Tooltip,
@@ -136,22 +136,47 @@ function TmuxRow({
   const { addTab } = useTabsStore()
   const { focusedGroupId } = useLayoutStore()
   const sessionsStore = useWorkSessionsStore.getState()
+  const groups = useTabsStore(s => s.groups)
 
-  const label = sessionLabel(session.tmux)
+  // Find open tab and its group for rename/title support
+  const openTab = (() => {
+    for (const [gid, group] of Object.entries(groups)) {
+      const tab = group.tabs.find(t => t.id === session.tmux.name)
+      if (tab) return { tab, groupId: gid }
+    }
+    return null
+  })()
+
+  const label = openTab ? openTab.tab.title : sessionLabel(session.tmux)
   const isOrphan = !session.workSession
+
+  // Inline rename
+  const [isRenaming, setIsRenaming] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
+  const renameInputRef = useRef<HTMLInputElement>(null)
+
+  function startRename() {
+    setRenameValue(label)
+    setIsRenaming(true)
+    setTimeout(() => renameInputRef.current?.select(), 0)
+  }
+
+  function commitRename() {
+    if (openTab && renameValue.trim()) {
+      useTabsStore.getState().updateTab(openTab.groupId, openTab.tab.id, { title: renameValue.trim() })
+    }
+    setIsRenaming(false)
+  }
 
   const openInTab = () => {
     // Focus existing tab if already open
-    const groups = useTabsStore.getState().groups
-    for (const [gid, group] of Object.entries(groups)) {
-      const tab = group.tabs.find(t => t.id === session.tmux.name)
-      if (tab) {
-        useTabsStore.getState().setActiveTab(gid, tab.id)
-        useLayoutStore.getState().setFocusedGroup(gid)
-        return
-      }
+    if (openTab) {
+      useTabsStore.getState().setActiveTab(openTab.groupId, openTab.tab.id)
+      useLayoutStore.getState().setFocusedGroup(openTab.groupId)
+      return
     }
-    const targetGroup = focusedGroupId || Object.keys(groups)[0]
+    const allGroups = useTabsStore.getState().groups
+    const targetGroup = focusedGroupId || Object.keys(allGroups)[0]
     if (targetGroup) {
       addTab(targetGroup, {
         id: session.tmux.name,
@@ -192,10 +217,31 @@ function TmuxRow({
           }`} />
 
           {/* Label + secondary info */}
-          <button onClick={openInTab} className="min-w-0 flex-1 text-left">
-            <span className="text-xs font-medium text-zinc-300 truncate block">{label}</span>
-            <span className="text-[10px] text-zinc-600 truncate block">{secondaryInfo}</span>
-          </button>
+          {isRenaming ? (
+            <input
+              ref={renameInputRef}
+              className="text-xs flex-1 min-w-0 bg-transparent border border-zinc-600 rounded px-1 py-0.5 outline-none text-zinc-100"
+              value={renameValue}
+              onChange={e => setRenameValue(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') commitRename()
+                if (e.key === 'Escape') setIsRenaming(false)
+                e.stopPropagation()
+              }}
+              onBlur={commitRename}
+              onClick={e => e.stopPropagation()}
+            />
+          ) : (
+            <button onClick={openInTab} className="min-w-0 flex-1 text-left">
+              <span
+                className="text-xs font-medium text-zinc-300 truncate block"
+                onDoubleClick={e => { if (openTab) { e.stopPropagation(); startRename() } }}
+              >
+                {label}
+              </span>
+              <span className="text-[10px] text-zinc-600 truncate block">{secondaryInfo}</span>
+            </button>
+          )}
 
           {/* Time */}
           <span className="text-[10px] text-zinc-600 shrink-0">{relativeTime(session.tmux.activity)}</span>
@@ -214,6 +260,14 @@ function TmuxRow({
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
+        {openTab && (
+          <>
+            <ContextMenuItem onSelect={startRename}>
+              Rename
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+          </>
+        )}
         <ContextMenuItem onSelect={killTmux} className="text-amber-400">
           <Square className="w-3 h-3 mr-2" />
           Kill session

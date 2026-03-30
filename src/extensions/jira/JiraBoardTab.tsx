@@ -13,6 +13,7 @@ import type { TicketStatus } from "./jira-api";
 import { useSessionThinking } from "./useSessionThinking";
 import { useWorkSessionsStore } from "@/store/work-sessions";
 import { useProjectStore } from "@/store/project";
+import { killTerminal } from "@/lib/terminal-api";
 import {
   loadConfig,
   fetchTickets,
@@ -314,17 +315,61 @@ export default function JiraBoardTab({
   async function startWork(ticket: Ticket) {
     const targetGroup = focusedGroupId || groupId;
     const tmuxName = tmuxSessionName(ticket.key);
-    const { cwd } = await resolveWorktree(ticket);
+
+    // Kill any stale tmux session so conductord creates a fresh one
+    // (returns isNew: true, enabling initialCommand to be sent).
+    try {
+      await window.electronAPI.conductordKillTmuxSession(tmuxName);
+    } catch { /* session may not exist */ }
+
+    // Kill stale WebSocket in the terminal bridge + activeSessions set
+    await killTerminal(tmuxName);
+
+    let cwd: string;
+    try {
+      const result = await resolveWorktree(ticket);
+      cwd = result.cwd;
+    } catch (err) {
+      console.error('[startWork] resolveWorktree failed:', err);
+      cwd = rootPath || '';
+    }
+
     const prompt = `Use the claude.ai Atlassian MCP (cloud ID 8fd881b3-a07f-4662-bad9-1a9d9e0321a3) to fetch ${ticket.key} from the ${projectKey} project in ${config?.domain}. Work autonomously on this ticket end to end.`
     const escaped = prompt.replace(/'/g, "'\\''")
-    addTab(targetGroup, {
-      id: tmuxName,
-      type: "claude",
-      title: `Claude · ${ticket.key}`,
-      filePath: cwd,
-      initialCommand: `cd ${JSON.stringify(cwd)} && claude --dangerously-skip-permissions '${escaped}'\n`,
-      autoPilot: true,
-    });
+    const initialCommand = `cd ${JSON.stringify(cwd)} && claude --dangerously-skip-permissions '${escaped}'\n`;
+
+    // If a tab with this ID already exists in the target group, update its
+    // properties and bump refreshKey to force a full React remount.
+    const existingGroup = useTabsStore.getState().groups[targetGroup];
+    const existingTab = existingGroup?.tabs.find(t => t.id === tmuxName);
+
+    if (existingTab) {
+      useTabsStore.getState().updateTab(targetGroup, tmuxName, {
+        filePath: cwd,
+        initialCommand,
+        autoPilot: true,
+        refreshKey: (existingTab.refreshKey || 0) + 1,
+      });
+      useTabsStore.getState().setActiveTab(targetGroup, tmuxName);
+    } else {
+      // Remove from other groups if it exists there
+      const allGroups = useTabsStore.getState().groups;
+      for (const [gid, group] of Object.entries(allGroups)) {
+        if (gid !== targetGroup && group.tabs.find(t => t.id === tmuxName)) {
+          useTabsStore.getState().removeTab(gid, tmuxName);
+        }
+      }
+
+      addTab(targetGroup, {
+        id: tmuxName,
+        type: "claude",
+        title: `Claude · ${ticket.key}`,
+        filePath: cwd,
+        initialCommand,
+        autoPilot: true,
+      });
+    }
+
     setTimeout(reconcileSessions, 1500);
     // Auto-transition ticket to "In Progress" in Jira
     if (config && ticket.status === 'backlog') {

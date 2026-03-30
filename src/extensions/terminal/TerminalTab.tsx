@@ -1,27 +1,14 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { RotateCw } from "lucide-react";
-import { init as initGhostty, Terminal, FitAddon } from "ghostty-web";
 import type { TabProps } from "@/extensions/types";
 import type { TerminalTabExtraProps } from "./types";
-import { terminalConfig } from "./theme";
 import SearchBar from "./SearchBar";
 import * as termAPI from "@/lib/terminal-api";
 import { useResolvedSettings } from "@/hooks/useResolvedSettings";
 import { useTabsStore } from "@/store/tabs";
-
-// Initialize ghostty WASM once
-const ghosttyReady = initGhostty();
-
-// Explicitly load the terminal fonts before the canvas renderer measures them.
-// document.fonts.ready alone is insufficient: @font-face fonts that aren't
-// referenced in any CSS rule aren't fetched eagerly, so measureFont() inside
-// new Terminal() would fall back to the system monospace font.
-const fontsReady = Promise.all([
-  document.fonts.load("400 12px 'JetBrains Mono'"),
-  document.fonts.load("400 12px 'Symbols Nerd Font Mono'"),
-]).catch(() => {
-  /* ignore load errors — terminal falls back gracefully */
-});
+import { useTerminalSettings } from "./useTerminalSettings";
+import { createGhosttyTerminal } from "./ghostty-init";
+import { createXtermTerminal } from "./xterm-init";
 
 export type { TerminalWatcher, TerminalTabExtraProps } from "./types";
 
@@ -42,8 +29,8 @@ export default function TerminalTab({
   const initialCommand = tab.initialCommand;
   const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const terminalRef = useRef<Terminal | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
+  const terminalRef = useRef<any>(null);
+  const fitAddonRef = useRef<any>(null);
   const isCreatedRef = useRef(false);
   const initCmdSentRef = useRef(false);
   const preventScreenClearRef = useRef(preventScreenClear);
@@ -56,6 +43,7 @@ export default function TerminalTab({
   const [searchQuery, setSearchQuery] = useState("");
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error' | null>('connecting');
   const resolvedSettings = useResolvedSettings();
+  const renderer = useTerminalSettings(s => s.renderer);
   const sessionReadyRef = useRef(false);
 
   const handleRefresh = useCallback(() => {
@@ -86,8 +74,12 @@ export default function TerminalTab({
     const fitAddon = fitAddonRef.current;
     const term = terminalRef.current;
     if (!fitAddon || !term) return;
+    const el = containerRef.current;
+    if (!el || el.offsetWidth === 0 || el.offsetHeight === 0) return;
     try {
       fitAddon.fit();
+      // Skip degenerate dimensions that occur during layout transitions
+      if (term.cols <= 1 || term.rows <= 1) return;
       // Always sync PTY dimensions after fit, even if cols/rows didn't change
       // from the terminal's perspective (onResize won't fire in that case)
       termAPI.resizeTerminal(tabId, term.cols, term.rows);
@@ -126,27 +118,23 @@ export default function TerminalTab({
 
     let disposed = false;
 
-    Promise.all([ghosttyReady, fontsReady]).then(() => {
-      if (disposed || !containerRef.current) return;
+    const createTerminal = renderer === 'xterm' ? createXtermTerminal : createGhosttyTerminal;
 
-      const term = new Terminal(terminalConfig);
-
-      const fitAddon = new FitAddon();
-      term.loadAddon(fitAddon);
+    createTerminal(containerRef.current).then(({ term, fitAddon }) => {
+      if (disposed) return;
 
       terminalRef.current = term;
       fitAddonRef.current = fitAddon;
 
       // Hide container until PTY is ready to avoid stale buffer flash
-      containerRef.current.style.visibility = "hidden";
-
-      term.open(containerRef.current);
+      containerRef.current!.style.visibility = "hidden";
 
       setTimeout(() => {
         doFit();
         const { cols, rows } = term;
-        console.log(`[terminal] ghostty fit: cols=${cols} rows=${rows}`);
+        console.log(`[terminal] ${renderer} fit: cols=${cols} rows=${rows}`);
         termAPI.createTerminal(tabId, cwd).then(({ isNew }) => {
+          console.log(`[terminal] session ready: id=${tabId} isNew=${isNew} hasInitCmd=${!!initialCommand}`);
           termAPI.resizeTerminal(tabId, cols, rows);
           sessionReadyRef.current = true;
           setConnectionStatus('connected');
@@ -157,6 +145,9 @@ export default function TerminalTab({
             containerRef.current.style.visibility = "visible";
           }
           term.focus();
+          // Re-fit after the container is visible to ensure tmux gets
+          // the correct dimensions (especially on reattach).
+          setTimeout(() => doFit(), 100);
           onTerminalReady?.((data: string) =>
             termAPI.writeTerminal(tabId, data, { programmatic: true }),
           );
@@ -272,23 +263,28 @@ export default function TerminalTab({
       termAPI.onTerminalExit(handleTerminalExit);
 
       let resizeTimer: ReturnType<typeof setTimeout> | null = null;
-      const resizeObserver = new ResizeObserver(() => {
+      const scheduleRefit = () => {
         if (resizeTimer) clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
           try {
-            const el = containerRef.current;
-            if (!el || el.offsetWidth === 0 || el.offsetHeight === 0) return;
             doFit();
             if (!userScrolledUpRef.current) {
               terminalRef.current?.scrollToBottom();
             }
           } catch {}
         }, 100);
-      });
+      };
+      const resizeObserver = new ResizeObserver(scheduleRefit);
       if (wrapperRef.current) resizeObserver.observe(wrapperRef.current);
+
+      // Fallback: window resize events catch cases ResizeObserver misses
+      // (e.g. Electron window maximize/unmaximize, fullscreen transitions)
+      const onWindowResize = () => scheduleRefit();
+      window.addEventListener("resize", onWindowResize);
 
       cleanupRef.current = () => {
         if (resizeTimer) clearTimeout(resizeTimer);
+        window.removeEventListener("resize", onWindowResize);
         termAPI.offTerminalData(handleTerminalData);
         termAPI.offTerminalExit(handleTerminalExit);
         el?.removeEventListener("wheel", onWheel);
@@ -356,11 +352,15 @@ export default function TerminalTab({
           }
         }
       };
-      setTimeout(() => {
+      // Use rAF to wait for the browser to finish layout after the hidden
+      // class is removed, then fit. The 50ms / 200ms fallbacks catch cases
+      // where a single frame isn't enough (e.g. complex split resizes).
+      requestAnimationFrame(() => {
         terminalRef.current?.focus();
         fitAndScroll();
-      }, 50);
-      setTimeout(fitAndScroll, 200);
+      });
+      setTimeout(fitAndScroll, 100);
+      setTimeout(fitAndScroll, 300);
     } else if (!isActive && terminalRef.current) {
       terminalRef.current.blur();
     }

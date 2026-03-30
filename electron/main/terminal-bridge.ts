@@ -21,9 +21,13 @@ function getWindow(): BrowserWindow | null {
 
 export function registerTerminalBridge(): void {
   ipcMain.handle('terminal:create', async (_event, id: string, cwd?: string) => {
-    // If already connected, return reattach
+    // If already connected, close the stale WebSocket so we get a fresh
+    // connection and let conductord decide whether the tmux session is new.
     if (sessions.has(id)) {
-      return { isNew: false }
+      const old = sessions.get(id)!
+      old.intentionalClose = true
+      old.ws.close()
+      sessions.delete(id)
     }
 
     // Deduplicate in-flight connection attempts for the same session

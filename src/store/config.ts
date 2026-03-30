@@ -14,6 +14,7 @@ interface ConfigState {
   setZoom: (zoom: number) => Promise<void>
   setKanbanCompactColumns: (columns: string[]) => Promise<void>
   setClaudeSettings: (patch: Partial<AppConfig['claude']>) => Promise<void>
+  setTerminalSettings: (patch: Partial<AppConfig['terminal']>) => Promise<void>
   setDisabledExtensions: (disabled: string[]) => Promise<void>
 
   // Jira connection management
@@ -72,6 +73,13 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       config: { ...state.config, claude: { ...state.config.claude, ...patch } },
     }))
     await window.electronAPI.patchConfig({ claude: patch })
+  },
+
+  setTerminalSettings: async (patch) => {
+    set(state => ({
+      config: { ...state.config, terminal: { ...state.config.terminal, ...patch } },
+    }))
+    await window.electronAPI.patchConfig({ terminal: patch })
   },
 
   setDisabledExtensions: async (disabled) => {
