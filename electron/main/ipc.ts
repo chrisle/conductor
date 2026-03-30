@@ -628,6 +628,57 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
     return { success: true, extensionId: manifest.id }
   })
 
+  // Watch for .zip files dropped into the extensions directory and auto-install
+  if (!fs.existsSync(extensionsDir)) {
+    fs.mkdirSync(extensionsDir, { recursive: true })
+  }
+  const processingZips = new Set<string>()
+  fs.watch(extensionsDir, async (eventType, filename) => {
+    if (!filename || !filename.endsWith('.zip')) return
+    const zipPath = path.join(extensionsDir, filename)
+    if (processingZips.has(zipPath)) return
+    processingZips.add(zipPath)
+
+    try {
+      // Brief delay to let the file finish writing
+      await new Promise(r => setTimeout(r, 500))
+      if (!fs.existsSync(zipPath)) return
+
+      const AdmZip = await import('adm-zip')
+      const zip = new AdmZip.default(zipPath)
+      const manifestEntry = zip.getEntry('manifest.json')
+      if (!manifestEntry) {
+        console.warn(`[extensions] ${filename} has no manifest.json, skipping`)
+        return
+      }
+
+      const manifest = JSON.parse(manifestEntry.getData().toString('utf-8'))
+      if (!manifest.id) {
+        console.warn(`[extensions] ${filename} manifest missing id, skipping`)
+        return
+      }
+
+      const destDir = path.join(extensionsDir, manifest.id)
+      if (!fs.existsSync(destDir)) {
+        fs.mkdirSync(destDir, { recursive: true })
+      }
+      zip.extractAllTo(destDir, true)
+
+      // Remove the zip after successful extraction
+      fs.unlinkSync(zipPath)
+      console.log(`[extensions] Auto-installed ${manifest.id} from ${filename}`)
+
+      // Notify all renderer windows so they can reload extensions
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.webContents.send('extensions:installed', manifest.id)
+      }
+    } catch (err) {
+      console.error(`[extensions] Failed to auto-install ${filename}:`, err)
+    } finally {
+      processingZips.delete(zipPath)
+    }
+  })
+
   ipcMain.handle('extensions:uninstall', async (_event, extensionId: string) => {
     const extDir = path.join(extensionsDir, extensionId)
     if (fs.existsSync(extDir)) {

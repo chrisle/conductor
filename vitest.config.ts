@@ -7,6 +7,7 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
       '@renderer': resolve(__dirname, 'src'),
       '@conductor/extension-sdk': resolve(__dirname, '../conductor-extension-sdk/src/index.ts'),
+      '@conductor/extension-api': resolve(__dirname, 'src/__tests__/extension-api-shim.ts'),
       '@np3/jira/jira-api': resolve(__dirname, '../np3-jira/src/jira-api.ts'),
       '@np3/jira': resolve(__dirname, '../np3-jira/src/index.ts')
     }

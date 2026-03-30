@@ -96,6 +96,11 @@ const electronAPI = {
   installExtension: (zipPath: string) => ipcRenderer.invoke('extensions:install', zipPath),
   uninstallExtension: (extensionId: string) => ipcRenderer.invoke('extensions:uninstall', extensionId),
   selectExtensionZip: () => ipcRenderer.invoke('extensions:selectZip'),
+  onExtensionInstalled: (cb: (extensionId: string) => void) => {
+    const handler = (_event: any, id: string) => cb(id)
+    ipcRenderer.on('extensions:installed', handler)
+    return () => ipcRenderer.removeListener('extensions:installed', handler)
+  },
 
   // Conductord log watching
   watchConductordLogs: () => ipcRenderer.invoke('conductord:watchLogs'),

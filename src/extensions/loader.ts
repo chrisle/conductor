@@ -1,5 +1,6 @@
 import { extensionRegistry } from './registry'
 import type { Extension } from './types'
+import * as lucideReact from 'lucide-react'
 
 interface ExtensionManifest {
   id: string
@@ -61,14 +62,28 @@ export async function loadExternalExtensions(): Promise<void> {
 }
 
 /**
- * Create a minimal require function for external extension bundles.
- * Extensions declare these as externals during build, so they resolve to host-provided modules.
+ * Create a require function for external extension bundles.
+ *
+ * Extensions declare these as externals during build, so they resolve to
+ * host-provided modules.  The full host API is available as
+ * `@conductor/extension-api` and individual subsystems (stores, ui, libs)
+ * are also reachable via subpath requires.
  */
 function createExtensionRequire() {
   const api = (window as any).__conductorAPI__
+
   const modules: Record<string, any> = {
+    // React — shared instance so hooks work across host/extension boundary
     'react': api?.React,
-    '@conductor/extension-api': api
+
+    // Lucide icons — shared so extensions don't bundle their own copy
+    'lucide-react': lucideReact,
+
+    // Full host API
+    '@conductor/extension-api': api,
+
+    // SDK types (runtime: empty, extensions only need these at build time)
+    '@conductor/extension-sdk': {},
   }
 
   return function extensionRequire(id: string) {
