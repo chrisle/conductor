@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, shell, screen } from 'electron'
+import { app, BrowserWindow, shell, screen } from 'electron'
 import { join } from 'path'
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { spawn } from 'child_process'
@@ -68,36 +68,7 @@ async function ensureConductord(): Promise<void> {
     return
   }
 
-  // If not installed as a service, prompt the user
-  if (!service.isInstalled()) {
-    const { response } = await dialog.showMessageBox({
-      type: 'question',
-      buttons: ['Install Service', 'Not Now'],
-      defaultId: 0,
-      title: 'Install conductord',
-      message: 'Conductor needs a background service (conductord) to run terminals.',
-      detail: 'This installs a lightweight daemon that manages terminal sessions. It runs in the background so your terminals persist even when Conductor is closed.\n\nYou can uninstall it later from Settings.'
-    })
-
-    if (response === 0) {
-      const result = service.install()
-      if (result.success) {
-        console.log('[conductord] service installed')
-        // Wait for launchd to start it
-        for (let i = 0; i < 20; i++) {
-          if (await conductordHealthCheck()) {
-            console.log('[conductord] service started')
-            return
-          }
-          await new Promise(r => setTimeout(r, 200))
-        }
-        console.warn('[conductord] service installed but not responding yet')
-        return
-      } else {
-        console.error('[conductord] service install failed:', result.error)
-      }
-    }
-  } else {
+  if (service.isInstalled()) {
     // Service is already installed — launchd should be managing it.
     // Wait longer for launchd to (re)start it instead of spawning a duplicate.
     console.log('[conductord] service installed, waiting for launchd to start it...')

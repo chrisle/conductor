@@ -3,6 +3,7 @@ import TitleBar from './components/TitleBar'
 import MainLayout from './components/Layout'
 import Footer from './components/Footer'
 import GoToDialog from './components/GoToDialog'
+import InstallConductordDialog from './components/InstallConductordDialog'
 import { useSidebarStore } from './store/sidebar'
 import { useTabsStore } from './store/tabs'
 import { useLayoutStore } from './store/layout'
@@ -14,12 +15,20 @@ import { initializeDefaultProject, saveProject, autosaveLayout } from './lib/pro
 
 function App(): React.ReactElement {
   const [goToOpen, setGoToOpen] = useState(false)
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false)
   const zoom = useUIStore(s => s.zoom)
 
   // Initialize config and work sessions stores
   useEffect(() => {
     useConfigStore.getState().initialize()
     useWorkSessionsStore.getState().initialize()
+  }, [])
+
+  // Prompt to install conductord if not yet installed
+  useEffect(() => {
+    window.electronAPI.isConductordInstalled().then(installed => {
+      if (!installed) setShowInstallPrompt(true)
+    }).catch(() => {})
   }, [])
 
   // Load persisted favorites from disk on startup
@@ -111,6 +120,7 @@ function App(): React.ReactElement {
       </div>
       <Footer />
       <GoToDialog open={goToOpen} onOpenChange={setGoToOpen} />
+      <InstallConductordDialog open={showInstallPrompt} onDismiss={() => setShowInstallPrompt(false)} />
     </div>
   )
 }
