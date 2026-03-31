@@ -62,8 +62,8 @@ function sessionLabel(tmux: TmuxSession): string {
   // Jira-originated: t-NP3-14 → NP3-14
   const ticket = ticketKeyFromTmuxName(tmux.name)
   if (ticket) return ticket
-  // Named claude sessions: claude-1, claude-2
-  if (tmux.name.startsWith('claude-')) return tmux.name
+  // Named AI CLI sessions: claude-code-1, codex-1, etc.
+  if (tmux.name.startsWith('claude-code-') || tmux.name.startsWith('codex-')) return tmux.name
   // Fallback: use the cwd basename
   const base = tmux.cwd.split('/').filter(Boolean).pop()
   return base ? `shell · ${base}` : tmux.name
@@ -180,8 +180,8 @@ function TmuxRow({
     if (targetGroup) {
       addTab(targetGroup, {
         id: session.tmux.name,
-        type: 'claude',
-        title: `Claude · ${label}`,
+        type: 'claude-code',
+        title: `Claude Code · ${label}`,
         filePath: session.workSession?.worktree?.path || session.tmux.cwd,
       })
     }

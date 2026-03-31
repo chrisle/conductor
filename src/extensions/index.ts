@@ -1,6 +1,6 @@
 import { extensionRegistry } from './registry'
 import { terminalExtension } from './terminal'
-import { claudeExtension } from './claude'
+import { aiCliExtension } from './ai-cli'
 import { browserExtension } from './browser'
 import { fileExplorerExtension } from './file-explorer'
 import { projectExtension } from './project'
@@ -11,7 +11,7 @@ export function initializeExtensions(): void {
   // Registration order determines menu item order and activity bar icon order
   extensionRegistry.register(projectExtension)
   extensionRegistry.register(workSessionsExtension)
-  extensionRegistry.register(claudeExtension)
+  extensionRegistry.register(aiCliExtension)
   extensionRegistry.register(fileExplorerExtension)
   extensionRegistry.register(terminalExtension)
   extensionRegistry.register(browserExtension)

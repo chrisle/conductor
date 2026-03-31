@@ -5,7 +5,7 @@ import TerminalTab from '../../terminal/TerminalTab'
 import Toggle from './Toggle'
 import { usePtyHandlers } from '../pty-handlers/usePtyHandlers'
 import { useSessionDetect } from '../contexts/useSessionDetect'
-import { useClaudeSettings } from '../contexts/useClaudeSettings'
+import { useClaudeCodeSettings } from '../contexts/useClaudeCodeSettings'
 import { buildClaudeCommand } from '../contexts/buildClaudeCommand'
 import { setAutoPilot as setAutoPilotWs } from '@/lib/terminal-api'
 import { useTabsStore } from '@/store/tabs'
@@ -17,8 +17,8 @@ function extractTicketKey(title: string): string | null {
   return match ? match[1] : null
 }
 
-export default function ClaudeTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
-  const settings = useClaudeSettings()
+export default function ClaudeCodeTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
+  const settings = useClaudeCodeSettings()
   const [autoPilot, setAutoPilot] = useState(tab.autoPilot ?? false)
   const [preventScreenClear, setPreventScreenClear] = useState(false)
   const [disableBackgroundTasks, setDisableBackgroundTasks] = useState(settings.disableBackgroundTasks)
@@ -113,7 +113,7 @@ export default function ClaudeTab({ tabId, groupId, isActive, tab }: TabProps): 
             title={sessionId}
             onClick={() => navigator.clipboard.writeText(sessionId)}
           >
-            Claude session: {sessionId.slice(0, 8)}
+            Session: {sessionId.slice(0, 8)}
           </span>
         </>
       )}

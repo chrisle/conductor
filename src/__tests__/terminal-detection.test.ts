@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { stripAnsi, isThinking, getThinkingState } from '../lib/terminal-detection'
-import { matchPrompt } from '../extensions/claude/pty-handlers/useAnswerYes'
+import { matchPrompt } from '../extensions/ai-cli/pty-handlers/useAnswerYes'
 
 describe('stripAnsi', () => {
   it('removes basic color codes', () => {

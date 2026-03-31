@@ -1,4 +1,4 @@
-import type { ClaudeSettings } from './useClaudeSettings'
+import type { ClaudeCodeSettings } from './useClaudeCodeSettings'
 
 /**
  * Rewrites a claude initialCommand to inject flags and env vars from settings.
@@ -15,7 +15,7 @@ import type { ClaudeSettings } from './useClaudeSettings'
  */
 export function buildClaudeCommand(
   command: string,
-  settings: Pick<ClaudeSettings, 'skipDangerousPermissions' | 'disableBackgroundTasks'>,
+  settings: Pick<ClaudeCodeSettings, 'skipDangerousPermissions' | 'disableBackgroundTasks'>,
 ): string {
   const envPrefix = settings.disableBackgroundTasks
     ? 'CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 '

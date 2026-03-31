@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildClaudeCommand } from '../extensions/claude/contexts/buildClaudeCommand'
+import { buildClaudeCommand } from '../extensions/ai-cli/contexts/buildClaudeCommand'
 
 const base = { skipDangerousPermissions: false, disableBackgroundTasks: false }
 

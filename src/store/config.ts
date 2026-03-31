@@ -13,7 +13,8 @@ interface ConfigState {
   // Convenience setters
   setZoom: (zoom: number) => Promise<void>
   setKanbanCompactColumns: (columns: string[]) => Promise<void>
-  setClaudeSettings: (patch: Partial<AppConfig['claude']>) => Promise<void>
+  setClaudeCodeSettings: (patch: Partial<AppConfig['aiCli']['claudeCode']>) => Promise<void>
+  setCodexSettings: (patch: Partial<AppConfig['aiCli']['codex']>) => Promise<void>
   setTerminalSettings: (patch: Partial<AppConfig['terminal']>) => Promise<void>
   setDisabledExtensions: (disabled: string[]) => Promise<void>
 
@@ -68,11 +69,24 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     await window.electronAPI.patchConfig({ ui: { kanbanCompactColumns: columns } })
   },
 
-  setClaudeSettings: async (patch) => {
+  setClaudeCodeSettings: async (patch) => {
     set(state => ({
-      config: { ...state.config, claude: { ...state.config.claude, ...patch } },
+      config: {
+        ...state.config,
+        aiCli: { ...state.config.aiCli, claudeCode: { ...state.config.aiCli.claudeCode, ...patch } },
+      },
     }))
-    await window.electronAPI.patchConfig({ claude: patch })
+    await window.electronAPI.patchConfig({ aiCli: { claudeCode: patch } } as any)
+  },
+
+  setCodexSettings: async (patch) => {
+    set(state => ({
+      config: {
+        ...state.config,
+        aiCli: { ...state.config.aiCli, codex: { ...state.config.aiCli.codex, ...patch } },
+      },
+    }))
+    await window.electronAPI.patchConfig({ aiCli: { codex: patch } } as any)
   },
 
   setTerminalSettings: async (patch) => {
@@ -137,7 +151,7 @@ function migrateFromLocalStorage(): AppConfig {
 
   try {
     const claude = localStorage.getItem('conductor:claude-settings')
-    if (claude) config.claude = { ...config.claude, ...JSON.parse(claude) }
+    if (claude) config.aiCli.claudeCode = { ...config.aiCli.claudeCode, ...JSON.parse(claude) }
   } catch {}
 
   try {

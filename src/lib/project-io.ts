@@ -44,7 +44,7 @@ export function serializeWorkspace(): Workspace {
           url: tab.url,
           content: tab.content,
         }
-        if ((tab.type === 'terminal' || tab.type === 'claude') && terminalBuffers.has(tab.id)) {
+        if ((tab.type === 'terminal' || tab.type === 'claude-code' || tab.type === 'codex') && terminalBuffers.has(tab.id)) {
           try {
             serialized.terminalHistory = terminalBuffers.get(tab.id)!()
           } catch {}
@@ -111,7 +111,7 @@ function restoreWorkspace(workspace: Workspace): void {
   // Clear current state
   for (const groupId of Object.keys(tabsStore.groups)) {
     for (const tab of tabsStore.groups[groupId].tabs) {
-      if (tab.type === 'terminal' || tab.type === 'claude') {
+      if (tab.type === 'terminal' || tab.type === 'claude-code' || tab.type === 'codex') {
         killTerminal(tab.id)
       }
     }
@@ -343,7 +343,7 @@ export async function switchWorkspace(workspaceName: string): Promise<boolean> {
     // Clear current state
     for (const groupId of Object.keys(tabsStore.groups)) {
       for (const tab of tabsStore.groups[groupId].tabs) {
-        if (tab.type === 'terminal' || tab.type === 'claude') {
+        if (tab.type === 'terminal' || tab.type === 'claude-code' || tab.type === 'codex') {
           killTerminal(tab.id)
         }
       }
@@ -392,7 +392,7 @@ export async function addWorkspace(workspaceName?: string): Promise<boolean> {
 
   for (const groupId of Object.keys(tabsStore.groups)) {
     for (const tab of tabsStore.groups[groupId].tabs) {
-      if (tab.type === 'terminal' || tab.type === 'claude') {
+      if (tab.type === 'terminal' || tab.type === 'claude-code' || tab.type === 'codex') {
         killTerminal(tab.id)
       }
     }

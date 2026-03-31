@@ -214,7 +214,7 @@ describe('useTabsStore', () => {
 
     it('updates isThinking and thinkingTime fields', () => {
       const groupId = useTabsStore.getState().createGroup()
-      const tabId = useTabsStore.getState().addTab(groupId, { type: 'claude', title: 'Claude' })
+      const tabId = useTabsStore.getState().addTab(groupId, { type: 'claude-code', title: 'Claude Code' })
 
       useTabsStore.getState().updateTab(groupId, tabId, { isThinking: true, thinkingTime: '4m 35s' })
 
@@ -225,7 +225,7 @@ describe('useTabsStore', () => {
 
     it('clears isThinking and thinkingTime when thinking stops', () => {
       const groupId = useTabsStore.getState().createGroup()
-      const tabId = useTabsStore.getState().addTab(groupId, { type: 'claude', title: 'Claude' })
+      const tabId = useTabsStore.getState().addTab(groupId, { type: 'claude-code', title: 'Claude Code' })
 
       useTabsStore.getState().updateTab(groupId, tabId, { isThinking: true, thinkingTime: '2m 10s' })
       useTabsStore.getState().updateTab(groupId, tabId, { isThinking: false, thinkingTime: undefined })

@@ -13,10 +13,15 @@ export interface AppConfig {
     kanbanCompactColumns: string[]
   }
   jiraConnections: JiraConnection[]
-  claude: {
-    skipDangerousPermissions: boolean
-    autoPilotScanMs: number
-    disableBackgroundTasks: boolean
+  aiCli: {
+    claudeCode: {
+      skipDangerousPermissions: boolean
+      autoPilotScanMs: number
+      disableBackgroundTasks: boolean
+    }
+    codex: {
+      autoPilotScanMs: number
+    }
   }
   terminal: {
     renderer: 'ghostty' | 'xterm'
@@ -33,10 +38,15 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     kanbanCompactColumns: [],
   },
   jiraConnections: [],
-  claude: {
-    skipDangerousPermissions: false,
-    autoPilotScanMs: 250,
-    disableBackgroundTasks: true,
+  aiCli: {
+    claudeCode: {
+      skipDangerousPermissions: false,
+      autoPilotScanMs: 250,
+      disableBackgroundTasks: true,
+    },
+    codex: {
+      autoPilotScanMs: 250,
+    },
   },
   terminal: {
     renderer: 'xterm',

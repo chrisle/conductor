@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { stripAnsi } from '@/lib/terminal-detection'
-import { useClaudeSettings } from '../contexts/useClaudeSettings'
 
 export function matchPrompt(text: string): string | null {
   if (/1\.?\s*Yes/s.test(text))              return '\r'
@@ -16,13 +15,13 @@ export function matchPrompt(text: string): string | null {
 }
 
 /**
- * Watches raw PTY data and auto-responds to Claude Code yes/no prompts.
+ * Watches raw PTY data and auto-responds to yes/no prompts.
  */
 export function useAnswerYes(
   enabled: boolean,
   write: ((data: string) => void) | null,
+  autoPilotScanMs: number,
 ) {
-  const { autoPilotScanMs } = useClaudeSettings()
   const enabledRef = useRef(enabled)
   const recentDataRef = useRef('')
   const lastResponseTimeRef = useRef(0)

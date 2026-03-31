@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { useThinkingDetect } from './index'
 
 /**
- * Composes all onPtyData handlers for a Claude tab into a single callback.
+ * Composes all onPtyData handlers for an AI CLI tab into a single callback.
  * Add new handlers to pty-handlers/ and wire them in here.
  *
  * Note: autopilot (auto-responding to yes/no prompts) is handled by conductord

@@ -1,28 +1,28 @@
 import { create } from 'zustand'
 import { useConfigStore } from '@/store/config'
 
-export interface ClaudeSettings {
+export interface ClaudeCodeSettings {
   skipDangerousPermissions: boolean
   autoPilotScanMs: number
   disableBackgroundTasks: boolean
 }
 
-const defaults: ClaudeSettings = {
+const defaults: ClaudeCodeSettings = {
   skipDangerousPermissions: false,
   autoPilotScanMs: 250,
   disableBackgroundTasks: true,
 }
 
-interface ClaudeSettingsStore extends ClaudeSettings {
-  update: (patch: Partial<ClaudeSettings>) => void
+interface ClaudeCodeSettingsStore extends ClaudeCodeSettings {
+  update: (patch: Partial<ClaudeCodeSettings>) => void
 }
 
-export const useClaudeSettings = create<ClaudeSettingsStore>((set) => ({
+export const useClaudeCodeSettings = create<ClaudeCodeSettingsStore>((set) => ({
   ...defaults,
   update: (patch) =>
     set((state) => {
       const next = { ...state, ...patch }
-      useConfigStore.getState().setClaudeSettings(patch)
+      useConfigStore.getState().setClaudeCodeSettings(patch)
       return next
     }),
 }))
@@ -30,6 +30,6 @@ export const useClaudeSettings = create<ClaudeSettingsStore>((set) => ({
 // Hydrate from config store once ready
 useConfigStore.subscribe((state) => {
   if (state.ready) {
-    useClaudeSettings.setState(state.config.claude)
+    useClaudeCodeSettings.setState(state.config.aiCli.claudeCode)
   }
 })

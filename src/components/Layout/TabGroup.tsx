@@ -317,8 +317,12 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [isFocused, group.activeTabId])
 
+  function isTerminalLike(type: string): boolean {
+    return type === 'terminal' || type === 'claude-code' || type === 'codex'
+  }
+
   function refreshTab(tab: Tab) {
-    if (tab.type === 'terminal' || tab.type === 'claude') {
+    if (isTerminalLike(tab.type)) {
       killTerminal(tab.id)
     }
     useTabsStore.getState().updateTab(groupId, tab.id, {
@@ -328,7 +332,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
 
   function closeTab(tabId: string) {
     const tab = group.tabs.find(t => t.id === tabId)
-    if (tab && (tab.type === 'terminal' || tab.type === 'claude')) {
+    if (tab && isTerminalLike(tab.type)) {
       killTerminal(tabId)
     }
     const groupTabs = group.tabs
@@ -463,7 +467,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
               </div>
               </ContextMenuTrigger>
               <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
-                {(tab.type === 'terminal' || tab.type === 'claude') && (
+                {isTerminalLike(tab.type) && (
                   <>
                     <ContextMenuItem
                       className="gap-2 text-xs cursor-pointer"
