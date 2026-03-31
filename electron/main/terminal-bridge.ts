@@ -2,25 +2,21 @@
  * Bridges renderer IPC to conductord terminal WebSocket connections
  * over a Unix domain socket.
  */
-import { ipcMain, BrowserWindow, app } from 'electron'
+import { ipcMain, WebContents, app } from 'electron'
 import WebSocket from 'ws'
 import { CONDUCTORD_SOCKET } from './conductord-client'
 
 interface TerminalSession {
   ws: WebSocket
   intentionalClose: boolean
+  webContents: WebContents
 }
 
 const sessions = new Map<string, TerminalSession>()
 const pendingConnections = new Map<string, Promise<{ isNew: boolean }>>()
 
-function getWindow(): BrowserWindow | null {
-  const wins = BrowserWindow.getAllWindows()
-  return wins.length > 0 ? wins[0] : null
-}
-
 export function registerTerminalBridge(): void {
-  ipcMain.handle('terminal:create', async (_event, id: string, cwd?: string) => {
+  ipcMain.handle('terminal:create', async (event, id: string, cwd?: string) => {
     // If already connected, close the stale WebSocket so we get a fresh
     // connection and let conductord decide whether the tmux session is new.
     if (sessions.has(id)) {
@@ -43,7 +39,11 @@ export function registerTerminalBridge(): void {
       const ws = new WebSocket(`ws+unix://${CONDUCTORD_SOCKET}:/ws/terminal?${params}`)
 
       let sessionResolved = false
-      const session: TerminalSession = { ws, intentionalClose: false }
+      const session: TerminalSession = {
+        ws,
+        intentionalClose: false,
+        webContents: event.sender,
+      }
 
       const resolveTimeout = setTimeout(() => {
         if (!sessionResolved) {
@@ -57,11 +57,13 @@ export function registerTerminalBridge(): void {
       })
 
       ws.on('message', (data: WebSocket.Data, isBinary: boolean) => {
-        if (!isBinary && typeof data !== 'object') {
-          // String message — JSON control
-          const str = data.toString()
+        // Convert to string — ws v8+ delivers both text and binary frames as Buffers
+        const text = Buffer.isBuffer(data) ? data.toString('utf-8') : String(data)
+
+        if (!isBinary) {
+          // Text frame — may be JSON control message
           try {
-            const msg = JSON.parse(str)
+            const msg = JSON.parse(text)
             if (msg.type === 'session') {
               if (!sessionResolved) {
                 sessionResolved = true
@@ -77,28 +79,19 @@ export function registerTerminalBridge(): void {
           } catch {
             // Not JSON — treat as terminal data
           }
-          const win = getWindow()
-          if (win && !win.isDestroyed()) {
-            win.webContents.send('terminal:data', id, str)
-          }
-          return
         }
 
-        // Binary data — terminal output
-        const buf = Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer)
-        const text = buf.toString('utf-8')
-        const win = getWindow()
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('terminal:data', id, text)
+        // Terminal output (binary frames, or non-JSON text frames)
+        if (!session.webContents.isDestroyed()) {
+          session.webContents.send('terminal:data', id, text)
         }
       })
 
       ws.on('close', () => {
         sessions.delete(id)
         if (!session.intentionalClose) {
-          const win = getWindow()
-          if (win && !win.isDestroyed()) {
-            win.webContents.send('terminal:exit', id)
+          if (!session.webContents.isDestroyed()) {
+            session.webContents.send('terminal:exit', id)
           }
         }
         if (!sessionResolved) {
