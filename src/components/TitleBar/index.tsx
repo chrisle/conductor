@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Minus, Square, X, Maximize2, ChevronDown, FolderOpen, Plus, Pencil, Trash2 } from 'lucide-react'
+import { Minus, Square, X, Maximize2, ChevronDown, FolderOpen, Plus, Pencil, Trash2, FilePlus2, Folder } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -18,6 +18,7 @@ import {
   saveProjectAs,
   openProjectDialog,
   openProject,
+  createNewProject,
   switchWorkspace,
   addWorkspace,
   deleteWorkspace,
@@ -34,12 +35,16 @@ type DialogMode =
   | { type: 'renameWorkspace'; name: string }
   | { type: 'deleteWorkspace'; name: string }
   | { type: 'renameProject' }
+  | { type: 'newProject' }
   | null
 
 export default function TitleBar(): React.ReactElement {
   const [isMaximized, setIsMaximized] = useState(false)
   const [dialog, setDialog] = useState<DialogMode>(null)
   const [inputValue, setInputValue] = useState('')
+  const [newProjectName, setNewProjectName] = useState('')
+  const [newProjectDir, setNewProjectDir] = useState('')
+  const [newProjectError, setNewProjectError] = useState('')
   const { activeExtensionId, toggleExtension } = useActivityBarStore()
   const projectName = useProjectStore(s => s.name)
   const activeWorkspace = useProjectStore(s => s.activeWorkspace)
@@ -174,6 +179,10 @@ export default function TitleBar(): React.ReactElement {
                   <DropdownMenuItem onSelect={() => { setInputValue(projectName); setDialog({ type: 'renameProject' }) }} className="text-xs">
                     <Pencil className="w-3 h-3 mr-2 text-zinc-500" />
                     Rename Project
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => { setNewProjectName(''); setNewProjectDir(''); setNewProjectError(''); setDialog({ type: 'newProject' }) }} className="text-xs">
+                    <FilePlus2 className="w-3 h-3 mr-2 text-zinc-500" />
+                    New Project...
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   {otherProjects.length > 0 && (
@@ -381,6 +390,60 @@ export default function TitleBar(): React.ReactElement {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* New Project dialog */}
+      <Dialog open={dialog?.type === 'newProject'} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent className="bg-zinc-900 border-zinc-700 max-w-sm" hideClose>
+          <VisuallyHidden><DialogTitle>New Project</DialogTitle></VisuallyHidden>
+          <div className="space-y-4">
+            <div className="text-sm text-zinc-300 font-medium">New Project</div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] text-zinc-500 uppercase tracking-wider">Name</label>
+              <input
+                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-500 placeholder-zinc-500"
+                placeholder="my-project" value={newProjectName}
+                onChange={e => { setNewProjectName(e.target.value); setNewProjectError('') }}
+                onKeyDown={e => { if (e.key === 'Enter') handleCreateProject(); if (e.key === 'Escape') setDialog(null) }}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] text-zinc-500 uppercase tracking-wider">Directory</label>
+              <div className="flex gap-2">
+                <div className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-400 truncate min-w-0">
+                  {newProjectDir ? newProjectDir.replace(/^\/Users\/[^/]+/, '~') : 'Select a directory...'}
+                </div>
+                <Button variant="ghost" className="shrink-0 text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-700" onClick={async () => {
+                  const dir = await window.electronAPI.selectDirectory()
+                  if (dir) setNewProjectDir(dir)
+                }}>
+                  <Folder className="w-3.5 h-3.5 mr-1.5" />
+                  Browse
+                </Button>
+              </div>
+            </div>
+            {newProjectError && <div className="text-xs text-red-400">{newProjectError}</div>}
+            {newProjectName.trim() && newProjectDir && (
+              <div className="text-[11px] text-zinc-500">
+                Creates <span className="text-zinc-300">{newProjectDir.replace(/^\/Users\/[^/]+/, '~')}/{newProjectName.trim()}.conductor</span>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" className="text-xs text-zinc-400 hover:text-zinc-200" onClick={() => setDialog(null)}>Cancel</Button>
+            <Button className="text-xs bg-zinc-700 hover:bg-zinc-600 text-zinc-200" onClick={handleCreateProject}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </TooltipProvider>
   )
+
+  async function handleCreateProject() {
+    const trimmed = newProjectName.trim()
+    if (!trimmed) { setNewProjectError('Name is required'); return }
+    if (/[/\\:*?"<>|]/.test(trimmed)) { setNewProjectError('Invalid characters in name'); return }
+    if (!newProjectDir) { setNewProjectError('Select a directory'); return }
+    const success = await createNewProject(trimmed, newProjectDir)
+    if (!success) { setNewProjectError('Failed to create project'); return }
+    setDialog(null)
+  }
 }
