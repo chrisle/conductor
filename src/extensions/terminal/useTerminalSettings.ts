@@ -8,7 +8,7 @@ export interface TerminalSettings {
 }
 
 const defaults: TerminalSettings = {
-  renderer: 'ghostty',
+  renderer: 'xterm',
 }
 
 interface TerminalSettingsStore extends TerminalSettings {

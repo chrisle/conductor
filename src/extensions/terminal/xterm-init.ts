@@ -11,7 +11,25 @@ function injectXtermStyles() {
   if (styleInjected) return
   styleInjected = true
   const style = document.createElement('style')
-  style.textContent = `.xterm { height: 100%; } .xterm-viewport { background-color: transparent !important; }`
+  style.textContent = `
+    .xterm {
+      height: 100%;
+      letter-spacing: normal !important;
+      line-height: normal !important;
+    }
+    .xterm * {
+      letter-spacing: normal !important;
+    }
+    .xterm .xterm-char-measure-element,
+    .xterm .xterm-rows,
+    .xterm .xterm-helper-textarea {
+      letter-spacing: normal !important;
+      line-height: normal !important;
+    }
+    .xterm-viewport {
+      background-color: transparent !important;
+    }
+  `
   document.head.appendChild(style)
 }
 

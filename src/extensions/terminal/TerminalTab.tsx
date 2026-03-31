@@ -39,6 +39,9 @@ export default function TerminalTab({
   const onPtyDataRef = useRef(onPtyData);
   const watchLastMatchRef = useRef<Map<string, string>>(new Map());
   const watchLastFireRef = useRef<Map<string, number>>(new Map());
+  const pendingDataRef = useRef<string[]>([]);
+  const pendingExitRef = useRef(false);
+  const mountGenerationRef = useRef(0);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error' | null>('connecting');
@@ -111,23 +114,132 @@ export default function TerminalTab({
     }
   }
 
+  function writePtyData(term: any, data: string) {
+    const afterWrite = () => {
+      if (!userScrolledUpRef.current) {
+        term.scrollToBottom();
+      }
+    };
+
+    // xterm.js supports a callback that fires once the chunk has been parsed.
+    // Use it so we scroll after the buffer has actually advanced, not before.
+    if (typeof term.write === "function" && term.write.length >= 2) {
+      term.write(data, afterWrite);
+      return;
+    }
+
+    term.write(data);
+    requestAnimationFrame(afterWrite);
+  }
+
   // --- Terminal lifecycle ---
   useEffect(() => {
     if (!containerRef.current || isCreatedRef.current) return;
     isCreatedRef.current = true;
 
+    const containerEl = containerRef.current;
+    const mountGeneration = ++mountGenerationRef.current;
     let disposed = false;
+    const cleanupRef = { current: () => {} };
 
     const createTerminal = renderer === 'xterm' ? createXtermTerminal : createGhosttyTerminal;
+    const clearContainer = () => {
+      if (mountGenerationRef.current !== mountGeneration) return;
+      containerEl.replaceChildren();
+      containerEl.style.visibility = "visible";
+    };
 
-    createTerminal(containerRef.current).then(({ term, fitAddon }) => {
-      if (disposed) return;
+    const flushPendingData = () => {
+      const term = terminalRef.current;
+      if (!term || pendingDataRef.current.length === 0) return;
+
+      if (needsRefitAfterFirstData) {
+        needsRefitAfterFirstData = false;
+        setTimeout(() => doFit(), 100);
+      }
+
+      const chunks = pendingDataRef.current;
+      pendingDataRef.current = [];
+      for (let data of chunks) {
+        if (preventScreenClearRef.current) {
+          data = data
+            .replace(/\x1b\[2J/g, "")
+            .replace(/\x1b\[3J/g, "")
+            .replace(/\x1bc/g, "");
+          if (!data) continue;
+        }
+        writePtyData(term, data);
+        onPtyDataRef.current?.(data);
+      }
+    };
+
+    const handleTerminalData = (_event: any, id: string, data: string) => {
+      if (id !== tabId || disposed) return;
+
+      const term = terminalRef.current;
+      if (!term) {
+        pendingDataRef.current.push(data);
+        return;
+      }
+
+      if (needsRefitAfterFirstData) {
+        needsRefitAfterFirstData = false;
+        setTimeout(() => doFit(), 100);
+      }
+
+      if (preventScreenClearRef.current) {
+        data = data
+          .replace(/\x1b\[2J/g, "")
+          .replace(/\x1b\[3J/g, "")
+          .replace(/\x1bc/g, "");
+        if (!data) return;
+      }
+
+      writePtyData(term, data);
+
+      // Notify parent extension of raw PTY data
+      onPtyDataRef.current?.(data);
+    };
+
+    const handleTerminalExit = (_event: any, id: string) => {
+      if (id !== tabId || disposed) return;
+
+      const term = terminalRef.current;
+      if (!term) {
+        pendingExitRef.current = true;
+        return;
+      }
+
+      term.writeln("\r\n\x1b[90m[Process exited]\x1b[0m");
+    };
+
+    termAPI.onTerminalData(handleTerminalData);
+    termAPI.onTerminalExit(handleTerminalExit);
+    cleanupRef.current = () => {
+      termAPI.offTerminalData(handleTerminalData);
+      termAPI.offTerminalExit(handleTerminalExit);
+      clearContainer();
+    };
+
+    let needsRefitAfterFirstData = true;
+
+    clearContainer();
+    createTerminal(containerEl).then(({ term, fitAddon }) => {
+      if (disposed) {
+        term.dispose();
+        return;
+      }
 
       terminalRef.current = term;
       fitAddonRef.current = fitAddon;
+      flushPendingData();
+      if (pendingExitRef.current) {
+        pendingExitRef.current = false;
+        term.writeln("\r\n\x1b[90m[Process exited]\x1b[0m");
+      }
 
       // Hide container until PTY is ready to avoid stale buffer flash
-      containerRef.current!.style.visibility = "hidden";
+      containerEl.style.visibility = "hidden";
 
       setTimeout(() => {
         doFit();
@@ -141,9 +253,7 @@ export default function TerminalTab({
           // Apply tmux mouse setting from resolved project/workspace config
           termAPI.setTmuxOption(tabId, 'mouse', resolvedSettings.terminal.tmuxMouse ? 'on' : 'off');
           // Show the terminal now that the PTY is connected and focus it
-          if (containerRef.current) {
-            containerRef.current.style.visibility = "visible";
-          }
+          containerEl.style.visibility = "visible";
           term.focus();
           // Re-fit after the container is visible to ensure tmux gets
           // the correct dimensions (especially on reattach).
@@ -182,9 +292,7 @@ export default function TerminalTab({
         }).catch((err) => {
           console.error(`[terminal] failed to create session ${tabId}:`, err);
           setConnectionStatus('error');
-          if (containerRef.current) {
-            containerRef.current.style.visibility = "visible";
-          }
+          containerEl.style.visibility = "visible";
         });
       }, 50);
 
@@ -222,46 +330,6 @@ export default function TerminalTab({
       };
       el?.addEventListener("wheel", onWheel);
 
-      let needsRefitAfterFirstData = true;
-
-      const handleTerminalData = (_event: any, id: string, data: string) => {
-        if (id !== tabId || disposed) return;
-
-        if (needsRefitAfterFirstData) {
-          needsRefitAfterFirstData = false;
-          setTimeout(() => doFit(), 100);
-        }
-
-        if (preventScreenClearRef.current) {
-          data = data
-            .replace(/\x1b\[2J/g, "")
-            .replace(/\x1b\[3J/g, "")
-            .replace(/\x1bc/g, "");
-          if (!data) return;
-        }
-
-        // Snapshot viewport position before write — term.write() can
-        // move the viewport on its own in some cases.
-        const buf = term.buffer.active;
-        const wasAtBottom = buf.viewportY >= buf.baseY;
-
-        term.write(data);
-
-        if (!userScrolledUpRef.current && wasAtBottom) {
-          term.scrollToBottom();
-        }
-
-        // Notify parent extension of raw PTY data
-        onPtyDataRef.current?.(data);
-      };
-
-      const handleTerminalExit = (_event: any, id: string) => {
-        if (id === tabId) term.writeln("\r\n\x1b[90m[Process exited]\x1b[0m");
-      };
-
-      termAPI.onTerminalData(handleTerminalData);
-      termAPI.onTerminalExit(handleTerminalExit);
-
       let resizeTimer: ReturnType<typeof setTimeout> | null = null;
       const scheduleRefit = () => {
         if (resizeTimer) clearTimeout(resizeTimer);
@@ -292,10 +360,15 @@ export default function TerminalTab({
         watchLastMatchRef.current.clear();
         watchLastFireRef.current.clear();
         term.dispose();
+        clearContainer();
       };
+    }).catch((err) => {
+      termAPI.offTerminalData(handleTerminalData);
+      termAPI.offTerminalExit(handleTerminalExit);
+      clearContainer();
+      console.error(`[terminal] failed to initialize renderer for ${tabId}:`, err);
+      setConnectionStatus('error');
     });
-
-    const cleanupRef = { current: () => {} };
 
     return () => {
       disposed = true;
