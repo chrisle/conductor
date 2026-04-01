@@ -41,6 +41,12 @@ Object.defineProperty(window, 'electronAPI', {
     setTicketBinding: vi.fn().mockResolvedValue(undefined),
     getAllTicketBindings: vi.fn().mockResolvedValue({}),
     removeTicketBinding: vi.fn().mockResolvedValue(undefined),
+    loadRecentProjects: vi.fn().mockResolvedValue([]),
+    saveRecentProjects: vi.fn().mockResolvedValue(undefined),
+    listClaudeSessions: vi.fn().mockResolvedValue([]),
+    setAutoPilot: vi.fn(),
+    setTmuxOption: vi.fn(),
+    capturePane: vi.fn().mockResolvedValue(null),
   },
   writable: true
 })
