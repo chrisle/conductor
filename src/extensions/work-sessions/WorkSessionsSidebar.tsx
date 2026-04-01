@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowDownAZ, ArrowUpDown, ChevronDown, ChevronRight, Clock, ExternalLink, FolderPlus, GitBranch, GripVertical, LayoutGrid, Link, Pencil, Square, Trash2, X } from 'lucide-react'
+import { ArrowDownAZ, ArrowUpDown, Bot, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, Folder, FolderPlus, GitBranch, GripVertical, Hand, Hash, LayoutGrid, Link, Pencil, Square, Terminal, Trash2, X } from 'lucide-react'
 import {
   Tooltip,
   TooltipContent,
@@ -15,6 +15,13 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import SidebarLayout from '@/components/Sidebar/SidebarLayout'
 import { getSessionTitle, setSessionTitle, clearSessionTitle } from '@/lib/session-titles'
 import { useWorkSessionsStore } from '@/store/work-sessions'
@@ -22,6 +29,7 @@ import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore, type LayoutNode } from '@/store/layout'
 import { useProjectStore, type SessionGroup, type SessionSortOrder } from '@/store/project'
 import type { WorkSession } from '@/types/work-session'
+import { useSessionInfoRegistry, type SessionInfoContext } from './session-info-registry'
 
 // ── Types ──────────────────────────────────────────────
 
@@ -73,22 +81,33 @@ function sessionLabel(tmux: TmuxSession): string {
   return base ? `shell · ${base}` : tmux.name
 }
 
-const SORT_CYCLE: SessionSortOrder[] = ['created', 'alpha', 'activity', 'attached']
+const SORT_CYCLE: SessionSortOrder[] = ['none', 'created', 'alpha', 'activity', 'attached']
 const SORT_LABELS: Record<SessionSortOrder, string> = {
+  none: 'Manual',
   created: 'Created',
   alpha: 'A–Z',
   activity: 'Last active',
   attached: 'Attached',
 }
 const SORT_ICONS: Record<SessionSortOrder, typeof ArrowUpDown> = {
+  none: Hand,
   created: ArrowUpDown,
   alpha: ArrowDownAZ,
   activity: Clock,
   attached: Link,
 }
 
-function sortSessions(sessions: EnrichedSession[], order: SessionSortOrder): EnrichedSession[] {
-  if (order === 'created') return sessions // tmux returns in creation order
+function sortSessions(
+  sessions: EnrichedSession[],
+  order: SessionSortOrder,
+  groupSessionIds?: string[],
+): EnrichedSession[] {
+  if (order === 'none' && groupSessionIds) {
+    // Respect the manual order from the group's sessionIds array
+    const posMap = new Map(groupSessionIds.map((id, i) => [id, i]))
+    return [...sessions].sort((a, b) => (posMap.get(a.tmux.name) ?? 999) - (posMap.get(b.tmux.name) ?? 999))
+  }
+  if (order === 'none' || order === 'created') return sessions
   const sorted = [...sessions]
   if (order === 'alpha') {
     sorted.sort((a, b) => sessionLabel(a.tmux).localeCompare(sessionLabel(b.tmux)))
@@ -225,24 +244,24 @@ function tileSessions(sessions: EnrichedSession[]) {
 
 function TmuxRow({
   session,
-  onAction,
   isSelected,
+  selectedIds,
   onRowClick,
-  currentGroupId,
+  onDragStateChange,
 }: {
   session: EnrichedSession
-  onAction: () => void
   isSelected: boolean
+  selectedIds: Set<string>
   onRowClick: (name: string, e: React.MouseEvent) => void
-  currentGroupId: string | null
+  onDragStateChange: (dragging: boolean) => void
 }) {
   const { addTab } = useTabsStore()
   const { focusedGroupId } = useLayoutStore()
-  const sessionsStore = useWorkSessionsStore.getState()
   const groups = useTabsStore(s => s.groups)
-  const sessionGroups = useProjectStore(s => s.sessionGroups)
 
   const [isExpanded, setIsExpanded] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const infoProviders = useSessionInfoRegistry(s => s.providers)
 
   const openTab = (() => {
     for (const [gid, group] of Object.entries(groups)) {
@@ -252,7 +271,7 @@ function TmuxRow({
     return null
   })()
 
-  const label = openTab ? openTab.tab.title : sessionLabel(session.tmux)
+  const label = (openTab?.tab.title) || sessionLabel(session.tmux)
   const isThinking = openTab?.tab.isThinking ?? false
   const thinkingTime = openTab?.tab.thinkingTime
 
@@ -310,70 +329,66 @@ function TmuxRow({
     })
   }
 
-  const closeOpenTab = (sessionName: string) => {
-    const groups = useTabsStore.getState().groups
-    for (const [groupId, group] of Object.entries(groups)) {
-      if (group.tabs.some(t => t.id === sessionName)) {
-        useTabsStore.getState().removeTab(groupId, sessionName)
-        break
-      }
-    }
-  }
+  const status: { label: string; color: string } = isThinking
+    ? { label: 'Thinking', color: 'text-blue-400' }
+    : session.hasOpenTab
+      ? { label: 'Idle', color: 'text-green-400' }
+      : { label: 'Detached', color: 'text-amber-400' }
 
-  const killTmux = async () => {
-    await window.electronAPI.conductordKillTmuxSession(session.tmux.name)
-    clearSessionTitle(session.tmux.name)
-    if (session.workSession && session.workSession.status === 'active') {
-      await sessionsStore.completeSession(session.workSession.id)
-    }
-    if (currentGroupId) {
-      useProjectStore.getState().removeSessionFromGroup(currentGroupId, session.tmux.name)
-    }
-    closeOpenTab(session.tmux.name)
-    onAction()
-  }
-
-  const deleteSession = async () => {
-    await window.electronAPI.conductordKillTmuxSession(session.tmux.name)
-    clearSessionTitle(session.tmux.name)
-    if (session.workSession) {
-      await sessionsStore.deleteSession(session.workSession.id)
-    }
-    if (currentGroupId) {
-      useProjectStore.getState().removeSessionFromGroup(currentGroupId, session.tmux.name)
-    }
-    closeOpenTab(session.tmux.name)
-    onAction()
-  }
-
-  const cwdShort = (() => {
-    const parts = session.tmux.cwd.split('/').filter(Boolean)
-    return parts.length > 2 ? `.../${parts.slice(-2).join('/')}` : session.tmux.cwd
+  const sessionType: { label: string; color: string } = (() => {
+    const cmd = session.tmux.command.toLowerCase()
+    if (cmd === 'claude' || session.tmux.name.startsWith('claude-code-'))
+      return { label: 'Claude Code', color: 'text-orange-300' }
+    if (cmd === 'codex' || session.tmux.name.startsWith('codex-'))
+      return { label: 'Codex', color: 'text-emerald-300' }
+    if (cmd === 'zsh') return { label: 'Shell (zsh)', color: 'text-zinc-300' }
+    if (cmd === 'bash') return { label: 'Shell (bash)', color: 'text-zinc-300' }
+    if (cmd === 'fish') return { label: 'Shell (fish)', color: 'text-zinc-300' }
+    if (cmd) return { label: cmd, color: 'text-zinc-300' }
+    return { label: 'Unknown', color: 'text-zinc-500' }
   })()
 
+  const copyToClipboard = (text: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    navigator.clipboard.writeText(text)
+  }
+
   return (
-    <ContextMenu>
-      <ContextMenuTrigger>
-        <div>
-          <div
+    <div>
+      <div
+        draggable
             onClick={e => onRowClick(session.tmux.name, e)}
-            className={`group flex items-center gap-1 rounded px-1 py-1.5 cursor-pointer transition-colors ${
-              isSelected
-                ? 'bg-indigo-900/30 ring-1 ring-indigo-500/50'
-                : 'hover:bg-zinc-800/50'
+            onDragStart={e => {
+              const names = isSelected && selectedIds.size > 1
+                ? [...selectedIds]
+                : [session.tmux.name]
+              e.dataTransfer.setData('__dragging_session__', session.tmux.name)
+              e.dataTransfer.setData('__dragging_sessions__', JSON.stringify(names))
+              e.dataTransfer.effectAllowed = 'move'
+              // Custom drag image
+              const ghost = document.createElement('div')
+              ghost.textContent = names.length > 1 ? `${names.length} sessions` : label
+              ghost.style.cssText = 'position:fixed;top:-1000px;padding:4px 10px;border-radius:6px;background:#27272a;color:#e4e4e7;font-size:11px;font-weight:500;white-space:nowrap;border:1px solid #3f3f46;box-shadow:0 4px 12px rgba(0,0,0,0.4);'
+              document.body.appendChild(ghost)
+              e.dataTransfer.setDragImage(ghost, 0, 0)
+              setTimeout(() => document.body.removeChild(ghost), 0)
+              setIsDragging(true)
+              onDragStateChange(true)
+            }}
+            onDragEnd={() => {
+              setIsDragging(false)
+              onDragStateChange(false)
+            }}
+            className={`group flex items-center gap-1 rounded px-1 py-1.5 cursor-pointer transition-all ${
+              isDragging
+                ? 'opacity-30'
+                : isSelected
+                  ? 'bg-indigo-900/30 ring-1 ring-indigo-500/50'
+                  : 'hover:bg-zinc-800/50'
             }`}
           >
-            {/* Drag handle */}
-            <div
-              draggable
-              onDragStart={e => {
-                e.stopPropagation()
-                e.dataTransfer.setData('__dragging_session__', session.tmux.name)
-                e.dataTransfer.effectAllowed = 'move'
-              }}
-              onClick={e => e.stopPropagation()}
-              className="shrink-0 cursor-grab text-zinc-700 hover:text-zinc-500 transition-colors active:cursor-grabbing"
-            >
+            {/* Drag handle (visual affordance) */}
+            <div className="shrink-0 cursor-grab text-zinc-500 hover:text-zinc-300 transition-colors active:cursor-grabbing">
               <GripVertical className="w-3 h-3" />
             </div>
 
@@ -390,7 +405,7 @@ function TmuxRow({
             {isRenaming ? (
               <input
                 ref={renameInputRef}
-                className="text-xs flex-1 min-w-0 bg-transparent border border-zinc-600 rounded px-1 py-0.5 outline-none text-zinc-100"
+                className="text-ui-base flex-1 min-w-0 bg-transparent border border-zinc-600 rounded px-1 py-0.5 outline-none text-zinc-100"
                 value={renameValue}
                 onChange={e => setRenameValue(e.target.value)}
                 onKeyDown={e => {
@@ -406,10 +421,10 @@ function TmuxRow({
                 className={`flex items-center min-w-0 flex-1 ${isThinking ? 'text-shimmer' : ''}`}
                 onDoubleClick={e => { e.stopPropagation(); startRename() }}
               >
-                <span className={`text-xs font-medium truncate min-w-0 flex-1 ${isThinking ? '' : 'text-zinc-300'}`}>
+                <span className={`text-ui-base font-medium truncate min-w-0 flex-1 ${isThinking ? '' : 'text-zinc-200'}`}>
                   {label}
                 </span>
-                <span className={`text-[10px] shrink-0 ml-1.5 ${isThinking ? '' : 'text-zinc-600'}`}>
+                <span className={`text-ui-xs shrink-0 ml-1.5 ${isThinking ? '' : 'text-zinc-500'}`}>
                   {isThinking ? (thinkingTime || 'thinking') : relativeTime(session.tmux.activity)}
                 </span>
               </span>
@@ -418,8 +433,7 @@ function TmuxRow({
             {/* Expand chevron */}
             <button
               onClick={e => { e.stopPropagation(); setIsExpanded(!isExpanded) }}
-              className="shrink-0 p-0.5 rounded text-zinc-700 hover:text-zinc-400 transition-colors opacity-0 group-hover:opacity-100"
-              style={isExpanded ? { opacity: 1 } : undefined}
+              className="shrink-0 p-0.5 rounded text-zinc-500 hover:text-zinc-200 transition-colors"
             >
               {isExpanded
                 ? <ChevronDown className="w-3 h-3" />
@@ -432,7 +446,7 @@ function TmuxRow({
               <TooltipTrigger asChild>
                 <button
                   onClick={openInTab}
-                  className="shrink-0 p-0.5 rounded text-zinc-700 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100"
+                  className="shrink-0 p-0.5 rounded text-zinc-500 hover:text-zinc-200 transition-colors"
                 >
                   <ExternalLink className="w-3 h-3" />
                 </button>
@@ -443,75 +457,91 @@ function TmuxRow({
 
           {/* Expanded details */}
           {isExpanded && (
-            <div className="ml-7 mr-2 mb-1 py-1 px-2 rounded bg-zinc-800/50 text-[10px] text-zinc-500 space-y-0.5">
-              <div className="flex items-center gap-1 truncate">
-                <span className="text-zinc-600">cwd</span>
-                <span className="text-zinc-400 truncate">{cwdShort}</span>
+            <div className="ml-5 mr-1 mb-1.5 mt-0.5 py-1.5 px-2.5 rounded-md bg-zinc-800/60 border border-zinc-700/40 text-ui-xs">
+              {/* Type + status row */}
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className={`font-medium ${sessionType.color}`}>{sessionType.label}</span>
+                <span className="text-zinc-600">·</span>
+                <span className={`font-medium ${status.color}`}>{status.label}</span>
+                <div className="flex-1" />
+                <span className="text-zinc-500">
+                  {relativeTime(session.tmux.activity)}
+                </span>
               </div>
-              {session.workSession?.worktree?.branch && (
-                <div className="flex items-center gap-1 truncate">
-                  <GitBranch className="w-2.5 h-2.5 text-zinc-600 shrink-0" />
-                  <span className="text-zinc-400 truncate">{session.workSession.worktree.branch}</span>
+
+              <div className="border-t border-zinc-700/30 pt-1.5 space-y-1">
+                {/* Directory */}
+                <div className="group/row flex items-center gap-1.5">
+                  <Folder className="w-3 h-3 text-zinc-500 shrink-0" />
+                  <span className="text-zinc-300 truncate flex-1">{session.tmux.cwd}</span>
+                  <button onClick={e => copyToClipboard(session.tmux.cwd, e)} className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover/row:opacity-100">
+                    <Copy className="w-2.5 h-2.5" />
+                  </button>
                 </div>
-              )}
-              <div className="flex items-center gap-2">
-                <span><span className="text-zinc-600">created</span> {relativeTime(session.tmux.created)}</span>
-                <span><span className="text-zinc-600">active</span> {relativeTime(session.tmux.activity)}</span>
+
+                {/* Branch */}
+                {session.workSession?.worktree?.branch && (
+                  <div className="group/row flex items-center gap-1.5">
+                    <GitBranch className="w-3 h-3 text-zinc-500 shrink-0" />
+                    <span className="text-zinc-300 truncate flex-1">{session.workSession.worktree.branch}</span>
+                    <span className="text-zinc-600 shrink-0">from {session.workSession.worktree.baseBranch}</span>
+                  </div>
+                )}
+
+                {/* Tmux session name */}
+                <div className="group/row flex items-center gap-1.5">
+                  <Terminal className="w-3 h-3 text-zinc-500 shrink-0" />
+                  <span className="text-zinc-400 truncate flex-1 font-mono">{session.tmux.name}</span>
+                  <button onClick={e => copyToClipboard(session.tmux.name, e)} className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover/row:opacity-100">
+                    <Copy className="w-2.5 h-2.5" />
+                  </button>
+                </div>
+
+                {/* Claude session ID */}
+                {session.workSession?.claudeSessionId && (
+                  <div className="group/row flex items-center gap-1.5">
+                    <Bot className="w-3 h-3 text-zinc-500 shrink-0" />
+                    <span className="text-zinc-400 truncate flex-1 font-mono">{session.workSession.claudeSessionId}</span>
+                    <button onClick={e => copyToClipboard(session.workSession!.claudeSessionId!, e)} className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover/row:opacity-100">
+                      <Copy className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Ticket key */}
+                {session.workSession?.ticketKey && (
+                  <div className="flex items-center gap-1.5">
+                    <Hash className="w-3 h-3 text-zinc-500 shrink-0" />
+                    <span className="text-zinc-300">{session.workSession.ticketKey}</span>
+                  </div>
+                )}
+
+                {/* Autopilot indicator */}
+                {openTab?.tab.autoPilot && (
+                  <div className="flex items-center gap-1.5">
+                    <Bot className="w-3 h-3 text-indigo-400 shrink-0" />
+                    <span className="text-indigo-400 font-medium">Autopilot</span>
+                  </div>
+                )}
+
+                {/* Extension-provided rows */}
+                {infoProviders.map(p => {
+                  const ctx: SessionInfoContext = {
+                    tmuxName: session.tmux.name,
+                    cwd: session.tmux.cwd,
+                    command: session.tmux.command,
+                    connected: session.tmux.connected,
+                    hasOpenTab: session.hasOpenTab,
+                    isThinking,
+                    workSession: session.workSession,
+                  }
+                  const node = p.render(ctx)
+                  return node ? <React.Fragment key={p.id}>{node}</React.Fragment> : null
+                })}
               </div>
-              <div className="text-zinc-600 truncate">{session.tmux.name}</div>
             </div>
           )}
-        </div>
-      </ContextMenuTrigger>
-      <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
-        <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={startRename}>
-          <Pencil className="w-3.5 h-3.5" />
-          Rename
-        </ContextMenuItem>
-        <ContextMenuSeparator className="bg-zinc-700" />
-        {/* Move to group submenu */}
-        <ContextMenuSub>
-          <ContextMenuSubTrigger className="gap-2 text-xs cursor-pointer">Move to group</ContextMenuSubTrigger>
-          <ContextMenuSubContent className="bg-zinc-900 border-zinc-700">
-            {sessionGroups.map(g => (
-              <ContextMenuItem
-                key={g.id}
-                className="text-xs cursor-pointer"
-                disabled={g.id === currentGroupId}
-                onSelect={() => useProjectStore.getState().addSessionsToGroup(g.id, [session.tmux.name])}
-              >
-                {g.name}
-              </ContextMenuItem>
-            ))}
-            {sessionGroups.length > 0 && <ContextMenuSeparator className="bg-zinc-700" />}
-            <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={() => {
-              useProjectStore.getState().addSessionGroup('New Group', [session.tmux.name])
-            }}>
-              <FolderPlus className="w-3.5 h-3.5" />
-              New group...
-            </ContextMenuItem>
-          </ContextMenuSubContent>
-        </ContextMenuSub>
-        {currentGroupId && (
-          <ContextMenuItem className="text-xs cursor-pointer" onSelect={() => {
-            useProjectStore.getState().removeSessionFromGroup(currentGroupId, session.tmux.name)
-          }}>
-            Remove from group
-          </ContextMenuItem>
-        )}
-        <ContextMenuSeparator className="bg-zinc-700" />
-        <ContextMenuItem onSelect={killTmux} className="gap-2 text-xs cursor-pointer text-red-400 focus:text-red-300">
-          <Square className="w-3.5 h-3.5" />
-          Kill session
-        </ContextMenuItem>
-        {session.workSession && (
-          <ContextMenuItem onSelect={deleteSession} className="gap-2 text-xs cursor-pointer text-red-400 focus:text-red-300">
-            <Trash2 className="w-3.5 h-3.5" />
-            Kill &amp; delete record
-          </ContextMenuItem>
-        )}
-      </ContextMenuContent>
-    </ContextMenu>
+    </div>
   )
 }
 
@@ -541,13 +571,13 @@ function OrphanedWorkSessionRow({
           <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-red-400/60" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <span className="text-xs font-medium text-zinc-400">{session.ticketKey}</span>
-              <span className="text-[10px] text-red-400/70">tmux dead</span>
+              <span className="text-ui-base font-medium text-zinc-400">{session.ticketKey}</span>
+              <span className="text-ui-xs text-red-400/70">tmux dead</span>
             </div>
             {session.worktree?.branch && (
               <div className="flex items-center gap-1 mt-0.5">
                 <GitBranch className="w-2.5 h-2.5 text-zinc-600" />
-                <span className="text-[10px] text-zinc-500 truncate">{session.worktree.branch}</span>
+                <span className="text-ui-xs text-zinc-500 truncate">{session.worktree.branch}</span>
               </div>
             )}
           </div>
@@ -579,11 +609,11 @@ function OrphanedWorkSessionRow({
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
-        <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={handleComplete}>
+        <ContextMenuItem className="gap-2 text-ui-base cursor-pointer" onSelect={handleComplete}>
           <Square className="w-3.5 h-3.5" />
           Mark completed
         </ContextMenuItem>
-        <ContextMenuItem onSelect={handleDelete} className="gap-2 text-xs cursor-pointer text-red-400 focus:text-red-300">
+        <ContextMenuItem onSelect={handleDelete} className="gap-2 text-ui-base cursor-pointer text-red-400 focus:text-red-300">
           <Trash2 className="w-3.5 h-3.5" />
           Delete record
         </ContextMenuItem>
@@ -599,6 +629,9 @@ function SessionGroupSection({
   sessions,
   selectedIds,
   onRowClick,
+  onDragStateChange,
+  isDraggingActive,
+  isManualSort,
   onRefresh,
   sessionToGroup,
 }: {
@@ -606,6 +639,9 @@ function SessionGroupSection({
   sessions: EnrichedSession[]
   selectedIds: Set<string>
   onRowClick: (name: string, e: React.MouseEvent) => void
+  onDragStateChange: (dragging: boolean) => void
+  isDraggingActive: boolean
+  isManualSort: boolean
   onRefresh: () => void
   sessionToGroup: Map<string, string>
 }) {
@@ -637,33 +673,110 @@ function SessionGroupSection({
   }
 
   const [isDragOver, setIsDragOver] = useState(false)
+  const [dropInsertIdx, setDropInsertIdx] = useState<number | null>(null)
+  const rowsRef = useRef<HTMLDivElement>(null)
+
+  // Clear drop indicator when drag ends globally
+  useEffect(() => {
+    if (!isDraggingActive) {
+      setDropInsertIdx(null)
+      setIsDragOver(false)
+    }
+  }, [isDraggingActive])
+
+  function getDraggedNames(e: React.DragEvent): string[] {
+    const multi = e.dataTransfer.getData('__dragging_sessions__')
+    if (multi) {
+      try {
+        const names: string[] = JSON.parse(multi)
+        if (names.length > 0) return names
+      } catch {}
+    }
+    const single = e.dataTransfer.getData('__dragging_session__')
+    return single ? [single] : []
+  }
 
   function handleDragOver(e: React.DragEvent) {
-    if (!group) return
     if (!e.dataTransfer.types.includes('__dragging_session__')) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
     setIsDragOver(true)
+
+    // Calculate insertion index from mouse position for manual reordering
+    if (isManualSort && rowsRef.current) {
+      const children = Array.from(rowsRef.current.children) as HTMLElement[]
+      // Skip indicator elements (they have h-0.5 class) — only measure session rows
+      const rows = children.filter(c => c.dataset.sessionRow)
+      let idx = rows.length
+      const DEAD_ZONE = 6 // px hysteresis to prevent jitter near midpoints
+      for (let i = 0; i < rows.length; i++) {
+        const rect = rows[i].getBoundingClientRect()
+        const mid = rect.top + rect.height / 2
+        if (e.clientY < mid - DEAD_ZONE) {
+          idx = i
+          break
+        } else if (e.clientY < mid + DEAD_ZONE) {
+          // Inside dead zone — keep current index to avoid jitter
+          return
+        }
+      }
+      if (idx !== dropInsertIdx) setDropInsertIdx(idx)
+    }
   }
 
   function handleDragLeave(e: React.DragEvent) {
-    // Only clear when leaving the container itself, not children
     if (e.currentTarget.contains(e.relatedTarget as Node)) return
     setIsDragOver(false)
+    setDropInsertIdx(null)
   }
 
   function handleDrop(e: React.DragEvent) {
+    const insertIdx = dropInsertIdx
     setIsDragOver(false)
-    if (!group) return
-    const sessionName = e.dataTransfer.getData('__dragging_session__')
-    if (!sessionName) return
+    setDropInsertIdx(null)
     e.preventDefault()
-    useProjectStore.getState().addSessionsToGroup(group.id, [sessionName])
+    const names = getDraggedNames(e)
+    if (names.length === 0) return
+
+    if (isManualSort && insertIdx !== null) {
+      // Manual reorder — insert at specific position
+      const store = useProjectStore.getState()
+      const beforeSession = sessions[insertIdx]?.tmux.name ?? null
+      for (const name of names) {
+        if (group) {
+          const srcGroup = sessionToGroup.get(name)
+          if (srcGroup !== group.id) {
+            store.addSessionsToGroup(group.id, [name])
+          }
+          store.reorderSessionInGroup(group.id, name, beforeSession)
+        } else {
+          // Ungrouped reorder — remove from any group first
+          const srcGroup = sessionToGroup.get(name)
+          if (srcGroup) store.removeSessionFromGroup(srcGroup, name)
+          store.reorderUngroupedSession(name, beforeSession)
+        }
+      }
+    } else if (group) {
+      useProjectStore.getState().addSessionsToGroup(group.id, names)
+    } else {
+      // Ungrouped — remove from groups
+      const store = useProjectStore.getState()
+      for (const name of names) {
+        const gid = sessionToGroup.get(name)
+        if (gid) store.removeSessionFromGroup(gid, name)
+      }
+    }
   }
 
   return (
     <div
-      className={`mb-3 rounded transition-colors ${isDragOver ? 'bg-indigo-900/20 ring-1 ring-indigo-500/40' : ''}`}
+      className={`mb-3 rounded transition-colors ${
+        isDragOver
+          ? 'bg-indigo-900/20'
+          : isDraggingActive
+            ? 'bg-zinc-800/20'
+            : ''
+      }`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -682,7 +795,7 @@ function SessionGroupSection({
         {isRenaming ? (
           <input
             ref={renameInputRef}
-            className="text-[10px] flex-1 min-w-0 bg-transparent border border-zinc-600 rounded px-1 py-0.5 outline-none text-zinc-100 font-medium uppercase tracking-wider"
+            className="text-ui-xs flex-1 min-w-0 bg-transparent border border-zinc-600 rounded px-1 py-0.5 outline-none text-zinc-100 font-medium uppercase tracking-wider"
             value={renameValue}
             onChange={e => setRenameValue(e.target.value)}
             onKeyDown={e => {
@@ -695,14 +808,14 @@ function SessionGroupSection({
           />
         ) : (
           <span
-            className="text-[10px] font-medium uppercase tracking-wider text-zinc-600 flex-1 min-w-0 truncate"
+            className="text-ui-xs font-medium uppercase tracking-wider text-zinc-300 flex-1 min-w-0 truncate"
             onDoubleClick={group ? () => startRename() : undefined}
           >
             {label}
           </span>
         )}
 
-        <span className="text-[10px] text-zinc-700">{sessions.length}</span>
+        <span className="text-ui-xs text-zinc-700">{sessions.length}</span>
 
         <div className="flex items-center gap-0.5">
           {canTile && (
@@ -750,18 +863,29 @@ function SessionGroupSection({
 
       {isOpen && (
         sessions.length > 0 ? (
-          sessions.map(s => (
-            <TmuxRow
-              key={s.tmux.name}
-              session={s}
-              onAction={onRefresh}
-              isSelected={selectedIds.has(s.tmux.name)}
-              onRowClick={onRowClick}
-              currentGroupId={sessionToGroup.get(s.tmux.name) ?? null}
-            />
-          ))
+          <div ref={rowsRef}>
+            {sessions.map((s, i) => (
+              <React.Fragment key={s.tmux.name}>
+                {dropInsertIdx === i && (
+                  <div className="mx-1 h-0.5 bg-indigo-400 rounded-full my-0.5" />
+                )}
+                <div data-session-row>
+                  <TmuxRow
+                    session={s}
+                    isSelected={selectedIds.has(s.tmux.name)}
+                    selectedIds={selectedIds}
+                    onRowClick={onRowClick}
+                    onDragStateChange={onDragStateChange}
+                  />
+                </div>
+              </React.Fragment>
+            ))}
+            {dropInsertIdx !== null && dropInsertIdx >= sessions.length && (
+              <div className="mx-1 h-0.5 bg-indigo-400 rounded-full my-0.5" />
+            )}
+          </div>
         ) : (
-          <div className="px-2 py-1 text-[10px] text-zinc-700 italic">No active sessions</div>
+          <div className="px-2 py-1 text-ui-xs text-zinc-700 italic">No active sessions</div>
         )
       )}
     </div>
@@ -774,11 +898,10 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
   const { enriched, orphanedWorkSessions, refresh } = useTmuxSessions()
   const sessionGroups = useProjectStore(s => s.sessionGroups)
   const sessionSort = useProjectStore(s => s.sessionSort)
+  const ungroupedOrder = useProjectStore(s => s.ungroupedSessionOrder)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [namingGroup, setNamingGroup] = useState(false)
-  const [groupName, setGroupName] = useState('')
-  const nameInputRef = useRef<HTMLInputElement>(null)
   const lastClickedRef = useRef<string | null>(null)
+  const [isDraggingActive, setIsDraggingActive] = useState(false)
 
   // Build sessionId → groupId lookup
   const sessionToGroup = new Map<string, string>()
@@ -804,9 +927,10 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
 
   // Apply sort to each bucket
   for (const [gid, sessions] of groupedSessions) {
-    groupedSessions.set(gid, sortSessions(sessions, sessionSort))
+    const group = sessionGroups.find(g => g.id === gid)
+    groupedSessions.set(gid, sortSessions(sessions, sessionSort, group?.sessionIds))
   }
-  const ungrouped = sortSessions(ungroupedRaw, sessionSort)
+  const ungrouped = sortSessions(ungroupedRaw, sessionSort, ungroupedOrder)
 
   // Flat ordered list of all session names matching render order (for shift-click range)
   const flatSessionOrder: string[] = []
@@ -856,35 +980,11 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
         })
       }
     } else {
-      // Plain click: select only this one
-      setSelectedIds(new Set([name]))
+      // Plain click: select or deselect
+      setSelectedIds(prev => prev.size === 1 && prev.has(name) ? new Set() : new Set([name]))
       lastClickedRef.current = name
     }
   }, [flatSessionOrder])
-
-  function cycleSort() {
-    const idx = SORT_CYCLE.indexOf(sessionSort)
-    const next = SORT_CYCLE[(idx + 1) % SORT_CYCLE.length]
-    useProjectStore.getState().setSessionSort(next)
-  }
-
-  function handleCreateGroup() {
-    setGroupName('')
-    setNamingGroup(true)
-    setTimeout(() => nameInputRef.current?.focus(), 0)
-  }
-
-  function commitCreateGroup() {
-    const name = groupName.trim() || 'New Group'
-    useProjectStore.getState().addSessionGroup(name, [...selectedIds])
-    setSelectedIds(new Set())
-    setNamingGroup(false)
-  }
-
-  function handleAddToGroup(groupId: string) {
-    useProjectStore.getState().addSessionsToGroup(groupId, [...selectedIds])
-    setSelectedIds(new Set())
-  }
 
   async function killSelected() {
     const sessionsStore = useWorkSessionsStore.getState()
@@ -930,65 +1030,90 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
       subtitle={subtitle}
       actions={[
         {
-          icon: SortIcon,
-          label: `Sort: ${SORT_LABELS[sessionSort]}`,
-          onClick: cycleSort,
+          icon: FolderPlus,
+          label: 'New group',
+          onClick: () => useProjectStore.getState().addSessionGroup('New Group', []),
         },
       ]}
     >
       <div className="p-1">
-        {enriched.length === 0 && orphanedWorkSessions.length === 0 ? (
-          <div className="py-8 text-center text-xs text-zinc-600">
-            No tmux sessions running.
+        {/* Sort toolbar */}
+        <div className="px-2 py-1 mb-2 border-b border-zinc-700/50 pb-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-1 text-ui-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+                <SortIcon className="w-3 h-3" />
+                <span>Sort: {SORT_LABELS[sessionSort]}</span>
+                <ChevronDown className="w-2.5 h-2.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="bg-zinc-900 border-zinc-700" align="start">
+              <DropdownMenuRadioGroup
+                value={sessionSort}
+                onValueChange={v => useProjectStore.getState().setSessionSort(v as SessionSortOrder)}
+              >
+                {SORT_CYCLE.map(order => {
+                  const Icon = SORT_ICONS[order]
+                  return (
+                    <DropdownMenuRadioItem key={order} value={order} className="gap-2 text-ui-base cursor-pointer">
+                      <Icon className="w-3.5 h-3.5" />
+                      {SORT_LABELS[order]}
+                    </DropdownMenuRadioItem>
+                  )
+                })}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* User-defined groups */}
+        {sessionGroups.map(group => {
+          const sessions = groupedSessions.get(group.id) || []
+          return (
+            <SessionGroupSection
+              key={group.id}
+              group={group}
+              sessions={sessions}
+              selectedIds={selectedIds}
+              onRowClick={handleRowClick}
+              onDragStateChange={setIsDraggingActive}
+              isDraggingActive={isDraggingActive}
+              isManualSort={sessionSort === 'none'}
+              onRefresh={refresh}
+              sessionToGroup={sessionToGroup}
+            />
+          )
+        })}
+
+        {/* Ungrouped sessions (always visible) */}
+        <SessionGroupSection
+          group={null}
+          sessions={ungrouped}
+          selectedIds={selectedIds}
+          onRowClick={handleRowClick}
+          onDragStateChange={setIsDraggingActive}
+          isDraggingActive={isDraggingActive}
+          isManualSort={sessionSort === 'none'}
+          onRefresh={refresh}
+          sessionToGroup={sessionToGroup}
+        />
+
+        {/* Stale work sessions */}
+        {orphanedWorkSessions.length > 0 && (
+          <div className="mb-3">
+            <div className="px-2 mb-1 text-ui-xs font-medium uppercase tracking-wider text-zinc-300">
+              Stale
+            </div>
+            {orphanedWorkSessions.map(ws => (
+              <OrphanedWorkSessionRow key={ws.id} session={ws} onAction={refresh} />
+            ))}
           </div>
-        ) : (
-          <>
-            {/* User-defined groups */}
-            {sessionGroups.map(group => {
-              const sessions = groupedSessions.get(group.id) || []
-              return (
-                <SessionGroupSection
-                  key={group.id}
-                  group={group}
-                  sessions={sessions}
-                  selectedIds={selectedIds}
-                  onRowClick={handleRowClick}
-                  onRefresh={refresh}
-                  sessionToGroup={sessionToGroup}
-                />
-              )
-            })}
-
-            {/* Ungrouped sessions */}
-            {ungrouped.length > 0 && (
-              <SessionGroupSection
-                group={null}
-                sessions={ungrouped}
-                selectedIds={selectedIds}
-                onToggleSelect={toggleSelect}
-                onRefresh={refresh}
-                sessionToGroup={sessionToGroup}
-              />
-            )}
-
-            {/* Stale work sessions */}
-            {orphanedWorkSessions.length > 0 && (
-              <div className="mb-3">
-                <div className="px-2 mb-1 text-[10px] font-medium uppercase tracking-wider text-zinc-600">
-                  Stale
-                </div>
-                {orphanedWorkSessions.map(ws => (
-                  <OrphanedWorkSessionRow key={ws.id} session={ws} onAction={refresh} />
-                ))}
-              </div>
-            )}
-          </>
         )}
 
         {/* Selection action bar */}
         {selectedIds.size > 0 && (
           <div className="sticky bottom-0 bg-zinc-900 border-t border-zinc-700/50 p-2 mt-2 rounded">
-            <div className="flex items-center gap-2 text-[10px]">
+            <div className="flex items-center gap-2 text-ui-xs">
               <span className="text-zinc-400 font-medium">{selectedIds.size} selected</span>
               <div className="flex-1" />
               <button
@@ -999,49 +1124,15 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
               </button>
             </div>
 
-            {namingGroup ? (
-              <div className="mt-2 flex items-center gap-1">
-                <input
-                  ref={nameInputRef}
-                  className="text-xs flex-1 min-w-0 bg-zinc-800 border border-zinc-600 rounded px-2 py-1 outline-none text-zinc-100 placeholder-zinc-600"
-                  placeholder="Group name"
-                  value={groupName}
-                  onChange={e => setGroupName(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') commitCreateGroup()
-                    if (e.key === 'Escape') setNamingGroup(false)
-                    e.stopPropagation()
-                  }}
-                  onBlur={commitCreateGroup}
-                />
-              </div>
-            ) : (
-              <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-                <button
-                  onClick={handleCreateGroup}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-600/30 text-indigo-300 hover:bg-indigo-600/50 text-[10px] transition-colors"
-                >
-                  <FolderPlus className="w-3 h-3" />
-                  New group
-                </button>
-                {sessionGroups.map(g => (
-                  <button
-                    key={g.id}
-                    onClick={() => handleAddToGroup(g.id)}
-                    className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 text-[10px] transition-colors"
-                  >
-                    {g.name}
-                  </button>
-                ))}
-                <button
-                  onClick={killSelected}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-900/30 text-red-400 hover:bg-red-900/50 text-[10px] transition-colors ml-auto"
-                >
-                  <Square className="w-3 h-3" />
-                  Kill {selectedIds.size}
-                </button>
-              </div>
-            )}
+            <div className="mt-1.5">
+              <button
+                onClick={killSelected}
+                className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-900/30 text-red-400 hover:bg-red-900/50 text-ui-xs transition-colors"
+              >
+                <Square className="w-3 h-3" />
+                Kill all
+              </button>
+            </div>
           </div>
         )}
       </div>

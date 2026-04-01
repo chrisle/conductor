@@ -9,7 +9,7 @@ export interface SessionGroup {
   sessionIds: string[]
 }
 
-export type SessionSortOrder = 'created' | 'alpha' | 'activity' | 'attached'
+export type SessionSortOrder = 'none' | 'created' | 'alpha' | 'activity' | 'attached'
 
 export interface SerializedTab {
   id: string
@@ -75,6 +75,7 @@ interface ProjectState {
   sessionTitles: Record<string, string>
   sessionGroups: SessionGroup[]
   sessionSort: SessionSortOrder
+  ungroupedSessionOrder: string[]
 
   setProject: (filePath: string, name: string) => void
   setJiraConfig: (spaceKeys: string[], connectionId?: string) => void
@@ -99,6 +100,9 @@ interface ProjectState {
   renameSessionGroup: (groupId: string, name: string) => void
   addSessionsToGroup: (groupId: string, sessionIds: string[]) => void
   removeSessionFromGroup: (groupId: string, sessionId: string) => void
+  reorderSessionInGroup: (groupId: string, sessionId: string, beforeSessionId: string | null) => void
+  setUngroupedSessionOrder: (order: string[]) => void
+  reorderUngroupedSession: (sessionId: string, beforeSessionId: string | null) => void
   setSessionSort: (sort: SessionSortOrder) => void
   addRecentProject: (name: string, path: string) => void
   loadRecentProjects: () => Promise<void>
@@ -119,6 +123,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   sessionTitles: {},
   sessionGroups: [],
   sessionSort: 'created' as SessionSortOrder,
+  ungroupedSessionOrder: [] as string[],
 
   setProjectSettings: (settings) => set({ projectSettings: settings }),
   setWorkspaceSettings: (settings) => set({ workspaceSettings: settings }),
@@ -143,7 +148,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     workspaceNames: [], dirtyWorkspaces: new Set(),
     jiraSpaceKeys: [], jiraConnectionId: null,
     projectSettings: undefined, workspaceSettings: undefined,
-    sessionTitles: {}, sessionGroups: [], sessionSort: 'created' as SessionSortOrder,
+    sessionTitles: {}, sessionGroups: [], sessionSort: 'created' as SessionSortOrder, ungroupedSessionOrder: [],
   }),
 
   setActiveWorkspace: (name) => set({ activeWorkspace: name }),
@@ -277,6 +282,44 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
           : g
       ),
     }))
+    get().markWorkspaceDirty()
+  },
+
+  reorderSessionInGroup: (groupId, sessionId, beforeSessionId) => {
+    set(state => ({
+      sessionGroups: state.sessionGroups.map(g => {
+        if (g.id !== groupId) return g
+        const ids = g.sessionIds.filter(sid => sid !== sessionId)
+        if (beforeSessionId === null) {
+          ids.push(sessionId)
+        } else {
+          const idx = ids.indexOf(beforeSessionId)
+          if (idx !== -1) ids.splice(idx, 0, sessionId)
+          else ids.push(sessionId)
+        }
+        return { ...g, sessionIds: ids }
+      }),
+    }))
+    get().markWorkspaceDirty()
+  },
+
+  setUngroupedSessionOrder: (order) => {
+    set({ ungroupedSessionOrder: order })
+    get().markWorkspaceDirty()
+  },
+
+  reorderUngroupedSession: (sessionId, beforeSessionId) => {
+    set(state => {
+      const ids = state.ungroupedSessionOrder.filter(sid => sid !== sessionId)
+      if (beforeSessionId === null) {
+        ids.push(sessionId)
+      } else {
+        const idx = ids.indexOf(beforeSessionId)
+        if (idx !== -1) ids.splice(idx, 0, sessionId)
+        else ids.push(sessionId)
+      }
+      return { ungroupedSessionOrder: ids }
+    })
     get().markWorkspaceDirty()
   },
 
