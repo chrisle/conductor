@@ -543,7 +543,10 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 	// isNew=true means a brand-new tmux session was created → client should
 	// send its initialCommand. isNew=false means we attached to an existing
 	// tmux session → client should NOT send initialCommand (process is running).
-	conn.WriteJSON(map[string]interface{}{"type": "session", "data": s.id, "isNew": isNew})
+	s.mu.Lock()
+	ap := s.autoPilot
+	s.mu.Unlock()
+	conn.WriteJSON(map[string]interface{}{"type": "session", "data": s.id, "isNew": isNew, "autoPilot": ap})
 
 	// Replay scrollback so the client sees previous output
 	scrollback := s.getScrollback()

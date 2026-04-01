@@ -60,6 +60,14 @@ export default function ClaudeCodeTab({ tabId, groupId, isActive, tab }: TabProp
     }
   }, [tabId])
 
+  const handleSessionReady = useCallback((isNew: boolean, opts?: { autoPilot?: boolean }) => {
+    // Restore autopilot state from conductord when reattaching to an existing session
+    if (!isNew && opts?.autoPilot && !autoPilotRef.current) {
+      setAutoPilot(true)
+      updateTab(groupId, tabId, { autoPilot: true })
+    }
+  }, [tabId, groupId, updateTab])
+
   // Translate Shift+Enter → Alt+Enter (newline) in Claude's input
   const interceptKeys = useMemo(() => (e: React.KeyboardEvent, write: (data: string) => void): boolean => {
     if (e.key === 'Enter' && e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -137,7 +145,10 @@ export default function ClaudeCodeTab({ tabId, groupId, isActive, tab }: TabProp
       preventScreenClear={preventScreenClear}
       onPtyData={onPtyData}
       onTerminalReady={handleTerminalReady}
-      onSessionReady={() => updateTab(groupId, tabId, { hasTmuxSession: true })}
+      onSessionReady={(isNew, opts) => {
+        updateTab(groupId, tabId, { hasTmuxSession: true })
+        handleSessionReady(isNew, opts)
+      }}
       interceptKeys={interceptKeys}
       footer={footer}
     />

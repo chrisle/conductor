@@ -245,8 +245,8 @@ export default function TerminalTab({
         doFit();
         const { cols, rows } = term;
         console.log(`[terminal] ${renderer} fit: cols=${cols} rows=${rows}`);
-        termAPI.createTerminal(tabId, cwd).then(({ isNew }) => {
-          console.log(`[terminal] session ready: id=${tabId} isNew=${isNew} hasInitCmd=${!!initialCommand}`);
+        termAPI.createTerminal(tabId, cwd).then(({ isNew, autoPilot: apState }) => {
+          console.log(`[terminal] session ready: id=${tabId} isNew=${isNew} autoPilot=${apState} hasInitCmd=${!!initialCommand}`);
           termAPI.resizeTerminal(tabId, cols, rows);
           sessionReadyRef.current = true;
           setConnectionStatus('connected');
@@ -261,7 +261,7 @@ export default function TerminalTab({
           onTerminalReady?.((data: string) =>
             termAPI.writeTerminal(tabId, data, { programmatic: true }),
           );
-          onSessionReady?.(isNew);
+          onSessionReady?.(isNew, { autoPilot: apState });
           // Only send initialCommand for brand-new tmux sessions. When
           // reattaching to an existing session the process is already running.
           if (initialCommand && isNew && !initCmdSentRef.current) {

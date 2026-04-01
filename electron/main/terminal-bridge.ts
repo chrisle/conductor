@@ -31,7 +31,7 @@ export function registerTerminalBridge(): void {
       return pendingConnections.get(id)!
     }
 
-    const connectionPromise = new Promise<{ isNew: boolean }>((resolve, reject) => {
+    const connectionPromise = new Promise<{ isNew: boolean; autoPilot?: boolean }>((resolve, reject) => {
       const params = new URLSearchParams()
       params.set('id', id)
       if (cwd) params.set('cwd', cwd)
@@ -68,7 +68,7 @@ export function registerTerminalBridge(): void {
               if (!sessionResolved) {
                 sessionResolved = true
                 clearTimeout(resolveTimeout)
-                resolve({ isNew: msg.isNew !== false })
+                resolve({ isNew: msg.isNew !== false, autoPilot: msg.autoPilot === true })
               }
               return
             }

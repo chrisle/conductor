@@ -40,7 +40,7 @@ function ensureIpcListeners(): void {
   })
 }
 
-export function createTerminal(id: string, cwd?: string): Promise<{ isNew: boolean }> {
+export function createTerminal(id: string, cwd?: string): Promise<{ isNew: boolean; autoPilot?: boolean }> {
   ensureIpcListeners()
   activeSessions.add(id)
   return window.electronAPI.createTerminal(id, cwd)

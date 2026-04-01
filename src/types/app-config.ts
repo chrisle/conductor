@@ -6,12 +6,19 @@ export interface JiraConnection {
   apiToken: string
 }
 
+export interface ClaudeAccount {
+  id: string
+  name: string
+  apiKey: string
+}
+
 export interface AppConfig {
   version: 1
   ui: {
     zoom: number
     kanbanCompactColumns: string[]
   }
+  claudeAccounts: ClaudeAccount[]
   jiraConnections: JiraConnection[]
   aiCli: {
     claudeCode: {
