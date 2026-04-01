@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Server, CheckCircle, XCircle, RefreshCw, ShieldCheck, ShieldAlert } from 'lucide-react'
+import { Server, CheckCircle, XCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { TabProps } from '@/extensions/types'
 
@@ -9,7 +9,6 @@ import type { TabProps } from '@/extensions/types'
  */
 export function ConductorDaemonPanel({ visible = true }: { visible?: boolean }): React.ReactElement {
   const [serviceRunning, setServiceRunning] = useState<boolean | null>(null)
-  const [fullDiskAccess, setFullDiskAccess] = useState<boolean | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   async function checkStatus() {
@@ -18,13 +17,6 @@ export function ConductorDaemonPanel({ visible = true }: { visible?: boolean }):
       setServiceRunning(ok)
     } catch {
       setServiceRunning(false)
-    }
-
-    try {
-      const fda = await window.electronAPI.hasFullDiskAccess()
-      setFullDiskAccess(fda)
-    } catch {
-      setFullDiskAccess(null)
     }
   }
 
@@ -77,36 +69,6 @@ export function ConductorDaemonPanel({ visible = true }: { visible?: boolean }):
         </div>
       </div>
 
-      {/* Permissions */}
-      <div className="space-y-3">
-        <div className="text-ui-sm text-zinc-500 uppercase tracking-wider">Permissions</div>
-        <div className="flex items-center justify-between text-sm">
-          <div>
-            <div className="text-zinc-400">Full Disk Access</div>
-            <div className="text-ui-xs text-zinc-600 mt-0.5">Required to read files in protected directories (Desktop, Documents, etc.)</div>
-          </div>
-          <div className="flex items-center gap-1.5 ml-4 shrink-0">
-            {fullDiskAccess === false && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => window.electronAPI.openFullDiskAccessSettings()}
-                className="h-6 px-2 text-ui-xs text-amber-500 hover:text-amber-400"
-                title="Open System Settings to grant Full Disk Access"
-              >
-                Grant access
-              </Button>
-            )}
-            {fullDiskAccess === null ? (
-              <span className="text-zinc-600">...</span>
-            ) : fullDiskAccess ? (
-              <ShieldCheck className="w-4 h-4 text-green-500" />
-            ) : (
-              <ShieldAlert className="w-4 h-4 text-amber-500" />
-            )}
-          </div>
-        </div>
-      </div>
 
       <p className="text-ui-base text-zinc-500 leading-relaxed">
         conductord runs in your menu bar. Terminals persist when the Conductor window is closed. Quit from the menu bar icon to stop.
