@@ -134,6 +134,9 @@ interface ElectronAPI {
   conductordKillTmuxSession: (name: string) => Promise<{ ok: boolean }>
   conductordKillOrphanedTmux: () => Promise<{ ok: boolean; killed: number }>
 
+  // Shell
+  openExternal: (url: string) => Promise<void>
+
   // Platform
   platform: string
 }

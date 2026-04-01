@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, app, dialog } from 'electron'
+import { ipcMain, BrowserWindow, app, dialog, shell } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
@@ -839,6 +839,11 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
     } catch {
       return { ok: false, killed: 0 }
     }
+  })
+
+  // Shell
+  ipcMain.handle('shell:openExternal', async (_event, url: string) => {
+    await shell.openExternal(url)
   })
 
   // Terminal WebSocket bridge (renderer <-> conductord via Unix socket)

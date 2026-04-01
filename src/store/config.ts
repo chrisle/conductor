@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { AppConfig, JiraConnection, DeepPartial } from '../types/app-config'
+import type { AppConfig, ClaudeAccount, JiraConnection, DeepPartial } from '../types/app-config'
 import { DEFAULT_APP_CONFIG } from '../types/app-config'
 
 interface ConfigState {
@@ -18,6 +18,11 @@ interface ConfigState {
   setTerminalSettings: (patch: Partial<AppConfig['terminal']>) => Promise<void>
   setDisabledExtensions: (disabled: string[]) => Promise<void>
 
+  // Claude account management
+  addClaudeAccount: (account: ClaudeAccount) => Promise<void>
+  updateClaudeAccount: (id: string, patch: Partial<ClaudeAccount>) => Promise<void>
+  removeClaudeAccount: (id: string) => Promise<void>
+
   // Jira connection management
   addJiraConnection: (connection: JiraConnection) => Promise<void>
   updateJiraConnection: (id: string, patch: Partial<JiraConnection>) => Promise<void>
@@ -33,7 +38,21 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     try {
       const loaded = await window.electronAPI.loadConfig()
       if (loaded && loaded.version === 1) {
-        set({ config: loaded, ready: true })
+        // Deep-merge with defaults so newly-added fields are always present
+        const merged: AppConfig = {
+          ...DEFAULT_APP_CONFIG,
+          ...loaded,
+          ui: { ...DEFAULT_APP_CONFIG.ui, ...loaded.ui },
+          claudeAccounts: loaded.claudeAccounts ?? DEFAULT_APP_CONFIG.claudeAccounts,
+          jiraConnections: loaded.jiraConnections ?? DEFAULT_APP_CONFIG.jiraConnections,
+          aiCli: {
+            claudeCode: { ...DEFAULT_APP_CONFIG.aiCli.claudeCode, ...loaded.aiCli?.claudeCode },
+            codex: { ...DEFAULT_APP_CONFIG.aiCli.codex, ...loaded.aiCli?.codex },
+          },
+          terminal: { ...DEFAULT_APP_CONFIG.terminal, ...loaded.terminal },
+          extensions: { ...DEFAULT_APP_CONFIG.extensions, ...loaded.extensions },
+        }
+        set({ config: merged, ready: true })
         return
       }
 
@@ -101,6 +120,32 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       config: { ...state.config, extensions: { ...state.config.extensions, disabled } },
     }))
     await window.electronAPI.patchConfig({ extensions: { disabled } })
+  },
+
+  addClaudeAccount: async (account) => {
+    const accounts = [...get().config.claudeAccounts, account]
+    set(state => ({
+      config: { ...state.config, claudeAccounts: accounts },
+    }))
+    await window.electronAPI.patchConfig({ claudeAccounts: accounts } as any)
+  },
+
+  updateClaudeAccount: async (id, patch) => {
+    const accounts = get().config.claudeAccounts.map(a =>
+      a.id === id ? { ...a, ...patch } : a
+    )
+    set(state => ({
+      config: { ...state.config, claudeAccounts: accounts },
+    }))
+    await window.electronAPI.patchConfig({ claudeAccounts: accounts } as any)
+  },
+
+  removeClaudeAccount: async (id) => {
+    const accounts = get().config.claudeAccounts.filter(a => a.id !== id)
+    set(state => ({
+      config: { ...state.config, claudeAccounts: accounts },
+    }))
+    await window.electronAPI.patchConfig({ claudeAccounts: accounts } as any)
   },
 
   addJiraConnection: async (connection) => {

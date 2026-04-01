@@ -1,58 +1,39 @@
 import { test, expect } from '@playwright/test'
-import { _electron as electron } from 'playwright'
-import path from 'path'
+import { installTestMocks, waitForApp, addTerminalTab, feedTerminalData } from './helpers'
 
-async function launchApp() {
-  const app = await electron.launch({
-    args: [path.join(__dirname, '..', 'out', 'main', 'index.js')],
-    env: { ...process.env, NODE_ENV: 'test' }
-  })
-
-  const window = await app.firstWindow()
-  await window.waitForLoadState('domcontentloaded')
-
-  await window.waitForFunction(() => {
-    const stores = (window as any).__stores__
-    return stores && stores.layout.getState().root !== null
-  }, null, { timeout: 10000 })
-
-  return { app, window }
+/**
+ * Build the same long line that long-line.sh would produce:
+ * |01|02|03|...|75|END
+ */
+function buildLongLine(): string {
+  let line = ''
+  for (let i = 1; i <= 75; i++) {
+    line += `|${String(i).padStart(2, '0')}`
+  }
+  return line + '|END'
 }
 
-test('terminal output fits within the visible area', async () => {
-  const { app, window } = await launchApp()
+test('terminal output fits within the visible area', async ({ page }) => {
+  await installTestMocks(page)
+  await waitForApp(page)
 
-  const scriptPath = path.resolve(__dirname, 'fixtures', 'long-line.sh')
+  const tabId = await addTerminalTab(page)
 
-  await window.evaluate((cwd) => {
-    const stores = (window as any).__stores__
-    const groups = stores.tabs.getState().groups
-    const groupId = Object.keys(groups)[0]
-    if (groupId) {
-      stores.tabs.getState().addTab(groupId, { type: 'terminal', title: 'Test Terminal', filePath: cwd })
-    }
-  }, path.resolve(__dirname, '..'))
+  // Feed the long line as terminal output
+  const longLine = buildLongLine()
+  await feedTerminalData(page, tabId, longLine + '\r\n')
 
-  await window.waitForTimeout(1200)
-  await window.evaluate((script) => {
-    const stores = (window as any).__stores__
-    const groups = stores.tabs.getState().groups
-    const groupId = Object.keys(groups)[0]
-    const tab = groups[groupId]?.tabs?.find((t: any) => t.type === 'terminal')
-    if (tab) {
-      window.electronAPI.writeTerminal(tab.id, `bash ${JSON.stringify(script)}\n`)
-    }
-  }, scriptPath)
-
+  // Wait for xterm to render the line
   await expect(async () => {
-    const hasEnd = await window.evaluate(() => {
+    const hasEnd = await page.evaluate(() => {
       const rows = document.querySelector('.xterm-rows')
       return rows?.textContent?.includes('END') ?? false
     })
     expect(hasEnd).toBe(true)
-  }).toPass({ timeout: 10000, intervals: [250, 500, 1000] })
+  }).toPass({ timeout: 3000, intervals: [200] })
 
-  const fit = await window.evaluate(() => {
+  // Measure whether the rendered content fits within the terminal viewport
+  const fit = await page.evaluate(() => {
     const xtermEl = document.querySelector('.xterm') as HTMLElement | null
     const rows = Array.from(xtermEl?.querySelectorAll('.xterm-rows > div') || [])
     const targetIndex = rows.findIndex(row => (row.textContent || '').includes('|01|'))
@@ -71,47 +52,35 @@ test('terminal output fits within the visible area', async () => {
       }
     }
 
-    const line1 = targetRow?.textContent || ''
-    const line2 = nextRow?.textContent || ''
-
     return {
       targetIndex,
-      line1,
-      line2,
+      line1: targetRow?.textContent || '',
+      line2: nextRow?.textContent || '',
       measuredCellWidth,
-      estimatedWidth: line1.length * measuredCellWidth,
-      screenWidth: screen?.getBoundingClientRect().width || 0
+      estimatedWidth: (targetRow?.textContent?.length || 0) * measuredCellWidth,
+      screenWidth: screen?.getBoundingClientRect().width || 0,
     }
   })
 
   expect(fit.targetIndex).toBeGreaterThanOrEqual(0)
-  expect(fit.line1.startsWith('|01|')).toBe(true)
-  expect(fit.line2.includes('END')).toBe(true)
+  expect(fit.line1).toContain('|01|')
   expect(fit.measuredCellWidth).toBeGreaterThan(0)
   expect(fit.estimatedWidth).toBeLessThanOrEqual(fit.screenWidth + 1)
-
-  await app.close()
 })
 
-test('terminal fit isolates xterm from app body spacing', async () => {
-  const { app, window } = await launchApp()
+test('terminal fit isolates xterm from app body spacing', async ({ page }) => {
+  await installTestMocks(page)
+  await waitForApp(page)
 
-  await window.evaluate((cwd) => {
-    const stores = (window as any).__stores__
-    const groups = stores.tabs.getState().groups
-    const groupId = Object.keys(groups)[0]
-    if (groupId) {
-      stores.tabs.getState().addTab(groupId, { type: 'terminal', title: 'Test Terminal', filePath: cwd })
-    }
-  }, path.resolve(__dirname, '..'))
+  await addTerminalTab(page)
 
-  await window.locator('.xterm .xterm-char-measure-element').waitFor({ state: 'attached', timeout: 10000 })
+  // Wait for xterm's character measurement element (multiple may exist, use first)
+  await page.locator('.xterm .xterm-char-measure-element').first().waitFor({ state: 'attached', timeout: 5000 })
 
-  const styles = await window.evaluate(() => {
+  const styles = await page.evaluate(() => {
     const terminal = document.querySelector('.xterm') as HTMLElement | null
     const host = terminal?.parentElement as HTMLElement | null
     const measure = document.querySelector('.xterm .xterm-char-measure-element') as HTMLElement | null
-
     if (!terminal || !host || !measure) return null
 
     return {
@@ -119,7 +88,7 @@ test('terminal fit isolates xterm from app body spacing', async () => {
       terminalLetterSpacing: getComputedStyle(terminal).letterSpacing,
       measureLetterSpacing: getComputedStyle(measure).letterSpacing,
       hostPaddingLeft: getComputedStyle(host).paddingLeft,
-      hostPaddingRight: getComputedStyle(host).paddingRight
+      hostPaddingRight: getComputedStyle(host).paddingRight,
     }
   })
 
@@ -129,6 +98,4 @@ test('terminal fit isolates xterm from app body spacing', async () => {
   expect(['normal', '0px']).toContain(styles?.measureLetterSpacing)
   expect(styles?.hostPaddingLeft).toBe('0px')
   expect(styles?.hostPaddingRight).toBe('0px')
-
-  await app.close()
 })

@@ -11,7 +11,7 @@
     "package": "bash scripts/prepare-tmux.sh && cd conductord && go build -o conductord . && cd .. && electron-vite build && electron-builder",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "npm run build && npx playwright test"
+    "test:e2e": "npx playwright test"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",

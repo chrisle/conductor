@@ -1,28 +1,31 @@
 import { test, expect } from '@playwright/test'
-import { _electron as electron } from 'playwright'
-import path from 'path'
+import { installTestMocks, waitForApp } from './helpers'
 
-test('app launches and window renders', async () => {
-  const app = await electron.launch({
-    args: [path.join(__dirname, '..', 'out', 'main', 'index.js')],
-    env: { ...process.env, NODE_ENV: 'test' }
+test('app launches without errors and renders UI', async ({ page }) => {
+  await installTestMocks(page)
+
+  const consoleErrors: string[] = []
+  page.on('console', msg => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text())
   })
 
-  const window = await app.firstWindow()
-  await window.waitForLoadState('domcontentloaded')
+  const pageErrors: string[] = []
+  page.on('pageerror', err => pageErrors.push(err.message))
 
-  // Wait for the app to fully initialise — the layout store creates a root node
-  await window.waitForFunction(() => {
-    const stores = (window as any).__stores__
-    return stores && stores.layout.getState().root !== null
-  }, null, { timeout: 10000 })
+  await waitForApp(page)
 
-  const { width, height } = await window.evaluate(() => ({
-    width: window.innerWidth,
-    height: window.innerHeight
+  const diag = await page.evaluate(() => ({
+    bodyLen: document.body.innerText.length,
+    hasStores: !!(window as any).__stores__,
+    rootNode: (window as any).__stores__?.layout?.getState()?.root,
+    divCount: document.querySelectorAll('div').length,
   }))
-  expect(width).toBeGreaterThan(400)
-  expect(height).toBeGreaterThan(300)
 
-  await app.close()
+  expect(diag.hasStores).toBe(true)
+  expect(diag.rootNode).not.toBeNull()
+  expect(diag.divCount).toBeGreaterThan(0)
+  expect(pageErrors).toEqual([])
+  // Filter out benign errors (e.g. failed extension loads in test env)
+  const realErrors = consoleErrors.filter(e => !e.includes('Failed to load external extensions'))
+  expect(realErrors).toEqual([])
 })

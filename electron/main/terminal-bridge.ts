@@ -3,6 +3,7 @@
  * over a Unix domain socket.
  */
 import { ipcMain, WebContents, app } from 'electron'
+import { StringDecoder } from 'string_decoder'
 import WebSocket from 'ws'
 import { CONDUCTORD_SOCKET } from './conductord-client'
 
@@ -10,6 +11,7 @@ interface TerminalSession {
   ws: WebSocket
   intentionalClose: boolean
   webContents: WebContents
+  decoder: StringDecoder
 }
 
 const sessions = new Map<string, TerminalSession>()
@@ -43,6 +45,7 @@ export function registerTerminalBridge(): void {
         ws,
         intentionalClose: false,
         webContents: event.sender,
+        decoder: new StringDecoder('utf8'),
       }
 
       const resolveTimeout = setTimeout(() => {
@@ -57,8 +60,9 @@ export function registerTerminalBridge(): void {
       })
 
       ws.on('message', (data: WebSocket.Data, isBinary: boolean) => {
-        // Convert to string — ws v8+ delivers both text and binary frames as Buffers
-        const text = Buffer.isBuffer(data) ? data.toString('utf-8') : String(data)
+        // Use StringDecoder for binary frames so split multi-byte UTF-8
+        // sequences are buffered across messages instead of producing U+FFFD.
+        const text = Buffer.isBuffer(data) ? session.decoder.write(data) : String(data)
 
         if (!isBinary) {
           // Text frame — may be JSON control message

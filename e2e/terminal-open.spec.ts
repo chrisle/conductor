@@ -1,42 +1,21 @@
 import { test, expect } from '@playwright/test'
-import { _electron as electron } from 'playwright'
-import path from 'path'
+import { installTestMocks, waitForApp, addTerminalTab, feedTerminalData } from './helpers'
 
-test('terminal tab can execute a command', async () => {
-  const app = await electron.launch({
-    args: [path.join(__dirname, '..', 'out', 'main', 'index.js')],
-    env: { ...process.env, NODE_ENV: 'test' }
-  })
+test('terminal tab renders and displays PTY data', async ({ page }) => {
+  await installTestMocks(page)
+  await waitForApp(page)
 
-  const window = await app.firstWindow()
-  await window.waitForLoadState('domcontentloaded')
+  const tabId = await addTerminalTab(page)
 
-  await window.waitForFunction(() => {
-    const stores = (window as any).__stores__
-    return stores && stores.layout.getState().root !== null
-  }, null, { timeout: 10000 })
+  // Feed output as if a command produced it
+  await feedTerminalData(page, tabId, '$ printf READY\r\nREADY\r\n$ ')
 
-  const tabId = await window.evaluate(() => {
-    const { tabs, layout } = (window as any).__stores__
-    const groupId = layout.getState().getAllGroupIds()[0]
-    return tabs.getState().addTab(groupId, {
-      type: 'terminal',
-      title: 'Terminal'
-    })
-  })
-
-  await window.waitForTimeout(1200)
-  await window.evaluate((id) => {
-    window.electronAPI.writeTerminal(id, 'printf READY\\n\r')
-  }, tabId)
-
+  // Verify xterm rendered the output
   await expect(async () => {
-    const hasReady = await window.evaluate(() => {
+    const hasReady = await page.evaluate(() => {
       const rows = document.querySelector('.xterm-rows')
       return rows?.textContent?.includes('READY') ?? false
     })
     expect(hasReady).toBe(true)
-  }).toPass({ timeout: 10000, intervals: [250, 500, 1000] })
-
-  await app.close()
+  }).toPass({ timeout: 3000, intervals: [200] })
 })

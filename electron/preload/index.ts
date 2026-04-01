@@ -127,6 +127,9 @@ const electronAPI = {
   conductordKillTmuxSession: (name: string) => ipcRenderer.invoke('conductord:killTmuxSession', name),
   conductordKillOrphanedTmux: () => ipcRenderer.invoke('conductord:killOrphanedTmux'),
 
+  // Shell
+  openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
+
   // Platform
   platform: process.platform
 }

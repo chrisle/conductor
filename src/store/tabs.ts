@@ -14,6 +14,7 @@ export interface Tab {
   thinkingTime?: string
   content?: string
   initialCommand?: string
+  apiKey?: string
   autoPilot?: boolean
   hasTmuxSession?: boolean
   refreshKey?: number

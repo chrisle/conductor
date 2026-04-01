@@ -96,7 +96,7 @@ export default function ClaudeCodeTab({ tabId, groupId, isActive, tab }: TabProp
         const cmd = buildClaudeCommand(`claude --resume ${sessionId}\n`, {
           ...settings,
           disableBackgroundTasks: newValue,
-        })
+        }, tab.apiKey)
         write(cmd)
         restartingRef.current = false
       }, 1500)
@@ -139,7 +139,7 @@ export default function ClaudeCodeTab({ tabId, groupId, isActive, tab }: TabProp
         // Restored tabs (from project file) have no initialCommand and should
         // not auto-launch claude — the process is already running in tmux.
         initialCommand: tab.initialCommand
-          ? buildClaudeCommand(tab.initialCommand, settings)
+          ? buildClaudeCommand(tab.initialCommand, settings, tab.apiKey)
           : undefined,
       }}
       preventScreenClear={preventScreenClear}

@@ -44,6 +44,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     zoom: 1,
     kanbanCompactColumns: [],
   },
+  claudeAccounts: [],
   jiraConnections: [],
   aiCli: {
     claudeCode: {
