@@ -13,6 +13,7 @@ export {
   killTerminal,
   setAutoPilot,
   setTmuxOption,
+  capturePane,
   onTerminalData,
   offTerminalData,
   onTerminalExit,

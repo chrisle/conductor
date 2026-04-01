@@ -44,8 +44,11 @@ interface ElectronAPI {
   gitBranch: (path: string) => Promise<string | null>
   gitLog: (path: string, maxCount?: number) => Promise<Array<{
     hash: string; abbrev: string; parents: string[]; author: string;
-    email: string; date: string; subject: string; refs: string[]
+    email: string; date: string; subject: string; refs: string[]; body: string
   }>>
+  gitShow: (path: string, hash: string) => Promise<{ body: string; files: Array<{ status: string; file: string }> }>
+  gitRemoteUrl: (path: string) => Promise<string | null>
+  gitShortstat: (path: string) => Promise<{ insertions: number; deletions: number }>
 
   // App config
   loadConfig: () => Promise<AppConfig | null>
@@ -58,12 +61,13 @@ interface ElectronAPI {
   invalidateCache: (namespace: string, key: string) => Promise<void>
 
   // Terminal (bridged to conductord Unix socket via main process)
-  createTerminal: (id: string, cwd?: string) => Promise<{ isNew: boolean }>
+  createTerminal: (id: string, cwd?: string, command?: string) => Promise<{ isNew: boolean }>
   writeTerminal: (id: string, data: string) => Promise<void>
   resizeTerminal: (id: string, cols: number, rows: number) => Promise<void>
   killTerminal: (id: string) => Promise<void>
   setAutoPilot: (id: string, enabled: boolean) => Promise<void>
   setTmuxOption: (id: string, key: string, value: string) => Promise<void>
+  capturePane: (id: string) => Promise<string | null>
   onTerminalData: (callback: (event: IpcRendererEvent, id: string, data: string) => void) => void
   offTerminalData: (callback: (event: IpcRendererEvent, id: string, data: string) => void) => void
   onTerminalExit: (callback: (event: IpcRendererEvent, id: string) => void) => void
@@ -117,13 +121,6 @@ interface ElectronAPI {
   onConductordLogs: (callback: (event: IpcRendererEvent, watchId: string, data: string) => void) => void
   offConductordLogs: (callback: (event: IpcRendererEvent, watchId: string, data: string) => void) => void
 
-  // Service management
-  isConductordInstalled: () => Promise<boolean>
-  installConductord: () => Promise<{ success: boolean; error?: string }>
-  uninstallConductord: () => Promise<{ success: boolean; error?: string }>
-  startConductord: () => Promise<{ success: boolean; error?: string }>
-  stopConductord: () => Promise<{ success: boolean; error?: string }>
-  restartConductord: () => Promise<{ success: boolean; error?: string }>
   hasFullDiskAccess: () => Promise<boolean>
   openFullDiskAccessSettings: () => Promise<void>
 

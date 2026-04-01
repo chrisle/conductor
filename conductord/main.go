@@ -61,6 +61,10 @@ type session struct {
 	autoPilot  bool
 	apBuf      []byte // recent PTY output for prompt scanning (max 4 KB)
 	apLastMs   int64  // unix ms of last auto-response (throttle)
+
+	// Exponential backoff for API Error 500 retries
+	ap500Count int   // consecutive API Error 500 count
+	ap500Until int64 // unix ms: suppress scanning until backoff expires
 }
 
 // ---------------------------------------------------------------------------
@@ -73,14 +77,38 @@ func stripAnsi(s string) string {
 	return ansiEscape.ReplaceAllString(s, "")
 }
 
+// ---------------------------------------------------------------------------
+// Two-tier prompt detection (inspired by claude-yolo / codex-yolo)
+//
+// Menu-style prompts require THREE signals:
+//   1. A "Yes" option visible  (primary)
+//   2. A "No" option visible   (primary)
+//   3. A contextual keyword    (secondary)
+//
+// Text-style y/n prompts are specific enough on their own.
+// A slash-command autocomplete picker vetoes all matches.
+// Only the last 25 terminal lines are scanned.
+// ---------------------------------------------------------------------------
+
 var (
-	// Legacy numbered menu: "1. Yes"
-	apReYes1       = regexp.MustCompile(`(?s)1\.?\s*Yes`)
-	// Claude Code v2+ cursor menu: "❯ Yes" or "> Yes"
-	apReCursorYes  = regexp.MustCompile(`[❯>]\s+Yes\b`)
-	// Claude Code permission menu: "Yes  Allow once" or "Yes, and don't ask"
-	apReYesAllow   = regexp.MustCompile(`(?i)Yes\s+(Allow once|and don't ask)`)
-	// Generic yes/no prompts
+	// Menu-style Yes option: "1. Yes", "❯ Yes", "> Yes", "Yes Allow once"
+	apYesOption = regexp.MustCompile(`(?i)1\.?\s*Yes|[❯>]\s+Yes\b|Yes\s+(Allow once|and don't ask)`)
+	// Menu-style No option: "2. No", "Deny", "No, exit", "Decline", "No, and tell", "Cancel this"
+	apNoOption  = regexp.MustCompile(`(?i)2\.?\s*No|[❯>]\s+No\b|\bDeny\b|No,?\s+exit|\bDecline\b|No,\s+and\s+tell|Go back without|Cancel this`)
+	// Secondary context signal — at least one must accompany a menu prompt
+	apSecondary = regexp.MustCompile(`(?i)` +
+		`\bBash\b|\bRead\b|\bWrite\b|\bEdit\b|\bWebFetch\b|\bWebSearch\b|\bGrep\b|\bGlob\b|\bNotebookEdit\b|` +
+		`\bexecute\b|` +
+		`Do you want|want to proceed|wants to (?:execute|run)|` +
+		`\bpermission\b|allow (?:once|always)|` +
+		`trust this (?:folder|project)|safety check|` +
+		`requires confirmation|Do you trust|created or one you trust|` +
+		`Would you like to|Allow Codex to|Approve app tool call|` +
+		`may have side effects|Enable full access|just this once|Run the tool|Decline this`)
+	// Slash-command autocomplete picker line
+	apSlashPicker = regexp.MustCompile(`(?m)^\s*/\S+\s{2,}\S`)
+
+	// Text-style y/n prompts (specific patterns, lower false-positive risk)
 	apReYN1        = regexp.MustCompile(`(?im)\(Y/n\)\s*$`)
 	apReYN2        = regexp.MustCompile(`(?im)\(y/N\)\s*$`)
 	apReYN3        = regexp.MustCompile(`(?im)\[y/n\]\s*$`)
@@ -89,23 +117,42 @@ var (
 	apRePressEnter = regexp.MustCompile(`(?i)press enter to continue`)
 	apReContinue   = regexp.MustCompile(`(?i)continue\? \[y/n\]`)
 	apReAllow      = regexp.MustCompile(`(?i)Allow.*\(y/n\)`)
-	// "Do you want to proceed?" style
 	apReProceed    = regexp.MustCompile(`(?i)proceed\?\s*\(y/n\)`)
+
+	// API error patterns — trigger "continue" with exponential backoff
+	apAPIError500 = regexp.MustCompile(`(?i)API Error:\s*500`)
 )
 
 func matchPrompt(text string) string {
-	if apReYes1.MatchString(text)       { return "\r" }
-	if apReCursorYes.MatchString(text)  { return "\r" }
-	if apReYesAllow.MatchString(text)   { return "\r" }
-	if apReYN1.MatchString(text)        { return "y\r" }
-	if apReYN2.MatchString(text)        { return "y\r" }
-	if apReYN3.MatchString(text)        { return "y\r" }
-	if apReYN4.MatchString(text)        { return "y\r" }
-	if apReConfirm.MatchString(text)    { return "y\r" }
-	if apRePressEnter.MatchString(text) { return "\r" }
-	if apReContinue.MatchString(text)   { return "y\r" }
-	if apReAllow.MatchString(text)      { return "y\r" }
-	if apReProceed.MatchString(text)    { return "y\r" }
+	// Only scan the last 25 lines
+	lines := strings.Split(text, "\n")
+	if len(lines) > 25 {
+		lines = lines[len(lines)-25:]
+	}
+	recent := strings.Join(lines, "\n")
+
+	// Veto: slash command autocomplete picker is open
+	matches := apSlashPicker.FindAllString(recent, -1)
+	if len(matches) >= 2 {
+		return ""
+	}
+
+	// --- Menu-style prompts (send Enter) ---
+	// Two-tier: Yes option + No option + secondary context signal
+	if apYesOption.MatchString(recent) && apNoOption.MatchString(recent) && apSecondary.MatchString(recent) {
+		return "\r"
+	}
+
+	// --- Text-style y/n prompts ---
+	if apReYN1.MatchString(recent)        { return "y\r" }
+	if apReYN2.MatchString(recent)        { return "y\r" }
+	if apReYN3.MatchString(recent)        { return "y\r" }
+	if apReYN4.MatchString(recent)        { return "y\r" }
+	if apReConfirm.MatchString(recent)    { return "y\r" }
+	if apRePressEnter.MatchString(recent) { return "\r" }
+	if apReContinue.MatchString(recent)   { return "y\r" }
+	if apReAllow.MatchString(recent)      { return "y\r" }
+	if apReProceed.MatchString(recent)    { return "y\r" }
 	return ""
 }
 
@@ -113,6 +160,10 @@ var (
 	sessions   = make(map[string]*session)
 	sessionsMu sync.Mutex
 )
+
+// serverListener is the Unix socket listener, stored at package level
+// so the tray exit handler can close it for clean shutdown.
+var serverListener net.Listener
 
 // tmuxPath is the resolved path to the tmux binary (bundled or system).
 var tmuxPath string
@@ -191,28 +242,48 @@ func initTmux() {
 	}
 }
 
-// tmuxCmd builds a tmux exec.Cmd, prepending "-u" (force UTF-8) and
-// "-f <conf>" when a config file has been extracted, so every invocation
-// uses the same settings.
+// tmuxSocketName is the dedicated tmux socket name used by Conductor.
+// Using a separate socket isolates Conductor sessions from the user's
+// personal tmux server so they never interfere with each other.
+const tmuxSocketName = "conductor"
+
+// tmuxCmd builds a tmux exec.Cmd, prepending "-u" (force UTF-8),
+// "-L conductor" (dedicated socket), and "-f <conf>" when a config file
+// has been extracted, so every invocation uses the same settings.
 func tmuxCmd(args ...string) *exec.Cmd {
-	// -u: force UTF-8 output regardless of locale. Critical because conductord
-	// runs as a launchd service with a bare environment (no LANG/LC_ALL), and
-	// without -u tmux disables UTF-8 — mangling box-drawing and block chars.
-	prefix := []string{"-u"}
+	// -u: force UTF-8 output regardless of locale, ensuring tmux never
+	// disables UTF-8 — which would mangle box-drawing and block chars.
+	// -L: use a dedicated socket so Conductor never touches the user's
+	// tmux server or sessions.
+	prefix := []string{"-u", "-L", tmuxSocketName}
 	if tmuxConf != "" {
 		prefix = append(prefix, "-f", tmuxConf)
 	}
 	return exec.Command(tmuxPath, append(prefix, args...)...)
 }
 
+// killTmuxServer kills the Conductor-specific tmux server and all its
+// sessions. Safe to call even if no server is running.
+func killTmuxServer() {
+	if tmuxPath == "" {
+		return
+	}
+	cmd := tmuxCmd("kill-server")
+	cmd.Env = tmuxEnv()
+	if err := cmd.Run(); err != nil {
+		log.Printf("[tmux] kill-server: %v (may already be stopped)", err)
+	} else {
+		log.Println("[tmux] killed conductor tmux server")
+	}
+}
+
 // tmuxEnv returns the environment for tmux processes. It starts from the
 // current process environment and ensures the essential variables are set,
-// filling in sensible defaults for the ones launchd strips out (LANG, etc.).
+// filling in sensible defaults for essential variables (LANG, etc.).
 func tmuxEnv() []string {
 	env := os.Environ()
-	// Ensure UTF-8 locale — launchd services start with a bare environment
-	// that has no LANG/LC_ALL, which makes tmux disable UTF-8 output even
-	// when -u is passed. Inject only if not already present.
+	// Ensure UTF-8 locale — inject LANG if not already present so tmux
+	// always uses UTF-8 output.
 	hasLang := false
 	for _, e := range env {
 		if strings.HasPrefix(e, "LANG=") || strings.HasPrefix(e, "LC_ALL=") {
@@ -255,7 +326,11 @@ func tmuxSessionExists(name string) bool {
 // newSession creates a new conductord session. Returns the session, whether it
 // is a brand-new tmux session (isNew=true) or an attach to an existing one
 // (isNew=false), and any error.
-func newSession(id, cwd string) (*session, bool, error) {
+//
+// If command is non-empty and the session is new, it is sent to the tmux
+// session via send-keys immediately after creation — before the PTY attach.
+// This is far more reliable than having the renderer wait for the shell prompt.
+func newSession(id, cwd, command string) (*session, bool, error) {
 	var cmd *exec.Cmd
 	isNew := true
 
@@ -264,9 +339,23 @@ func newSession(id, cwd string) (*session, bool, error) {
 		isNew = !tmuxSessionExists(tmuxName)
 
 		if isNew {
-			// Create a new detached tmux session so the shell is started in the
-			// right directory. We then attach to it via a PTY below.
-			createCmd := tmuxCmd("new-session", "-d", "-s", tmuxName, "-c", cwd)
+			// Create a new detached tmux session in the right directory.
+			// If a command is provided (e.g. "claude --dangerously-skip-permissions"),
+			// wrap it in a login shell so the user's full PATH, env vars, etc.
+			// are available, then exec the command. The shell-command argument
+			// is passed through "sh -c" by tmux, so we build a single string.
+			var createCmd *exec.Cmd
+			if command != "" {
+				trimmed := strings.TrimRight(command, "\r\n")
+				shell := getShell()
+				// Run through a login-interactive shell. After the command exits,
+				// drop back to an interactive shell so the user can type.
+				shellCmd := fmt.Sprintf("%s -lic '%s; exec %s'", shell, trimmed, shell)
+				createCmd = tmuxCmd("new-session", "-d", "-s", tmuxName, "-c", cwd, shellCmd)
+				log.Printf("[session %s] creating tmux session with shell-command: %s", id, shellCmd)
+			} else {
+				createCmd = tmuxCmd("new-session", "-d", "-s", tmuxName, "-c", cwd)
+			}
 			createCmd.Env = tmuxEnv()
 			if err := createCmd.Run(); err != nil {
 				return nil, false, fmt.Errorf("tmux new-session: %w", err)
@@ -276,6 +365,7 @@ func newSession(id, cwd string) (*session, bool, error) {
 			mouseCmd := tmuxCmd("set-option", "-t", "="+tmuxName, "mouse", "on")
 			mouseCmd.Env = tmuxEnv()
 			_ = mouseCmd.Run()
+
 			log.Printf("[session %s] created tmux session '%s'", id, tmuxName)
 		} else {
 			log.Printf("[session %s] attaching to existing tmux session '%s'", id, tmuxName)
@@ -351,13 +441,14 @@ func (s *session) readLoop() {
 
 			// Autopilot: accumulate output and scan for prompts
 			var apResponse string
+			var apDelay time.Duration = 150 * time.Millisecond
 			if s.autoPilot {
 				s.apBuf = append(s.apBuf, data...)
 				if len(s.apBuf) > 4096 {
 					s.apBuf = s.apBuf[len(s.apBuf)-4096:]
 				}
 				now := time.Now().UnixMilli()
-				if now-s.apLastMs >= 250 {
+				if now >= s.ap500Until && now-s.apLastMs >= 250 {
 					stripped := stripAnsi(string(s.apBuf))
 					// Log the tail of the scanned buffer for debugging
 					tail := stripped
@@ -369,6 +460,24 @@ func (s *session) readLoop() {
 					if apResponse != "" {
 						s.apLastMs = now
 						s.apBuf = nil
+						s.ap500Count = 0 // reset backoff on normal prompt match
+					} else if apAPIError500.MatchString(stripped) {
+						// Exponential backoff: 1s, 2s, 4s, … ceiling 2min
+						s.ap500Count++
+						backoff := time.Second
+						for i := 1; i < s.ap500Count; i++ {
+							backoff *= 2
+							if backoff > 2*time.Minute {
+								backoff = 2 * time.Minute
+								break
+							}
+						}
+						apResponse = "continue\r"
+						apDelay = backoff
+						s.ap500Until = now + backoff.Milliseconds()
+						s.apLastMs = now
+						s.apBuf = nil
+						log.Printf("[autopilot %s] API Error 500 #%d, sending 'continue' after %v", s.id, s.ap500Count, backoff)
 					}
 				}
 			}
@@ -383,11 +492,12 @@ func (s *session) readLoop() {
 				}
 			}
 
-			// Send autopilot response after a short delay (mimics human think time)
+			// Send autopilot response after delay
 			if apResponse != "" {
 				resp := apResponse
+				delay := apDelay
 				go func() {
-					time.Sleep(150 * time.Millisecond)
+					time.Sleep(delay)
 					s.write([]byte(resp))
 				}()
 			}
@@ -492,6 +602,7 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 
 	id := r.URL.Query().Get("id")
 	cwd := r.URL.Query().Get("cwd")
+	command := r.URL.Query().Get("command")
 	if cwd == "" {
 		home, _ := os.UserHomeDir()
 		cwd = home
@@ -514,7 +625,7 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 	}
 	isNew := false
 	if !exists && id != "" {
-		s, isNew, err = newSession(id, cwd)
+		s, isNew, err = newSession(id, cwd, command)
 		if err != nil {
 			sessionsMu.Unlock()
 			log.Printf("session create error: %v", err)
@@ -525,7 +636,7 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 		sessions[id] = s
 	} else if !exists {
 		id = fmt.Sprintf("s-%d", time.Now().UnixNano())
-		s, isNew, err = newSession(id, cwd)
+		s, isNew, err = newSession(id, cwd, command)
 		if err != nil {
 			sessionsMu.Unlock()
 			log.Printf("session create error: %v", err)
@@ -592,6 +703,8 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 			if !enabled {
 				s.apBuf = nil
 			}
+			s.ap500Count = 0
+			s.ap500Until = 0
 			s.mu.Unlock()
 			log.Printf("[session %s] autopilot %v", s.id, enabled)
 		case "tmux-option":
@@ -982,28 +1095,24 @@ func healthCheckUnix(sockPath string) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-func main() {
-	socketPath := flag.String("socket", defaultSocketPath(), "Unix socket path")
-	devPort := flag.Int("dev-port", 0, "optional TCP port for web dev mode (0 = disabled)")
-	flag.Parse()
-
-	// Extract bundled tmux (if available) and set tmuxPath.
-	initTmux()
-
+// startServer registers HTTP handlers, binds the Unix socket, and starts
+// serving in a background goroutine. It fatals if the socket cannot be
+// created. The listener is stored in serverListener for clean shutdown.
+func startServer(socketPath string, devPort int) {
 	// Ensure parent directory exists.
-	if err := os.MkdirAll(filepath.Dir(*socketPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(socketPath), 0755); err != nil {
 		log.Fatalf("failed to create socket directory: %v", err)
 	}
 
 	// Check if another conductord instance is already running on this socket.
-	if _, err := os.Stat(*socketPath); err == nil {
-		if healthCheckUnix(*socketPath) {
-			log.Printf("conductord already running on %s, exiting", *socketPath)
+	if _, err := os.Stat(socketPath); err == nil {
+		if healthCheckUnix(socketPath) {
+			log.Printf("conductord already running on %s, exiting", socketPath)
 			os.Exit(0)
 		}
 		// Stale socket file — remove it.
-		log.Printf("removing stale socket file %s", *socketPath)
-		os.Remove(*socketPath)
+		log.Printf("removing stale socket file %s", socketPath)
+		os.Remove(socketPath)
 	}
 
 	http.HandleFunc("/ws/terminal", handleTerminal)
@@ -1014,25 +1123,16 @@ func main() {
 	http.HandleFunc("/api/exec", cors(handleExec))
 	http.HandleFunc("/health", cors(handleHealth))
 
-	ln, err := net.Listen("unix", *socketPath)
+	ln, err := net.Listen("unix", socketPath)
 	if err != nil {
 		log.Fatalf("listen error: %v", err)
 	}
-	os.Chmod(*socketPath, 0600)
-
-	// Clean up socket file on shutdown.
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
-	go func() {
-		<-sigCh
-		log.Printf("shutting down, removing socket %s", *socketPath)
-		os.Remove(*socketPath)
-		os.Exit(0)
-	}()
+	os.Chmod(socketPath, 0600)
+	serverListener = ln
 
 	// Optional TCP listener for web dev mode.
-	if *devPort > 0 {
-		devAddr := fmt.Sprintf("127.0.0.1:%d", *devPort)
+	if devPort > 0 {
+		devAddr := fmt.Sprintf("127.0.0.1:%d", devPort)
 		devLn, err := net.Listen("tcp", devAddr)
 		if err != nil {
 			log.Printf("[dev] TCP listen on %s failed: %v (continuing with socket only)", devAddr, err)
@@ -1042,8 +1142,33 @@ func main() {
 		}
 	}
 
-	log.Printf("conductord listening on %s", *socketPath)
-	if err := http.Serve(ln, nil); err != nil {
-		log.Fatalf("server error: %v", err)
+	log.Printf("conductord listening on %s", socketPath)
+	go http.Serve(ln, nil)
+}
+
+func main() {
+	socketPath := flag.String("socket", defaultSocketPath(), "Unix socket path")
+	devPort := flag.Int("dev-port", 0, "optional TCP port for web dev mode (0 = disabled)")
+	trayMode := flag.Bool("tray", false, "show system tray icon instead of running as a headless daemon")
+	flag.Parse()
+
+	// Extract bundled tmux (if available) and set tmuxPath.
+	initTmux()
+
+	// Start HTTP server in background.
+	startServer(*socketPath, *devPort)
+
+	if *trayMode {
+		// runTray blocks on the main goroutine (macOS Cocoa event loop).
+		// It handles SIGTERM/SIGINT internally and cleans up on exit.
+		runTray(*socketPath)
+	} else {
+		// Headless daemon mode — wait for signal.
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+		<-sigCh
+		log.Printf("shutting down, removing socket %s", *socketPath)
+		killTmuxServer()
+		os.Remove(*socketPath)
 	}
 }

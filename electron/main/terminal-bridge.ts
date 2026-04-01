@@ -18,7 +18,7 @@ const sessions = new Map<string, TerminalSession>()
 const pendingConnections = new Map<string, Promise<{ isNew: boolean }>>()
 
 export function registerTerminalBridge(): void {
-  ipcMain.handle('terminal:create', async (event, id: string, cwd?: string) => {
+  ipcMain.handle('terminal:create', async (event, id: string, cwd?: string, command?: string) => {
     // If already connected, close the stale WebSocket so we get a fresh
     // connection and let conductord decide whether the tmux session is new.
     if (sessions.has(id)) {
@@ -37,6 +37,7 @@ export function registerTerminalBridge(): void {
       const params = new URLSearchParams()
       params.set('id', id)
       if (cwd) params.set('cwd', cwd)
+      if (command) params.set('command', command)
 
       const ws = new WebSocket(`ws+unix://${CONDUCTORD_SOCKET}:/ws/terminal?${params}`)
 
@@ -159,6 +160,24 @@ export function registerTerminalBridge(): void {
     const session = sessions.get(id)
     if (session && session.ws.readyState === WebSocket.OPEN) {
       session.ws.send(JSON.stringify({ type: 'tmux-option', data: { key, value } }))
+    }
+  })
+
+  ipcMain.handle('terminal:capturePane', async (_event, id: string) => {
+    try {
+      const { conductordFetch } = await import('./conductord-client')
+      const { body } = await conductordFetch('/api/exec', {
+        method: 'POST',
+        body: JSON.stringify({
+          command: 'tmux',
+          args: ['capture-pane', '-t', id, '-p', '-S', '-100000', '-J'],
+          timeout: 10,
+        }),
+      }) as { body: { success: boolean; stdout?: string; stderr?: string } }
+      if (!body.success) return null
+      return body.stdout ?? null
+    } catch {
+      return null
     }
   })
 

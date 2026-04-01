@@ -40,10 +40,10 @@ function ensureIpcListeners(): void {
   })
 }
 
-export function createTerminal(id: string, cwd?: string): Promise<{ isNew: boolean; autoPilot?: boolean }> {
+export function createTerminal(id: string, cwd?: string, command?: string): Promise<{ isNew: boolean; autoPilot?: boolean }> {
   ensureIpcListeners()
   activeSessions.add(id)
-  return window.electronAPI.createTerminal(id, cwd)
+  return window.electronAPI.createTerminal(id, cwd, command)
 }
 
 export function writeTerminal(id: string, data: string, opts?: { programmatic?: boolean }): Promise<void> {
@@ -75,6 +75,10 @@ export function resizeTerminal(id: string, cols: number, rows: number): Promise<
 
 export function setTmuxOption(id: string, key: string, value: string): void {
   window.electronAPI.setTmuxOption(id, key, value)
+}
+
+export function capturePane(id: string): Promise<string | null> {
+  return window.electronAPI.capturePane(id)
 }
 
 export function setAutoPilot(id: string, enabled: boolean): void {

@@ -21,6 +21,9 @@ const electronAPI = {
   mkdir: (path: string) => ipcRenderer.invoke('fs:mkdir', path),
   gitBranch: (path: string) => ipcRenderer.invoke('git:branch', path),
   gitLog: (path: string, maxCount?: number) => ipcRenderer.invoke('git:log', path, maxCount),
+  gitShow: (path: string, hash: string) => ipcRenderer.invoke('git:show', path, hash),
+  gitRemoteUrl: (path: string) => ipcRenderer.invoke('git:remoteUrl', path),
+  gitShortstat: (path: string) => ipcRenderer.invoke('git:shortstat', path),
   rename: (oldPath: string, newPath: string) => ipcRenderer.invoke('fs:rename', oldPath, newPath),
   deleteFile: (path: string) => ipcRenderer.invoke('fs:delete', path),
   getHomeDir: () => ipcRenderer.invoke('fs:getHomeDir'),
@@ -39,13 +42,14 @@ const electronAPI = {
   invalidateCache: (namespace: string, key: string) => ipcRenderer.invoke('cache:invalidate', namespace, key),
 
   // Terminal (bridged to conductord Unix socket via main process)
-  createTerminal: (id: string, cwd?: string) => ipcRenderer.invoke('terminal:create', id, cwd),
+  createTerminal: (id: string, cwd?: string, command?: string) => ipcRenderer.invoke('terminal:create', id, cwd, command),
   writeTerminal: (id: string, data: string) => ipcRenderer.invoke('terminal:write', id, data),
   resizeTerminal: (id: string, cols: number, rows: number) =>
     ipcRenderer.invoke('terminal:resize', id, cols, rows),
   killTerminal: (id: string) => ipcRenderer.invoke('terminal:kill', id),
   setAutoPilot: (id: string, enabled: boolean) => ipcRenderer.invoke('terminal:setAutoPilot', id, enabled),
   setTmuxOption: (id: string, key: string, value: string) => ipcRenderer.invoke('terminal:setTmuxOption', id, key, value),
+  capturePane: (id: string) => ipcRenderer.invoke('terminal:capturePane', id),
   onTerminalData: (callback: (event: IpcRendererEvent, id: string, data: string) => void) =>
     ipcRenderer.on('terminal:data', callback),
   offTerminalData: (callback: (event: IpcRendererEvent, id: string, data: string) => void) =>
@@ -110,13 +114,6 @@ const electronAPI = {
   offConductordLogs: (callback: (event: IpcRendererEvent, watchId: string, data: string) => void) =>
     ipcRenderer.removeListener('conductord:logs', callback),
 
-  // Service management
-  isConductordInstalled: () => ipcRenderer.invoke('conductord:isInstalled'),
-  installConductord: () => ipcRenderer.invoke('conductord:install'),
-  uninstallConductord: () => ipcRenderer.invoke('conductord:uninstall'),
-  startConductord: () => ipcRenderer.invoke('conductord:start'),
-  stopConductord: () => ipcRenderer.invoke('conductord:stop'),
-  restartConductord: () => ipcRenderer.invoke('conductord:restart'),
   hasFullDiskAccess: () => ipcRenderer.invoke('conductord:hasFullDiskAccess'),
   openFullDiskAccessSettings: () => ipcRenderer.invoke('conductord:openFullDiskAccessSettings'),
 

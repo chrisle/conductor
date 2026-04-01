@@ -6,9 +6,8 @@ import SearchBar from "./SearchBar";
 import * as termAPI from "@/lib/terminal-api";
 import { useResolvedSettings } from "@/hooks/useResolvedSettings";
 import { useTabsStore } from "@/store/tabs";
-import { useTerminalSettings } from "./useTerminalSettings";
-import { createGhosttyTerminal } from "./ghostty-init";
 import { createXtermTerminal } from "./xterm-init";
+import { terminalConfig } from "./theme";
 
 export type { TerminalWatcher, TerminalTabExtraProps } from "./types";
 
@@ -31,6 +30,7 @@ export default function TerminalTab({
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<any>(null);
   const fitAddonRef = useRef<any>(null);
+  const serializeAddonRef = useRef<any>(null);
   const isCreatedRef = useRef(false);
   const initCmdSentRef = useRef(false);
   const preventScreenClearRef = useRef(preventScreenClear);
@@ -46,8 +46,9 @@ export default function TerminalTab({
   const [searchQuery, setSearchQuery] = useState("");
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error' | null>('connecting');
   const resolvedSettings = useResolvedSettings();
-  const renderer = useTerminalSettings(s => s.renderer);
   const sessionReadyRef = useRef(false);
+  const hydratingRef = useRef(false);
+  const tmuxMouseRef = useRef(resolvedSettings.terminal.tmuxMouse);
 
   const handleRefresh = useCallback(() => {
     termAPI.killTerminal(tabId);
@@ -65,6 +66,10 @@ export default function TerminalTab({
   useEffect(() => {
     onPtyDataRef.current = onPtyData;
   }, [onPtyData]);
+
+  useEffect(() => {
+    tmuxMouseRef.current = resolvedSettings.terminal.tmuxMouse;
+  }, [resolvedSettings.terminal.tmuxMouse]);
 
   // Re-apply tmux mouse whenever the resolved setting changes
   useEffect(() => {
@@ -142,12 +147,20 @@ export default function TerminalTab({
     let disposed = false;
     const cleanupRef = { current: () => {} };
 
-    const createTerminal = renderer === 'xterm' ? createXtermTerminal : createGhosttyTerminal;
+    const createTerminal = createXtermTerminal;
     const clearContainer = () => {
       if (mountGenerationRef.current !== mountGeneration) return;
       containerEl.replaceChildren();
       containerEl.style.visibility = "visible";
     };
+
+    // Regex to strip mouse tracking escape sequences (DEC private mode set/reset).
+    // When tmuxMouse is off, we prevent xterm.js from entering mouse reporting
+    // mode so wheel events scroll xterm's buffer and click-drag does native selection.
+    // Matches any DEC private mode set/reset sequence containing a mouse
+    // tracking mode — handles both individual (\x1b[?1000h) and combined
+    // (\x1b[?1000;1002;1006h) forms.
+    const MOUSE_MODE_RE = /\x1b\[\?[\d;]*(1000|1002|1003|1005|1006|1015)[\d;]*[hl]/g;
 
     const flushPendingData = () => {
       const term = terminalRef.current;
@@ -168,6 +181,10 @@ export default function TerminalTab({
             .replace(/\x1bc/g, "");
           if (!data) continue;
         }
+        if (!tmuxMouseRef.current) {
+          data = data.replace(MOUSE_MODE_RE, "");
+          if (!data) continue;
+        }
         writePtyData(term, data);
         onPtyDataRef.current?.(data);
       }
@@ -177,7 +194,7 @@ export default function TerminalTab({
       if (id !== tabId || disposed) return;
 
       const term = terminalRef.current;
-      if (!term) {
+      if (!term || hydratingRef.current) {
         pendingDataRef.current.push(data);
         return;
       }
@@ -192,6 +209,10 @@ export default function TerminalTab({
           .replace(/\x1b\[2J/g, "")
           .replace(/\x1b\[3J/g, "")
           .replace(/\x1bc/g, "");
+        if (!data) return;
+      }
+      if (!tmuxMouseRef.current) {
+        data = data.replace(MOUSE_MODE_RE, "");
         if (!data) return;
       }
 
@@ -224,7 +245,7 @@ export default function TerminalTab({
     let needsRefitAfterFirstData = true;
 
     clearContainer();
-    createTerminal(containerEl).then(({ term, fitAddon }) => {
+    createTerminal(containerEl).then(({ term, fitAddon, serializeAddon }) => {
       if (disposed) {
         term.dispose();
         return;
@@ -232,6 +253,7 @@ export default function TerminalTab({
 
       terminalRef.current = term;
       fitAddonRef.current = fitAddon;
+      serializeAddonRef.current = serializeAddon;
       flushPendingData();
       if (pendingExitRef.current) {
         pendingExitRef.current = false;
@@ -244,50 +266,61 @@ export default function TerminalTab({
       setTimeout(() => {
         doFit();
         const { cols, rows } = term;
-        console.log(`[terminal] ${renderer} fit: cols=${cols} rows=${rows}`);
-        termAPI.createTerminal(tabId, cwd).then(({ isNew, autoPilot: apState }) => {
+        console.log(`[terminal] xterm fit: cols=${cols} rows=${rows}`);
+        // Pass the initialCommand to conductord so it can use tmux send-keys
+        // immediately after creating the session — far more reliable than
+        // waiting for the shell prompt from the renderer side.
+        termAPI.createTerminal(tabId, cwd, initialCommand).then(async ({ isNew, autoPilot: apState }) => {
           console.log(`[terminal] session ready: id=${tabId} isNew=${isNew} autoPilot=${apState} hasInitCmd=${!!initialCommand}`);
           termAPI.resizeTerminal(tabId, cols, rows);
+
+          // For existing sessions, suppress live PTY data while we hydrate
+          // the scrollback buffer to avoid doubling the visible screen content.
+          if (!isNew) {
+            hydratingRef.current = true;
+          }
+
+          if (disposed) return;
           sessionReadyRef.current = true;
           setConnectionStatus('connected');
           // Apply tmux mouse setting from resolved project/workspace config
           termAPI.setTmuxOption(tabId, 'mouse', resolvedSettings.terminal.tmuxMouse ? 'on' : 'off');
-          // Show the terminal now that the PTY is connected and focus it
-          containerEl.style.visibility = "visible";
-          term.focus();
-          // Re-fit after the container is visible to ensure tmux gets
-          // the correct dimensions (especially on reattach).
-          setTimeout(() => doFit(), 100);
+
+          if (!isNew) {
+            // Restore scrollback from serialized buffer (saved on previous
+            // teardown) so colors and formatting are preserved exactly.
+            const saved = sessionStorage.getItem(`terminal:buffer:${tabId}`);
+            if (saved && !disposed) {
+              term.write(saved, () => {
+                if (disposed) return;
+                containerEl.style.visibility = "visible";
+                term.focus();
+                term.scrollToBottom();
+                hydratingRef.current = false;
+                flushPendingData();
+              });
+            } else {
+              // No saved buffer — show terminal and resume immediately
+              containerEl.style.visibility = "visible";
+              term.focus();
+              hydratingRef.current = false;
+              flushPendingData();
+            }
+            setTimeout(() => doFit(), 100);
+          } else {
+            // For new sessions: show immediately, fit after visible
+            containerEl.style.visibility = "visible";
+            term.focus();
+            setTimeout(() => doFit(), 100);
+          }
           onTerminalReady?.((data: string) =>
             termAPI.writeTerminal(tabId, data, { programmatic: true }),
           );
           onSessionReady?.(isNew, { autoPilot: apState });
-          // Only send initialCommand for brand-new tmux sessions. When
-          // reattaching to an existing session the process is already running.
-          if (initialCommand && isNew && !initCmdSentRef.current) {
-            // Wait for the shell prompt to settle before sending the command.
-            // We detect readiness by waiting for a gap in incoming PTY data,
-            // which means the prompt has finished rendering.
-            let idleTimer: ReturnType<typeof setTimeout> | null = null;
-            const onData = (_event: any, id: string, _data: string) => {
-              if (id !== tabId) return;
-              if (idleTimer) clearTimeout(idleTimer);
-              idleTimer = setTimeout(() => {
-                if (initCmdSentRef.current) return;
-                initCmdSentRef.current = true;
-                termAPI.offTerminalData(onData);
-                termAPI.writeTerminal(tabId, initialCommand, { programmatic: true });
-              }, 150);
-            };
-            termAPI.onTerminalData(onData);
-            // Fallback in case no data arrives (e.g. bare shell with no prompt)
-            setTimeout(() => {
-              if (initCmdSentRef.current) return;
-              initCmdSentRef.current = true;
-              termAPI.offTerminalData(onData);
-              if (idleTimer) clearTimeout(idleTimer);
-              termAPI.writeTerminal(tabId, initialCommand, { programmatic: true });
-            }, 3000);
+          // Mark initialCommand as sent — conductord already sent it via
+          // tmux send-keys when creating the session.
+          if (initialCommand && isNew) {
+            initCmdSentRef.current = true;
           }
         }).catch((err) => {
           console.error(`[terminal] failed to create session ${tabId}:`, err);
@@ -302,7 +335,7 @@ export default function TerminalTab({
       });
 
       term.onResize(({ cols, rows }: { cols: number; rows: number }) => {
-        console.log(`[terminal] ghostty resize: cols=${cols} rows=${rows}`);
+        console.log(`[terminal] resize: cols=${cols} rows=${rows}`);
         termAPI.resizeTerminal(tabId, cols, rows);
       });
 
@@ -318,7 +351,7 @@ export default function TerminalTab({
         if (e.deltaY < 0) {
           userScrolledUpRef.current = true;
         } else if (e.deltaY > 0) {
-          // Check synchronously after Ghostty processes the scroll
+          // Check synchronously after xterm processes the scroll
           requestAnimationFrame(() => {
             if (disposed) return;
             const buf = term.buffer.active;
@@ -359,6 +392,18 @@ export default function TerminalTab({
         resizeObserver.disconnect();
         watchLastMatchRef.current.clear();
         watchLastFireRef.current.clear();
+        // Serialize the buffer with colors before disposing so it can
+        // be restored on reattach (same approach as VS Code).
+        try {
+          if (serializeAddonRef.current) {
+            const serialized = serializeAddonRef.current.serialize({
+              scrollback: terminalConfig.scrollback,
+            });
+            sessionStorage.setItem(`terminal:buffer:${tabId}`, serialized);
+          }
+        } catch (err) {
+          console.warn('[terminal] failed to serialize buffer:', err);
+        }
         term.dispose();
         clearContainer();
       };
