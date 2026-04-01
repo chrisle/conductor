@@ -11,7 +11,6 @@ import { useTabsStore } from '@/store/tabs'
 export default function CodexTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
   const settings = useCodexSettings()
   const [autoPilot, setAutoPilot] = useState(tab.autoPilot ?? false)
-  const [preventScreenClear, setPreventScreenClear] = useState(false)
   const { updateTab } = useTabsStore()
   const autoPilotRef = useRef(autoPilot)
   const writeRef = useRef<((data: string) => void) | null>(null)
@@ -46,7 +45,6 @@ export default function CodexTab({ tabId, groupId, isActive, tab }: TabProps): R
   const footer = (
     <>
       <Toggle on={autoPilot} onToggle={() => setAutoPilot(!autoPilot)} label="Auto-pilot" />
-      <Toggle on={preventScreenClear} onToggle={() => setPreventScreenClear(!preventScreenClear)} label="Prevent clear" color="#06b6d4" />
     </>
   )
 
@@ -61,7 +59,6 @@ export default function CodexTab({ tabId, groupId, isActive, tab }: TabProps): R
           ? buildCodexCommand(tab.initialCommand, settings)
           : undefined,
       }}
-      preventScreenClear={preventScreenClear}
       onPtyData={onPtyData}
       onTerminalReady={handleTerminalReady}
       onSessionReady={() => updateTab(groupId, tabId, { hasTmuxSession: true })}

@@ -1,6 +1,15 @@
 import { create } from 'zustand'
+import { nanoid } from '@/lib/nanoid'
 import type { LayoutNode } from './layout'
 import type { ProjectSettings } from '@/types/project-settings'
+
+export interface SessionGroup {
+  id: string
+  name: string
+  sessionIds: string[]
+}
+
+export type SessionSortOrder = 'created' | 'alpha' | 'activity' | 'attached'
 
 export interface SerializedTab {
   id: string
@@ -45,6 +54,11 @@ export interface ConductorProject {
     connectionId?: string
   }
   settings?: ProjectSettings
+  /** Custom titles for tmux sessions, keyed by session name (tab ID) */
+  sessionTitles?: Record<string, string>
+  /** User-defined session groups */
+  sessionGroups?: SessionGroup[]
+  sessionSort?: SessionSortOrder
 }
 
 interface ProjectState {
@@ -58,6 +72,9 @@ interface ProjectState {
   jiraConnectionId: string | null
   projectSettings: ProjectSettings | undefined
   workspaceSettings: ProjectSettings | undefined
+  sessionTitles: Record<string, string>
+  sessionGroups: SessionGroup[]
+  sessionSort: SessionSortOrder
 
   setProject: (filePath: string, name: string) => void
   setJiraConfig: (spaceKeys: string[], connectionId?: string) => void
@@ -73,6 +90,16 @@ interface ProjectState {
   isAnyDirty: () => boolean
   reorderWorkspace: (fromIndex: number, toIndex: number) => void
   renameWorkspaceInStore: (oldName: string, newName: string) => void
+  setSessionTitle: (sessionId: string, title: string) => void
+  clearSessionTitle: (sessionId: string) => void
+  setSessionTitles: (titles: Record<string, string>) => void
+  setSessionGroups: (groups: SessionGroup[]) => void
+  addSessionGroup: (name: string, sessionIds: string[]) => string
+  removeSessionGroup: (groupId: string) => void
+  renameSessionGroup: (groupId: string, name: string) => void
+  addSessionsToGroup: (groupId: string, sessionIds: string[]) => void
+  removeSessionFromGroup: (groupId: string, sessionId: string) => void
+  setSessionSort: (sort: SessionSortOrder) => void
   addRecentProject: (name: string, path: string) => void
   loadRecentProjects: () => Promise<void>
   saveRecentProjects: () => Promise<void>
@@ -89,6 +116,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   jiraConnectionId: null,
   projectSettings: undefined,
   workspaceSettings: undefined,
+  sessionTitles: {},
+  sessionGroups: [],
+  sessionSort: 'created' as SessionSortOrder,
 
   setProjectSettings: (settings) => set({ projectSettings: settings }),
   setWorkspaceSettings: (settings) => set({ workspaceSettings: settings }),
@@ -113,6 +143,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     workspaceNames: [], dirtyWorkspaces: new Set(),
     jiraSpaceKeys: [], jiraConnectionId: null,
     projectSettings: undefined, workspaceSettings: undefined,
+    sessionTitles: {}, sessionGroups: [], sessionSort: 'created' as SessionSortOrder,
   }),
 
   setActiveWorkspace: (name) => set({ activeWorkspace: name }),
@@ -169,6 +200,89 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       }
       return { workspaceNames: names, activeWorkspace, dirtyWorkspaces }
     })
+  },
+
+  setSessionTitle: (sessionId, title) => {
+    set(state => ({
+      sessionTitles: { ...state.sessionTitles, [sessionId]: title }
+    }))
+    get().markWorkspaceDirty()
+  },
+
+  clearSessionTitle: (sessionId) => {
+    set(state => {
+      const next = { ...state.sessionTitles }
+      delete next[sessionId]
+      return { sessionTitles: next }
+    })
+    get().markWorkspaceDirty()
+  },
+
+  setSessionTitles: (titles) => set({ sessionTitles: titles }),
+
+  setSessionGroups: (groups) => set({ sessionGroups: groups }),
+
+  addSessionGroup: (name, sessionIds) => {
+    const id = nanoid()
+    set(state => {
+      // Remove sessionIds from any existing groups first
+      const idSet = new Set(sessionIds)
+      const cleaned = state.sessionGroups.map(g => ({
+        ...g,
+        sessionIds: g.sessionIds.filter(sid => !idSet.has(sid)),
+      }))
+      return { sessionGroups: [...cleaned, { id, name, sessionIds }] }
+    })
+    get().markWorkspaceDirty()
+    return id
+  },
+
+  removeSessionGroup: (groupId) => {
+    set(state => ({
+      sessionGroups: state.sessionGroups.filter(g => g.id !== groupId),
+    }))
+    get().markWorkspaceDirty()
+  },
+
+  renameSessionGroup: (groupId, name) => {
+    set(state => ({
+      sessionGroups: state.sessionGroups.map(g =>
+        g.id === groupId ? { ...g, name } : g
+      ),
+    }))
+    get().markWorkspaceDirty()
+  },
+
+  addSessionsToGroup: (groupId, sessionIds) => {
+    set(state => {
+      const idSet = new Set(sessionIds)
+      // Remove from other groups first
+      const updated = state.sessionGroups.map(g => {
+        if (g.id === groupId) {
+          const merged = new Set([...g.sessionIds, ...sessionIds])
+          return { ...g, sessionIds: [...merged] }
+        }
+        return { ...g, sessionIds: g.sessionIds.filter(sid => !idSet.has(sid)) }
+      })
+      return { sessionGroups: updated }
+    })
+    get().markWorkspaceDirty()
+  },
+
+  removeSessionFromGroup: (groupId, sessionId) => {
+    set(state => ({
+      sessionGroups: state.sessionGroups.map(g =>
+        g.id === groupId
+          ? { ...g, sessionIds: g.sessionIds.filter(sid => sid !== sessionId) }
+          : g
+      ),
+    }))
+    get().markWorkspaceDirty()
+  },
+
+  setSessionSort: (sort) => {
+    set({ sessionSort: sort })
+    get().markWorkspaceDirty()
   },
 
   addRecentProject: (name, path) => {

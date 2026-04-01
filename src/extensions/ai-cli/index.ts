@@ -6,19 +6,7 @@ import CodexTab from './components/CodexTab'
 import AiCliSettingsPanel from './components/AiCliSettingsPanel'
 import { useTabsStore } from '@/store/tabs'
 import { useSidebarStore } from '@/store/sidebar'
-
-function nextSessionId(prefix: string): string {
-  const groups = useTabsStore.getState().groups
-  const existing = new Set<string>()
-  for (const group of Object.values(groups)) {
-    for (const tab of group.tabs) {
-      if (tab.id.startsWith(`${prefix}-`)) existing.add(tab.id)
-    }
-  }
-  let n = 1
-  while (existing.has(`${prefix}-${n}`)) n++
-  return `${prefix}-${n}`
-}
+import { nextSessionId } from '@/lib/session-id'
 
 export const aiCliExtension: Extension = {
   id: 'ai-cli',

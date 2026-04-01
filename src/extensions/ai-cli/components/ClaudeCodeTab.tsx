@@ -20,12 +20,9 @@ function extractTicketKey(title: string): string | null {
 export default function ClaudeCodeTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
   const settings = useClaudeCodeSettings()
   const [autoPilot, setAutoPilot] = useState(tab.autoPilot ?? false)
-  const [preventScreenClear, setPreventScreenClear] = useState(false)
-  const [disableBackgroundTasks, setDisableBackgroundTasks] = useState(settings.disableBackgroundTasks)
   const { rootPath } = useSidebarStore()
   const { updateTab } = useTabsStore()
   const writeRef = useRef<((data: string) => void) | null>(null)
-  const restartingRef = useRef(false)
   const autoPilotRef = useRef(autoPilot)
 
   useEffect(() => { autoPilotRef.current = autoPilot }, [autoPilot])
@@ -80,39 +77,9 @@ export default function ClaudeCodeTab({ tabId, groupId, isActive, tab }: TabProp
     return false
   }, [])
 
-  const handleToggleBackgroundTasks = useCallback(() => {
-    if (!sessionId || !writeRef.current) return
-    const newValue = !disableBackgroundTasks
-    setDisableBackgroundTasks(newValue)
-
-    if (restartingRef.current) return
-    restartingRef.current = true
-
-    const write = writeRef.current
-    write('\x03')
-    setTimeout(() => {
-      write('/exit\n')
-      setTimeout(() => {
-        const cmd = buildClaudeCommand(`claude --resume ${sessionId}\n`, {
-          ...settings,
-          disableBackgroundTasks: newValue,
-        }, tab.apiKey)
-        write(cmd)
-        restartingRef.current = false
-      }, 1500)
-    }, 500)
-  }, [sessionId, disableBackgroundTasks])
-
   const footer = (
     <>
       <Toggle on={autoPilot} onToggle={() => setAutoPilot(!autoPilot)} label="Auto-pilot" />
-      <Toggle on={preventScreenClear} onToggle={() => setPreventScreenClear(!preventScreenClear)} label="Prevent clear" color="#06b6d4" />
-      <Toggle
-        on={disableBackgroundTasks}
-        onToggle={handleToggleBackgroundTasks}
-        label="No bg tasks"
-        color="#ef4444"
-      />
       {sessionId && (
         <>
           <div className="w-px h-3 bg-zinc-700" />
@@ -142,7 +109,6 @@ export default function ClaudeCodeTab({ tabId, groupId, isActive, tab }: TabProp
           ? buildClaudeCommand(tab.initialCommand, settings, tab.apiKey)
           : undefined,
       }}
-      preventScreenClear={preventScreenClear}
       onPtyData={onPtyData}
       onTerminalReady={handleTerminalReady}
       onSessionReady={(isNew, opts) => {

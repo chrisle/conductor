@@ -100,6 +100,9 @@ export function serializeProject(): ConductorProject {
       connectionId: project.jiraConnectionId ?? undefined,
     } : undefined,
     settings: project.projectSettings,
+    sessionTitles: Object.keys(project.sessionTitles).length > 0 ? project.sessionTitles : undefined,
+    sessionGroups: project.sessionGroups.length > 0 ? project.sessionGroups : undefined,
+    sessionSort: project.sessionSort !== 'created' ? project.sessionSort : undefined,
   }
 }
 
@@ -194,6 +197,13 @@ export function restoreProject(project: ConductorProject, projectDir?: string): 
   if (activeWorkspace) {
     projectStore.setWorkspaceSettings(activeWorkspace.settings)
   }
+
+  // Restore session titles
+  projectStore.setSessionTitles(project.sessionTitles || {})
+
+  // Restore session groups and sort
+  projectStore.setSessionGroups(project.sessionGroups || [])
+  projectStore.setSessionSort(project.sessionSort || 'created')
 }
 
 /** Save the current project to the given file path */
@@ -235,6 +245,9 @@ export async function saveProject(filePath: string): Promise<void> {
       connectionId: project.jiraConnectionId ?? undefined,
     } : undefined,
     settings: project.projectSettings,
+    sessionTitles: Object.keys(project.sessionTitles).length > 0 ? project.sessionTitles : undefined,
+    sessionGroups: project.sessionGroups.length > 0 ? project.sessionGroups : undefined,
+    sessionSort: project.sessionSort !== 'created' ? project.sessionSort : undefined,
   }
 
   await window.electronAPI.writeFile(filePath, JSON.stringify(data, null, 2))
@@ -538,6 +551,7 @@ export function autosaveLayout(): void {
   try {
     const sidebar = useSidebarStore.getState()
     const activityBar = useActivityBarStore.getState()
+    const project = useProjectStore.getState()
     const data = {
       workspace: serializeWorkspace(),
       sidebar: {
@@ -545,6 +559,9 @@ export function autosaveLayout(): void {
         expandedPaths: Array.from(sidebar.expandedPaths),
       },
       activeExtensionId: activityBar.activeExtensionId,
+      sessionTitles: Object.keys(project.sessionTitles).length > 0 ? project.sessionTitles : undefined,
+      sessionGroups: project.sessionGroups.length > 0 ? project.sessionGroups : undefined,
+      sessionSort: project.sessionSort !== 'created' ? project.sessionSort : undefined,
     }
     localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data))
   } catch { /* quota exceeded — ignore */ }
@@ -565,6 +582,9 @@ function restoreAutosavedLayout(): boolean {
       workspaceOrder: ['default'],
       sidebar: data.sidebar || { rootPath: null, expandedPaths: [] },
       activeExtensionId: data.activeExtensionId ?? null,
+      sessionTitles: data.sessionTitles,
+      sessionGroups: data.sessionGroups,
+      sessionSort: data.sessionSort,
     }
     restoreProject(project)
     return true

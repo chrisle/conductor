@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { X, Plus, FileText, FolderOpen, FilePlus2, Folder, RotateCw } from 'lucide-react'
+import { X, Plus, FileText, FolderOpen, FilePlus2, Folder, RotateCw, Pencil, Skull } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -14,6 +14,8 @@ import { openProjectDialog, openProject, createNewProject } from '@/lib/project-
 import { useProjectStore } from '@/store/project'
 import { useConfigStore } from '@/store/config'
 import { killTerminal } from '@/lib/terminal-api'
+import { nextSessionId } from '@/lib/session-id'
+import { setSessionTitle } from '@/lib/session-titles'
 import ClaudeIcon from '@/components/ui/ClaudeIcon'
 import CodexIcon from '@/components/ui/CodexIcon'
 import { Terminal, Globe } from 'lucide-react'
@@ -335,10 +337,6 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   }
 
   function closeTab(tabId: string) {
-    const tab = group.tabs.find(t => t.id === tabId)
-    if (tab && isTerminalLike(tab.type)) {
-      killTerminal(tabId)
-    }
     const groupTabs = group.tabs
     removeTab(groupId, tabId)
     if (groupTabs.length === 1) {
@@ -350,6 +348,14 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
         }, 0)
       }
     }
+  }
+
+  function killAndCloseTab(tabId: string) {
+    const tab = group.tabs.find(t => t.id === tabId)
+    if (tab && isTerminalLike(tab.type)) {
+      killTerminal(tabId)
+    }
+    closeTab(tabId)
   }
 
   function handleCloseTab(e: React.MouseEvent, tabId: string) {
@@ -369,25 +375,17 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
 
   function commitRename() {
     if (renamingTabId && renameValue.trim()) {
-      useTabsStore.getState().updateTab(groupId, renamingTabId, { title: renameValue.trim() })
+      const title = renameValue.trim()
+      useTabsStore.getState().updateTab(groupId, renamingTabId, { title })
+      const tab = group.tabs.find(t => t.id === renamingTabId)
+      if (tab && isTerminalLike(tab.type)) {
+        setSessionTitle(renamingTabId, title)
+      }
     }
     setRenamingTabId(null)
   }
 
   const claudeAccounts = useConfigStore(s => s.config.claudeAccounts)
-
-  function nextSessionId(prefix: string): string {
-    const groups = useTabsStore.getState().groups
-    const existing = new Set<string>()
-    for (const g of Object.values(groups)) {
-      for (const t of g.tabs) {
-        if (t.id.startsWith(`${prefix}-`)) existing.add(t.id)
-      }
-    }
-    let n = 1
-    while (existing.has(`${prefix}-${n}`)) n++
-    return `${prefix}-${n}`
-  }
 
   function addClaudeTab(apiKey?: string, accountName?: string) {
     const cwd = rootPath || undefined
@@ -414,7 +412,10 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     return (
       <>
         {/* Current directory */}
-        <DropdownMenuLabel className="text-[10px] text-zinc-500 font-normal truncate max-w-[200px] py-1">
+        <DropdownMenuLabel className="text-[10px] text-zinc-500 font-normal py-0.5">
+          Current directory
+        </DropdownMenuLabel>
+        <DropdownMenuLabel className="text-[10px] text-zinc-400 font-normal truncate max-w-[200px] py-0.5 -mt-1">
           {rootPath ? friendly(rootPath) : 'No project'}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
@@ -425,7 +426,11 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
             <ClaudeIcon className="w-3.5 h-3.5 text-[#D97757] shrink-0" />
             <span>Claude</span>
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="bg-zinc-900 border-zinc-700">
+          <DropdownMenuSubContent className="bg-zinc-900 border-zinc-700 shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
+            <DropdownMenuLabel className="text-[10px] text-zinc-500 font-normal py-0.5">
+              Claude Accounts
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => { addClaudeTab(); onDone() }}
               className="gap-2 text-xs cursor-pointer"
@@ -607,30 +612,42 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
               </div>
               </ContextMenuTrigger>
               <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
+                <ContextMenuItem
+                  className="gap-2 text-xs cursor-pointer"
+                  onClick={() => startRename(tab)}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  Rename
+                </ContextMenuItem>
                 {isTerminalLike(tab.type) && (
                   <>
+                    <CtxMenuSeparator />
                     <ContextMenuItem
                       className="gap-2 text-xs cursor-pointer"
                       onClick={() => refreshTab(tab)}
                     >
                       <RotateCw className="w-3.5 h-3.5" />
-                      Refresh Terminal
+                      Refresh
                     </ContextMenuItem>
-                    <CtxMenuSeparator />
                   </>
                 )}
+                <CtxMenuSeparator />
                 <ContextMenuItem
                   className="gap-2 text-xs cursor-pointer"
-                  onClick={() => startRename(tab)}
-                >
-                  Rename
-                </ContextMenuItem>
-                <ContextMenuItem
-                  className="gap-2 text-xs cursor-pointer text-red-400 focus:text-red-300"
                   onClick={() => closeTab(tab.id)}
                 >
+                  <X className="w-3.5 h-3.5" />
                   Close
                 </ContextMenuItem>
+                {isTerminalLike(tab.type) && (
+                  <ContextMenuItem
+                    className="gap-2 text-xs cursor-pointer text-red-400 focus:text-red-300"
+                    onClick={() => killAndCloseTab(tab.id)}
+                  >
+                    <Skull className="w-3.5 h-3.5" />
+                    Kill Session
+                  </ContextMenuItem>
+                )}
               </ContextMenuContent>
             </ContextMenu>
           ))}
@@ -642,7 +659,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                 <Plus className="w-3.5 h-3.5" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-44 bg-zinc-900 border-zinc-700">
+            <DropdownMenuContent align="start" className="w-44 bg-zinc-900 border-zinc-700 shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
               {renderMenuItems(() => setNewTabMenuOpen(false))}
             </DropdownMenuContent>
           </DropdownMenu>

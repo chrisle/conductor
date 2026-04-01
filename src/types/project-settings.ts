@@ -13,7 +13,7 @@ export const DEFAULT_PROJECT_SETTINGS: Required<{
   terminal: Required<NonNullable<ProjectSettings['terminal']>>
 }> = {
   terminal: {
-    tmuxMouse: true,
+    tmuxMouse: false,
   },
 }
 

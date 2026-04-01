@@ -7,8 +7,9 @@ import { useTabsStore } from '@/store/tabs'
  * whenever Claude transitions between thinking and idle.
  *
  * Transitions to "thinking" are immediate. Transitions to "not thinking" are
- * debounced (3 s) so that brief gaps caused by cursor rewrites or large tool
- * responses don't produce visible flicker.
+ * debounced (800 ms) so that brief gaps caused by cursor rewrites or large tool
+ * responses don't produce visible flicker. The spinner gives us a reliable
+ * frame-by-frame signal (~200ms apart) so a short debounce is sufficient.
  */
 export function useThinkingDetect(tabId: string, groupId: string) {
   const { updateTab } = useTabsStore()
@@ -26,7 +27,7 @@ export function useThinkingDetect(tabId: string, groupId: string) {
     // The thinking pattern (timer + tokens) also uses the tail so old
     // thinking lines that scrolled off don't produce false positives.
     const tail = recentDataRef.current.slice(-1024)
-    const { thinking, time, done } = getThinkingState(stripAnsi(tail))
+    const { thinking, time, done } = getThinkingState(stripAnsi(tail), data)
 
     if (thinking) {
       // Cancel any pending "not thinking" timer and go green immediately
@@ -58,7 +59,7 @@ export function useThinkingDetect(tabId: string, groupId: string) {
         thinkingRef.current = false
         recentDataRef.current = ''
         updateTab(groupId, tabId, { isThinking: false, thinkingTime: undefined })
-      }, 3000)
+      }, 800)
     }
   }, [tabId, groupId, updateTab])
 
