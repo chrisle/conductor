@@ -25,13 +25,6 @@ export default function GoToDialog({ open, onOpenChange }: GoToDialogProps): Rea
   const [suggestions, setSuggestions] = useState<string[]>([])
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => {
-    if (open) {
-      setInputValue('')
-      setSuggestions([])
-    }
-  }, [open])
-
   const resolvePath = useCallback(async (partial: string): Promise<string> => {
     if (partial.startsWith('/') || partial.startsWith('~')) return partial
     if (rootPath) {
@@ -42,15 +35,30 @@ export default function GoToDialog({ open, onOpenChange }: GoToDialogProps): Rea
     return '~/' + partial
   }, [rootPath])
 
+  const fetchCurrentDirSuggestions = useCallback(async () => {
+    if (!rootPath) { setSuggestions([]); return }
+    const home = await window.electronAPI.getHomeDir()
+    const friendly = rootPath.startsWith(home) ? '~' + rootPath.slice(home.length) : rootPath
+    const results = await window.electronAPI.autocomplete(friendly + '/')
+    setSuggestions(results)
+  }, [rootPath])
+
   const fetchSuggestions = useCallback(async (value: string) => {
     if (!value.trim()) {
-      setSuggestions([])
+      fetchCurrentDirSuggestions()
       return
     }
     const resolved = await resolvePath(value)
     const results: string[] = await window.electronAPI.autocomplete(resolved)
     setSuggestions(results)
-  }, [resolvePath])
+  }, [resolvePath, fetchCurrentDirSuggestions])
+
+  useEffect(() => {
+    if (open) {
+      setInputValue('')
+      fetchCurrentDirSuggestions()
+    }
+  }, [open, fetchCurrentDirSuggestions])
 
   const handleInputChange = (value: string) => {
     setInputValue(value)
@@ -85,7 +93,7 @@ export default function GoToDialog({ open, onOpenChange }: GoToDialogProps): Rea
         <VisuallyHidden><DialogTitle>Go to folder</DialogTitle></VisuallyHidden>
         <Command className="rounded-lg bg-zinc-900" shouldFilter={false}>
           <CommandInput
-            placeholder={rootPath ? `Search from ${friendly(rootPath)}...` : 'Type a path...'}
+            placeholder={rootPath ? `Change directory from ${friendly(rootPath)}...` : 'Change directory...'}
             value={inputValue}
             onValueChange={handleInputChange}
           />
@@ -119,7 +127,7 @@ export default function GoToDialog({ open, onOpenChange }: GoToDialogProps): Rea
             {suggestions.length > 0 && (
               <>
                 {filteredFavorites.length > 0 && <CommandSeparator />}
-                <CommandGroup heading="Directories">
+                <CommandGroup heading={inputValue.trim() ? 'Directories' : './'}>
                   {suggestions.map(s => (
                     <CommandItem
                       key={'dir-' + s}
