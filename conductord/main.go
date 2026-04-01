@@ -74,7 +74,13 @@ func stripAnsi(s string) string {
 }
 
 var (
+	// Legacy numbered menu: "1. Yes"
 	apReYes1       = regexp.MustCompile(`(?s)1\.?\s*Yes`)
+	// Claude Code v2+ cursor menu: "❯ Yes" or "> Yes"
+	apReCursorYes  = regexp.MustCompile(`[❯>]\s+Yes\b`)
+	// Claude Code permission menu: "Yes  Allow once" or "Yes, and don't ask"
+	apReYesAllow   = regexp.MustCompile(`(?i)Yes\s+(Allow once|and don't ask)`)
+	// Generic yes/no prompts
 	apReYN1        = regexp.MustCompile(`(?im)\(Y/n\)\s*$`)
 	apReYN2        = regexp.MustCompile(`(?im)\(y/N\)\s*$`)
 	apReYN3        = regexp.MustCompile(`(?im)\[y/n\]\s*$`)
@@ -83,10 +89,14 @@ var (
 	apRePressEnter = regexp.MustCompile(`(?i)press enter to continue`)
 	apReContinue   = regexp.MustCompile(`(?i)continue\? \[y/n\]`)
 	apReAllow      = regexp.MustCompile(`(?i)Allow.*\(y/n\)`)
+	// "Do you want to proceed?" style
+	apReProceed    = regexp.MustCompile(`(?i)proceed\?\s*\(y/n\)`)
 )
 
 func matchPrompt(text string) string {
 	if apReYes1.MatchString(text)       { return "\r" }
+	if apReCursorYes.MatchString(text)  { return "\r" }
+	if apReYesAllow.MatchString(text)   { return "\r" }
 	if apReYN1.MatchString(text)        { return "y\r" }
 	if apReYN2.MatchString(text)        { return "y\r" }
 	if apReYN3.MatchString(text)        { return "y\r" }
@@ -95,6 +105,7 @@ func matchPrompt(text string) string {
 	if apRePressEnter.MatchString(text) { return "\r" }
 	if apReContinue.MatchString(text)   { return "y\r" }
 	if apReAllow.MatchString(text)      { return "y\r" }
+	if apReProceed.MatchString(text)    { return "y\r" }
 	return ""
 }
 
@@ -348,6 +359,12 @@ func (s *session) readLoop() {
 				now := time.Now().UnixMilli()
 				if now-s.apLastMs >= 250 {
 					stripped := stripAnsi(string(s.apBuf))
+					// Log the tail of the scanned buffer for debugging
+					tail := stripped
+					if len(tail) > 300 {
+						tail = tail[len(tail)-300:]
+					}
+					log.Printf("[autopilot %s] scanning %d bytes, tail: %q", s.id, len(stripped), tail)
 					apResponse = matchPrompt(stripped)
 					if apResponse != "" {
 						s.apLastMs = now

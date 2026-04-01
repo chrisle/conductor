@@ -2,7 +2,13 @@ import { useCallback, useEffect, useRef } from 'react'
 import { stripAnsi } from '@/lib/terminal-detection'
 
 export function matchPrompt(text: string): string | null {
+  // Legacy numbered menu: "1. Yes"
   if (/1\.?\s*Yes/s.test(text))              return '\r'
+  // Claude Code v2+ cursor menu: "❯ Yes" or "> Yes"
+  if (/[❯>]\s+Yes\b/.test(text))            return '\r'
+  // Claude Code permission menu: "Yes  Allow once" or "Yes, and don't ask"
+  if (/Yes\s+(Allow once|and don't ask)/i.test(text)) return '\r'
+  // Generic yes/no prompts
   if (/\(Y\/n\)\s*$/im.test(text))           return 'y\r'
   if (/\(y\/N\)\s*$/im.test(text))           return 'y\r'
   if (/\[y\/n\]\s*$/im.test(text))           return 'y\r'
@@ -11,6 +17,7 @@ export function matchPrompt(text: string): string | null {
   if (/press enter to continue/i.test(text)) return '\r'
   if (/continue\? \[y\/n\]/i.test(text))     return 'y\r'
   if (/Allow.*\(y\/n\)/i.test(text))         return 'y\r'
+  if (/proceed\?\s*\(y\/n\)/i.test(text))    return 'y\r'
   return null
 }
 
