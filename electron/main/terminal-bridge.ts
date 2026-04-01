@@ -88,7 +88,13 @@ export function registerTerminalBridge(): void {
       })
 
       ws.on('close', () => {
-        sessions.delete(id)
+        // Only remove from the map if this session is still the active one.
+        // When a tab reconnects, terminal:create replaces the old session
+        // before the old WebSocket's close event fires — deleting here
+        // would remove the NEW session.
+        if (sessions.get(id) === session) {
+          sessions.delete(id)
+        }
         if (!session.intentionalClose) {
           if (!session.webContents.isDestroyed()) {
             session.webContents.send('terminal:exit', id)
