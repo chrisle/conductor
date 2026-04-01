@@ -4,6 +4,8 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useSidebarStore } from '@/store/sidebar'
+import { useTabsStore } from '@/store/tabs'
+import { useLayoutStore } from '@/store/layout'
 import { useUIStore } from '@/store/ui'
 
 
@@ -38,13 +40,13 @@ function ZoomControl() {
             <DropdownMenuItem
               key={z}
               onClick={() => setZoom(z)}
-              className={`text-xs cursor-pointer justify-center tabular-nums ${Math.abs(zoom - z) < 0.01 ? 'text-blue-400' : ''}`}
+              className={`text-ui-base cursor-pointer justify-center tabular-nums ${Math.abs(zoom - z) < 0.01 ? 'text-blue-400' : ''}`}
             >
               {Math.round(z * 100)}%
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={resetZoom} className="text-xs cursor-pointer justify-center">
+          <DropdownMenuItem onClick={resetZoom} className="text-ui-base cursor-pointer justify-center">
             Reset
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -99,7 +101,7 @@ export default function Footer(): React.ReactElement {
   }, [])
 
   return (
-    <div className="flex items-center h-6 bg-zinc-900 border-t border-zinc-800 shrink-0 text-[11px] select-none overflow-hidden">
+    <div className="flex items-center h-6 bg-zinc-900 border-t border-zinc-800 shrink-0 text-ui-sm select-none overflow-hidden">
       <button
         onClick={() => useUIStore.getState().setGoToOpen(true)}
         className="flex items-center gap-1.5 text-white hover:text-zinc-300 transition-colors cursor-pointer px-2"
@@ -113,10 +115,34 @@ export default function Footer(): React.ReactElement {
 
       {gitBranch && (
         <>
-          <Item>
-            <GitBranch className="w-2.5 h-2.5 text-white" />
-            <span className="text-white">{gitBranch}</span>
-          </Item>
+          <button
+            onClick={() => {
+              const tabsState = useTabsStore.getState()
+              const layoutStore = useLayoutStore.getState()
+              const layoutGroupIds = new Set(layoutStore.getAllGroupIds())
+              const focusedGroupId = layoutStore.focusedGroup
+
+              // Check if git-graph tab already exists
+              for (const [gid, group] of Object.entries(tabsState.groups)) {
+                const existing = group.tabs.find(t => t.type === 'git-graph')
+                if (existing && layoutGroupIds.has(gid)) {
+                  tabsState.setActiveTab(gid, existing.id)
+                  layoutStore.setFocusedGroup(gid)
+                  return
+                }
+              }
+
+              let targetGroup = focusedGroupId && tabsState.groups[focusedGroupId] && layoutGroupIds.has(focusedGroupId)
+                ? focusedGroupId
+                : [...layoutGroupIds].find(gid => tabsState.groups[gid]) || Object.keys(tabsState.groups)[0]
+              if (!targetGroup) targetGroup = tabsState.createGroup()
+              tabsState.addTab(targetGroup, { type: 'git-graph', title: 'Git Graph', filePath: rootPath || undefined })
+            }}
+            className="flex items-center gap-1.5 text-white hover:text-zinc-300 transition-colors cursor-pointer px-2"
+          >
+            <GitBranch className="w-2.5 h-2.5" />
+            <span>{gitBranch}</span>
+          </button>
           {(gitStat.insertions > 0 || gitStat.deletions > 0) && (
             <Item>
               {gitStat.insertions > 0 && <span className="text-emerald-400">+{gitStat.insertions}</span>}
