@@ -42,6 +42,13 @@ module.exports = {
           foreground: 'hsl(var(--card-foreground))'
         }
       },
+      fontSize: {
+        'ui-2xs': 'var(--ui-text-2xs)',
+        'ui-xs': 'var(--ui-text-xs)',
+        'ui-sm': 'var(--ui-text-sm)',
+        'ui-base': 'var(--ui-text-base)',
+        'ui-md': 'var(--ui-text-md)',
+      },
       fontFamily: {
         mono: ['JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'monospace']
       }

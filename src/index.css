@@ -70,6 +70,13 @@
 
 @layer base {
   :root {
+    /* UI font-size scale — bump all tiers here to resize app-wide */
+    --ui-text-2xs: 7.75pt;   /* tiny: badges, version numbers */
+    --ui-text-xs: 8.5pt;     /* small: descriptions, timestamps */
+    --ui-text-sm: 9.25pt;    /* medium: section headers, labels */
+    --ui-text-base: 10pt;    /* standard: general UI text, menus */
+    --ui-text-md: 10.75pt;   /* large: file tree, editor content */
+
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
     --card: 240 10% 3.9%;
