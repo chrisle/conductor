@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Minus, Square, X, Maximize2, ChevronDown, FolderOpen, Plus, Pencil, Trash2, FilePlus2, Folder } from 'lucide-react'
+import { Minus, Square, X, Maximize2, ChevronDown, FolderOpen, Plus, Pencil, Trash2, FilePlus2, Folder, SaveAll } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -179,6 +179,10 @@ export default function TitleBar(): React.ReactElement {
                   <DropdownMenuItem onSelect={() => { setInputValue(projectName); setDialog({ type: 'renameProject' }) }} className="text-xs">
                     <Pencil className="w-3 h-3 mr-2 text-zinc-500" />
                     Rename Project
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => saveProjectAs()} className="text-xs">
+                    <SaveAll className="w-3 h-3 mr-2 text-zinc-500" />
+                    Save Project As...
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => { setNewProjectName(''); setNewProjectDir(''); setNewProjectError(''); setDialog({ type: 'newProject' }) }} className="text-xs">
                     <FilePlus2 className="w-3 h-3 mr-2 text-zinc-500" />

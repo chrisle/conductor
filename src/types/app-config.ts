@@ -30,9 +30,6 @@ export interface AppConfig {
       autoPilotScanMs: number
     }
   }
-  terminal: {
-    renderer: 'ghostty' | 'xterm'
-  }
   extensions: {
     disabled: string[]
   }
@@ -55,9 +52,6 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     codex: {
       autoPilotScanMs: 250,
     },
-  },
-  terminal: {
-    renderer: 'xterm',
   },
   extensions: {
     disabled: [],

@@ -6,6 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { useSidebarStore } from '@/store/sidebar'
 import { useUIStore } from '@/store/ui'
 
+
 function Item({ children }: { children: React.ReactNode }) {
   return (
     <span className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 transition-colors cursor-default px-2">
@@ -58,17 +59,24 @@ function ZoomControl() {
 export default function Footer(): React.ReactElement {
   const { rootPath } = useSidebarStore()
   const [gitBranch, setGitBranch] = useState<string | null>(null)
+  const [gitStat, setGitStat] = useState<{ insertions: number; deletions: number }>({ insertions: 0, deletions: 0 })
   const [conductord, setConductord] = useState<{ ok: boolean; tmux: number }>({ ok: false, tmux: 0 })
 
   useEffect(() => {
     if (!rootPath) return
     let cancelled = false
-    const fetchBranch = async () => {
-      const branch = await window.electronAPI.gitBranch(rootPath)
-      if (!cancelled) setGitBranch(branch)
+    const fetchGit = async () => {
+      const [branch, stat] = await Promise.all([
+        window.electronAPI.gitBranch(rootPath),
+        window.electronAPI.gitShortstat(rootPath),
+      ])
+      if (!cancelled) {
+        setGitBranch(branch)
+        setGitStat(stat)
+      }
     }
-    fetchBranch()
-    const id = setInterval(fetchBranch, 3000)
+    fetchGit()
+    const id = setInterval(fetchGit, 3000)
     return () => { cancelled = true; clearInterval(id) }
   }, [rootPath])
 
@@ -92,26 +100,34 @@ export default function Footer(): React.ReactElement {
 
   return (
     <div className="flex items-center h-6 bg-zinc-900 border-t border-zinc-800 shrink-0 text-[11px] select-none overflow-hidden">
-      <Item>
-        <span className="text-zinc-600 truncate max-w-[300px]">
+      <button
+        onClick={() => useUIStore.getState().setGoToOpen(true)}
+        className="flex items-center gap-1.5 text-white hover:text-zinc-300 transition-colors cursor-pointer px-2"
+      >
+        <span>Current directory:</span>
+        <span className="truncate max-w-[300px]">
           {rootPath ? rootPath.replace(/^\/Users\/[^/]+/, '~') : '—'}
         </span>
-      </Item>
+      </button>
       <Separator orientation="vertical" className="h-3 bg-zinc-800" />
-
-      <div className="flex-1" />
 
       {gitBranch && (
         <>
           <Item>
-            <Badge variant="outline" className="h-4 px-1.5 gap-1 text-[10px] text-fuchsia-400 border-fuchsia-900 bg-fuchsia-950/30">
-              <GitBranch className="w-2.5 h-2.5" />
-              {gitBranch}
-            </Badge>
+            <GitBranch className="w-2.5 h-2.5 text-white" />
+            <span className="text-white">{gitBranch}</span>
           </Item>
+          {(gitStat.insertions > 0 || gitStat.deletions > 0) && (
+            <Item>
+              {gitStat.insertions > 0 && <span className="text-emerald-400">+{gitStat.insertions}</span>}
+              {gitStat.deletions > 0 && <span className="text-red-400">-{gitStat.deletions}</span>}
+            </Item>
+          )}
           <Separator orientation="vertical" className="h-3 bg-zinc-800" />
         </>
       )}
+
+      <div className="flex-1" />
 
       <Item>
         <Activity className={`w-2.5 h-2.5 ${conductord.ok ? 'text-emerald-500' : 'text-red-500'}`} />

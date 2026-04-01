@@ -53,6 +53,38 @@ describe('isThinking', () => {
   it('returns true for seconds-only format (minutes component is optional)', () => {
     expect(isThinking('⠋ Reasoning… (12s · ↑ 42 tokens)')).toBe(true)
   })
+
+  it('detects spinner character · on last line as thinking', () => {
+    expect(isThinking('some output\n·')).toBe(true)
+  })
+
+  it('detects spinner character ✢ on last line as thinking', () => {
+    expect(isThinking('some output\n✢')).toBe(true)
+  })
+
+  it('detects spinner character ✳ on last line as thinking', () => {
+    expect(isThinking('some output\n✳')).toBe(true)
+  })
+
+  it('detects spinner character ✶ on last line as thinking', () => {
+    expect(isThinking('some output\n✶')).toBe(true)
+  })
+
+  it('detects spinner character ✽ on last line as thinking', () => {
+    expect(isThinking('some output\n✽')).toBe(true)
+  })
+
+  it('detects spinner character * on last line as thinking', () => {
+    expect(isThinking('some output\n*')).toBe(true)
+  })
+
+  it('does not detect ✻ as thinking (excluded spinner frame)', () => {
+    expect(isThinking('some output\n✻')).toBe(false)
+  })
+
+  it('does not detect spinner chars embedded in longer text', () => {
+    expect(isThinking('some output with · in it')).toBe(false)
+  })
 })
 
 describe('getThinkingState', () => {
@@ -107,6 +139,8 @@ describe('getThinkingState', () => {
 })
 
 describe('matchPrompt', () => {
+  // --- Text-style y/n prompts (no secondary signal needed) ---
+
   it('matches (Y/n) prompts', () => {
     expect(matchPrompt('Do you want to continue? (Y/n) ')).toBe('y\r')
   })
@@ -123,7 +157,17 @@ describe('matchPrompt', () => {
     expect(matchPrompt('Press Enter to continue')).toBe('\r')
   })
 
-  it('matches numbered menu with "1. Yes" — sends Enter only', () => {
+  it('matches Allow permission prompts', () => {
+    expect(matchPrompt('Allow Read access to /etc/hosts? (y/n)')).toBe('y\r')
+  })
+
+  it('matches case-insensitively', () => {
+    expect(matchPrompt('PRESS ENTER TO CONTINUE')).toBe('\r')
+  })
+
+  // --- Menu-style prompts (two-tier: Yes + No + secondary context) ---
+
+  it('matches numbered menu with Yes+No and secondary context', () => {
     const screenText = [
       'Permission rule Bash(npm install:*) requires confirmation for this command.',
       'Do you want to proceed?',
@@ -133,11 +177,7 @@ describe('matchPrompt', () => {
     expect(matchPrompt(screenText)).toBe('\r')
   })
 
-  it('matches Allow permission prompts', () => {
-    expect(matchPrompt('Allow Read access to /etc/hosts? (y/n)')).toBe('y\r')
-  })
-
-  it('matches Claude Code multi-line menu with "Yes" as option 1', () => {
+  it('matches Claude Code multi-line menu with context', () => {
     expect(matchPrompt('Do you want to create this file?\n  ❯ 1. Yes\n    2. No')).toBe('\r')
   })
 
@@ -150,18 +190,58 @@ describe('matchPrompt', () => {
     expect(matchPrompt(screenText)).toBe('\r')
   })
 
+  it('rejects menu with Yes+No but no secondary context signal', () => {
+    const screenText = [
+      'Pick a color:',
+      '❯ 1. Yes',
+      '  2. No',
+    ].join('\n')
+    expect(matchPrompt(screenText)).toBeNull()
+  })
+
+  // --- Slash-command picker veto ---
+
+  it('vetoes when slash-command autocomplete picker is visible', () => {
+    const screenText = [
+      'Do you want to proceed?',
+      '❯ 1. Yes',
+      '  2. No',
+      '  /permissions    Manage permission rules',
+      '  /clear          Clear conversation',
+      '  /help           Show help',
+    ].join('\n')
+    expect(matchPrompt(screenText)).toBeNull()
+  })
+
+  // --- Last 25 lines restriction ---
+
+  it('ignores prompts buried beyond 25 lines', () => {
+    const filler = Array(30).fill('some log output').join('\n')
+    const prompt = '❯ 1. Yes\n  2. No\nBash command requires permission'
+    expect(matchPrompt(prompt + '\n' + filler)).toBeNull()
+  })
+
+  // --- Edge cases ---
+
   it('returns null for non-matching text', () => {
     expect(matchPrompt('$ npm install')).toBeNull()
     expect(matchPrompt('Building project...')).toBeNull()
     expect(matchPrompt('')).toBeNull()
   })
 
-  it('matches case-insensitively', () => {
-    expect(matchPrompt('PRESS ENTER TO CONTINUE')).toBe('\r')
+  it('falls back to y/n when menu has Yes but no No option', () => {
+    // "1. Yes" alone won't trigger menu-style, but (y/N) will trigger text-style
+    const screenText = '1. Yes\n(y/N) '
+    expect(matchPrompt(screenText)).toBe('y\r')
   })
 
-  it('"1. Yes" rule fires before y/n rules', () => {
-    const screenText = '1. Yes\n(y/N)'
+  it('matches Codex-style permission prompt', () => {
+    const screenText = [
+      'Would you like to run this command?',
+      '  ❯ Yes, just this once',
+      '    No, and tell Codex why',
+    ].join('\n')
+    // "Yes" + "No" + "Would you like to" secondary
     expect(matchPrompt(screenText)).toBe('\r')
   })
 })

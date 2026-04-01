@@ -4,7 +4,7 @@ import path from 'path'
 import os from 'os'
 import { execFile } from 'child_process'
 import { readDir, readFile, readFileBinary, writeFile, mkdirRecursive, deleteEntry } from './fs-handlers'
-import * as service from './service'
+
 import { conductordFetch } from './conductord-client'
 import { registerTerminalBridge } from './terminal-bridge'
 
@@ -214,28 +214,74 @@ export function registerIpcHandlers(): void {
     })
   })
 
+  ipcMain.handle('git:shortstat', (_event, dirPath: string) => {
+    return new Promise<{ insertions: number; deletions: number }>((resolve) => {
+      execFile('git', ['-C', dirPath, 'diff', '--shortstat'], (err, stdout) => {
+        if (err) { resolve({ insertions: 0, deletions: 0 }); return }
+        const ins = stdout.match(/(\d+) insertion/)
+        const del = stdout.match(/(\d+) deletion/)
+        resolve({ insertions: ins ? parseInt(ins[1]) : 0, deletions: del ? parseInt(del[1]) : 0 })
+      })
+    })
+  })
+
   ipcMain.handle('git:log', (_event, dirPath: string, maxCount = 200) => {
-    const SEP = '\x1f' // unit separator
-    const format = ['%H', '%h', '%P', '%an', '%ae', '%aI', '%s', '%D'].join(SEP)
+    const SEP = '\x1f' // unit separator between fields
+    const REC = '\x1e' // record separator between commits
+    const format = ['%H', '%h', '%P', '%an', '%ae', '%aI', '%s', '%D', '%b'].join(SEP) + REC
     return new Promise<Array<{
       hash: string; abbrev: string; parents: string[]; author: string;
-      email: string; date: string; subject: string; refs: string[]
+      email: string; date: string; subject: string; refs: string[]; body: string
     }>>((resolve) => {
       execFile('git', ['-C', dirPath, 'log', `--format=${format}`, `--max-count=${maxCount}`],
         { maxBuffer: 1024 * 1024 * 4 },
         (err, stdout) => {
           if (err) { resolve([]); return }
-          const commits = stdout.trim().split('\n').filter(Boolean).map(line => {
-            const [hash, abbrev, parents, author, email, date, subject, refs] = line.split(SEP)
+          const commits = stdout.split(REC).filter(r => r.trim()).map(record => {
+            const [hash, abbrev, parents, author, email, date, subject, refs, body] = record.trim().split(SEP)
             return {
               hash, abbrev,
               parents: parents ? parents.split(' ') : [],
               author, email, date, subject,
-              refs: refs ? refs.split(', ').map(r => r.trim()).filter(Boolean) : []
+              refs: refs ? refs.split(', ').map(r => r.trim()).filter(Boolean) : [],
+              body: (body ?? '').trim()
             }
           })
           resolve(commits)
         })
+    })
+  })
+
+  ipcMain.handle('git:remoteUrl', (_event, dirPath: string) => {
+    return new Promise<string | null>((resolve) => {
+      execFile('git', ['-C', dirPath, 'remote', 'get-url', 'origin'], (err, stdout) => {
+        if (err) { resolve(null); return }
+        let url = stdout.trim()
+        // Convert SSH to HTTPS
+        const sshMatch = url.match(/^git@([^:]+):(.+?)(?:\.git)?$/)
+        if (sshMatch) url = `https://${sshMatch[1]}/${sshMatch[2]}`
+        // Strip trailing .git
+        url = url.replace(/\.git$/, '')
+        resolve(url)
+      })
+    })
+  })
+
+  ipcMain.handle('git:show', (_event, dirPath: string, hash: string) => {
+    return new Promise<{ body: string; files: Array<{ status: string; file: string }> }>((resolve) => {
+      // Get full commit body
+      execFile('git', ['-C', dirPath, 'log', '-1', '--format=%B', hash], (err, bodyOut) => {
+        if (err) { resolve({ body: '', files: [] }); return }
+        // Get changed files
+        execFile('git', ['-C', dirPath, 'diff-tree', '--root', '--no-commit-id', '-r', '--name-status', hash], (err2, filesOut) => {
+          if (err2) { resolve({ body: bodyOut.trim(), files: [] }); return }
+          const files = filesOut.trim().split('\n').filter(Boolean).map(line => {
+            const [status, ...rest] = line.split('\t')
+            return { status, file: rest.join('\t') }
+          })
+          resolve({ body: bodyOut.trim(), files })
+        })
+      })
     })
   })
 
@@ -778,13 +824,6 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
     }
   })
 
-  // Conductord service management
-  ipcMain.handle('conductord:isInstalled', () => service.isInstalled())
-  ipcMain.handle('conductord:install', () => service.install())
-  ipcMain.handle('conductord:uninstall', () => service.uninstall())
-  ipcMain.handle('conductord:start', () => service.start())
-  ipcMain.handle('conductord:stop', () => service.stop())
-  ipcMain.handle('conductord:restart', () => service.restart())
   ipcMain.handle('conductord:hasFullDiskAccess', async () => {
     try {
       const { body } = await conductordFetch('/health')
@@ -793,7 +832,9 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
       return false
     }
   })
-  ipcMain.handle('conductord:openFullDiskAccessSettings', () => service.openFullDiskAccessSettings())
+  ipcMain.handle('conductord:openFullDiskAccessSettings', () => {
+    shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles')
+  })
 
   // Conductord REST proxy (renderer can't reach Unix socket directly)
   ipcMain.handle('conductord:health', async () => {

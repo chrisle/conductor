@@ -24,10 +24,11 @@ export const terminalColors = {
 
 export const terminalConfig = {
   theme: terminalColors,
-  fontFamily: "'JetBrains Mono', 'Symbols Nerd Font Mono', 'Symbols Nerd Font', Menlo, Monaco, monospace",
-  fontSize: 11.5,
+  fontFamily: "'FiraCode Nerd Font Mono', monospace",
+  fontSize: 12,
+  lineHeight: 1.0,
   cursorBlink: true,
   cursorStyle: "block" as const,
-  scrollback: 10000,
+  scrollback: 100000,
   devicePixelRatio: window.devicePixelRatio || 2,
 };

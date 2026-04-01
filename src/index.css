@@ -51,11 +51,19 @@
   font-display: swap;
 }
 
-/* Nerd Font Symbols — bundled for terminal icon glyphs */
+/* FiraCode Nerd Font Mono — bundled for terminal use */
 @font-face {
-  font-family: 'Symbols Nerd Font Mono';
-  src: url('./assets/fonts/SymbolsNerdFontMono-Regular.woff2') format('woff2');
+  font-family: 'FiraCode Nerd Font Mono';
+  src: url('./assets/fonts/FiraCodeNerdFontMono-Regular.woff2') format('woff2');
   font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'FiraCode Nerd Font Mono';
+  src: url('./assets/fonts/FiraCodeNerdFontMono-Bold.woff2') format('woff2');
+  font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
@@ -133,17 +141,6 @@
   width: 100%;
 }
 
-/* Ghostty terminal: suppress contenteditable chrome and stretch canvas to fill */
-[contenteditable="true"]:has(> canvas) {
-  outline: none;
-  caret-color: transparent;
-}
-
-[contenteditable="true"] > canvas {
-  width: 100% !important;
-  height: 100% !important;
-}
-
 /* Webview */
 webview {
   display: flex;
@@ -178,10 +175,10 @@ webview {
 /* Thinking tab indicator — trailing light sweeps across the blue bar */
 @keyframes thinking-sweep {
   0% {
-    background-position: -100% 0;
+    background-position: 100% 0;
   }
   100% {
-    background-position: 200% 0;
+    background-position: -100% 0;
   }
 }
 
@@ -200,13 +197,39 @@ webview {
   background: linear-gradient(
     90deg,
     #3b82f6 0%,
-    #3b82f6 25%,
+    #3b82f6 35%,
     #bfdbfe 50%,
-    #3b82f6 75%,
+    #3b82f6 65%,
     #3b82f6 100%
   );
   background-size: 200% 100%;
-  animation: thinking-sweep 1.5s ease-in-out infinite;
+  animation: thinking-sweep 2.5s linear infinite;
+}
+
+/* Shimmer text — rolling gradient highlight across text (sidebar thinking) */
+@keyframes shimmer-text {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.text-shimmer {
+  background: linear-gradient(
+    90deg,
+    #71717a 0%,
+    #71717a 35%,
+    #f4f4f5 50%,
+    #71717a 65%,
+    #71717a 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer-text 2.5s linear infinite;
 }
 
 /* Thinking halo — chasing light around the full border (used on ticket cards) */

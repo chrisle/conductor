@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useEffect, useCallback } from 'react'
 import TitleBar from './components/TitleBar'
 import MainLayout from './components/Layout'
 import Footer from './components/Footer'
 import GoToDialog from './components/GoToDialog'
-import InstallConductordDialog from './components/InstallConductordDialog'
+
 import { useSidebarStore } from './store/sidebar'
 import { useTabsStore } from './store/tabs'
 import { useLayoutStore } from './store/layout'
@@ -14,21 +14,14 @@ import { useWorkSessionsStore } from './store/work-sessions'
 import { initializeDefaultProject, saveProject, autosaveLayout } from './lib/project-io'
 
 function App(): React.ReactElement {
-  const [goToOpen, setGoToOpen] = useState(false)
-  const [showInstallPrompt, setShowInstallPrompt] = useState(false)
   const zoom = useUIStore(s => s.zoom)
+  const goToOpen = useUIStore(s => s.goToOpen)
+  const setGoToOpen = useUIStore(s => s.setGoToOpen)
 
   // Initialize config and work sessions stores
   useEffect(() => {
     useConfigStore.getState().initialize()
     useWorkSessionsStore.getState().initialize()
-  }, [])
-
-  // Prompt to install conductord if not yet installed
-  useEffect(() => {
-    window.electronAPI.isConductordInstalled().then(installed => {
-      if (!installed) setShowInstallPrompt(true)
-    }).catch(() => {})
   }, [])
 
   // Load persisted favorites from disk on startup
@@ -77,7 +70,7 @@ function App(): React.ReactElement {
     // Ctrl+G or Cmd+G
     if (e.key === 'g' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault()
-      setGoToOpen(prev => !prev)
+      setGoToOpen(!useUIStore.getState().goToOpen)
     }
     // Cmd+Shift+[ / Cmd+Shift+] — switch tabs in focused group
     if (e.metaKey && e.shiftKey && (e.key === '[' || e.key === ']')) {
@@ -120,7 +113,6 @@ function App(): React.ReactElement {
       </div>
       <Footer />
       <GoToDialog open={goToOpen} onOpenChange={setGoToOpen} />
-      <InstallConductordDialog open={showInstallPrompt} onDismiss={() => setShowInstallPrompt(false)} />
     </div>
   )
 }

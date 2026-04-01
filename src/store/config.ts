@@ -15,7 +15,6 @@ interface ConfigState {
   setKanbanCompactColumns: (columns: string[]) => Promise<void>
   setClaudeCodeSettings: (patch: Partial<AppConfig['aiCli']['claudeCode']>) => Promise<void>
   setCodexSettings: (patch: Partial<AppConfig['aiCli']['codex']>) => Promise<void>
-  setTerminalSettings: (patch: Partial<AppConfig['terminal']>) => Promise<void>
   setDisabledExtensions: (disabled: string[]) => Promise<void>
 
   // Claude account management
@@ -49,7 +48,6 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
             claudeCode: { ...DEFAULT_APP_CONFIG.aiCli.claudeCode, ...loaded.aiCli?.claudeCode },
             codex: { ...DEFAULT_APP_CONFIG.aiCli.codex, ...loaded.aiCli?.codex },
           },
-          terminal: { ...DEFAULT_APP_CONFIG.terminal, ...loaded.terminal },
           extensions: { ...DEFAULT_APP_CONFIG.extensions, ...loaded.extensions },
         }
         set({ config: merged, ready: true })
@@ -106,13 +104,6 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       },
     }))
     await window.electronAPI.patchConfig({ aiCli: { codex: patch } } as any)
-  },
-
-  setTerminalSettings: async (patch) => {
-    set(state => ({
-      config: { ...state.config, terminal: { ...state.config.terminal, ...patch } },
-    }))
-    await window.electronAPI.patchConfig({ terminal: patch })
   },
 
   setDisabledExtensions: async (disabled) => {

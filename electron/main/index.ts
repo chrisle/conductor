@@ -3,7 +3,6 @@ import { join } from 'path'
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { spawn } from 'child_process'
 import { registerIpcHandlers } from './ipc'
-import * as service from './service'
 import { conductordHealthCheck, CONDUCTORD_SOCKET } from './conductord-client'
 import os from 'os'
 
@@ -62,58 +61,33 @@ function validateBounds(bounds: Partial<WindowBounds>): Partial<WindowBounds> {
 }
 
 async function ensureConductord(): Promise<void> {
-  // Check if conductord is already running
+  // Check if conductord is already running (previous tray instance)
   if (await conductordHealthCheck()) {
     console.log('[conductord] already running')
     return
   }
 
-  if (service.isInstalled()) {
-    // Service is already installed — launchd should be managing it.
-    // Wait longer for launchd to (re)start it instead of spawning a duplicate.
-    console.log('[conductord] service installed, waiting for launchd to start it...')
-    for (let i = 0; i < 30; i++) {
-      if (await conductordHealthCheck()) {
-        console.log('[conductord] service started via launchd')
-        return
-      }
-      await new Promise(r => setTimeout(r, 200))
-    }
-    // Try kickstarting it
-    try {
-      service.restart()
-      for (let i = 0; i < 20; i++) {
-        if (await conductordHealthCheck()) {
-          console.log('[conductord] service started after kickstart')
-          return
-        }
-        await new Promise(r => setTimeout(r, 200))
-      }
-    } catch {}
-    console.warn('[conductord] launchd service not responding, falling back to direct spawn')
-  }
-
-  // Fallback: start conductord as a detached process for this session
+  // Spawn conductord with system tray
   const isDev = !!process.env['ELECTRON_RENDERER_URL']
   const binPath = isDev
     ? join(__dirname, '../../conductord/conductord')
     : join(process.resourcesPath!, 'conductord')
 
-  const child = spawn(binPath, ['-socket', CONDUCTORD_SOCKET], {
+  const child = spawn(binPath, ['-socket', CONDUCTORD_SOCKET, '-tray'], {
     stdio: 'ignore',
     detached: true,
     env: { ...process.env }
   })
   child.unref()
 
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 30; i++) {
     if (await conductordHealthCheck()) {
-      console.log('[conductord] started (pid %d)', child.pid)
+      console.log('[conductord] started with tray (pid %d)', child.pid)
       return
     }
     await new Promise(r => setTimeout(r, 100))
   }
-  console.error('[conductord] failed to start within 2s')
+  console.error('[conductord] failed to start within 3s')
 }
 
 function createWindow(): void {
@@ -177,7 +151,9 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
-  await ensureConductord()
+  if (!process.env['CONDUCTOR_SKIP_TRAY']) {
+    await ensureConductord()
+  }
   registerIpcHandlers()
   createWindow()
 

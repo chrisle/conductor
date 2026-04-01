@@ -1,9 +1,10 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { SerializeAddon } from '@xterm/addon-serialize'
 import '@xterm/xterm/css/xterm.css'
 import { terminalConfig, terminalColors } from './theme'
 
-export type { Terminal, FitAddon }
+export type { Terminal, FitAddon, SerializeAddon }
 
 // Inject once: make xterm fill its container instead of sizing to row count
 let styleInjected = false
@@ -47,8 +48,10 @@ export async function createXtermTerminal(container: HTMLElement): Promise<{ ter
   })
 
   const fitAddon = new FitAddon()
+  const serializeAddon = new SerializeAddon()
   term.loadAddon(fitAddon)
+  term.loadAddon(serializeAddon)
   term.open(container)
 
-  return { term, fitAddon }
+  return { term, fitAddon, serializeAddon }
 }

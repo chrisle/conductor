@@ -14,6 +14,8 @@ import './index.css'
 import { useTabsStore } from './store/tabs'
 import { useLayoutStore } from './store/layout'
 import { useSidebarStore } from './store/sidebar'
+import { useProjectStore } from './store/project'
+import { useActivityBarStore } from './store/activityBar'
 import { initializeExtensions } from './extensions'
 import { mountConductorAPI } from './extensions/api'
 import { loadExternalExtensions } from './extensions/loader'
@@ -50,7 +52,9 @@ loadExternalExtensions().catch(err => console.error('Failed to load external ext
 ;(window as any).__stores__ = {
   tabs: useTabsStore,
   layout: useLayoutStore,
-  sidebar: useSidebarStore
+  sidebar: useSidebarStore,
+  project: useProjectStore,
+  activityBar: useActivityBarStore,
 }
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(

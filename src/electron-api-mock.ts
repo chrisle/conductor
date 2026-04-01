@@ -188,13 +188,6 @@ const mock: ElectronAPI = {
   onConductordLogs: noop,
   offConductordLogs: noop,
 
-  // Service management
-  isConductordInstalled: async () => false,
-  installConductord: async () => ({ success: false, error: 'Not available in web mode' }),
-  uninstallConductord: async () => ({ success: false, error: 'Not available in web mode' }),
-  startConductord: async () => ({ success: false, error: 'Not available in web mode' }),
-  stopConductord: async () => ({ success: false, error: 'Not available in web mode' }),
-  restartConductord: async () => ({ success: false, error: 'Not available in web mode' }),
   hasFullDiskAccess: async () => false,
   openFullDiskAccessSettings: noopAsync,
 

@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
+import { Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { extensionRegistry } from '@/extensions'
 import { useActivityBarStore } from '@/store/activityBar'
+import { useSettingsDialogStore } from '@/store/settingsDialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 export default function ActivityBar(): React.ReactElement {
@@ -12,10 +14,12 @@ export default function ActivityBar(): React.ReactElement {
 
   const allSidebarExtensions = extensionRegistry.getSidebarExtensions()
   const { activeExtensionId, toggleExtension } = useActivityBarStore()
+  const openSettings = useSettingsDialogStore(s => s.setOpen)
 
+  // Settings opens a dialog instead of a sidebar
   const bottomIds = new Set(['extensions', 'conductord', 'settings'])
-  const mainExtensions = allSidebarExtensions.filter(ext => !bottomIds.has(ext.id))
-  const bottomExtensions = allSidebarExtensions.filter(ext => bottomIds.has(ext.id))
+  const mainExtensions = allSidebarExtensions.filter(ext => !bottomIds.has(ext.id) && ext.id !== 'settings')
+  const bottomExtensions = allSidebarExtensions.filter(ext => bottomIds.has(ext.id) && ext.id !== 'settings')
 
   const renderIcon = (ext: typeof allSidebarExtensions[0]) => {
     const Icon = ext.icon!
@@ -46,6 +50,18 @@ export default function ActivityBar(): React.ReactElement {
         {mainExtensions.map(renderIcon)}
         <div className="flex-1" />
         {bottomExtensions.map(renderIcon)}
+        {/* Settings icon — opens dialog */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => openSettings(true)}
+              className="flex items-center justify-center w-10 h-10 transition-colors text-zinc-500 border-l-2 border-l-transparent hover:text-zinc-200"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Settings</TooltipContent>
+        </Tooltip>
       </div>
     </TooltipProvider>
   )

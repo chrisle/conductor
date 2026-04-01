@@ -11,6 +11,8 @@ interface UIState {
   zoomIn: () => void
   zoomOut: () => void
   resetZoom: () => void
+  goToOpen: boolean
+  setGoToOpen: (open: boolean) => void
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
@@ -33,6 +35,9 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   resetZoom: () => get().setZoom(1),
+
+  goToOpen: false,
+  setGoToOpen: (open) => set({ goToOpen: open }),
 }))
 
 // Hydrate zoom from config store once it's ready

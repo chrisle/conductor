@@ -4,6 +4,7 @@ import { useTabsStore } from "@/store/tabs";
 import ActivityBar from "../ActivityBar";
 import Sidebar from "../Sidebar";
 import SplitPane from "./SplitPane";
+import SettingsDialog from "../SettingsDialog";
 
 export default function MainLayout(): React.ReactElement {
   const { root, setRoot, setFocusedGroup } = useLayoutStore();
@@ -35,6 +36,7 @@ export default function MainLayout(): React.ReactElement {
       <div className="flex-1 min-w-0 overflow-hidden">
         <SplitPane node={root} />
       </div>
+      <SettingsDialog />
     </div>
   );
 }

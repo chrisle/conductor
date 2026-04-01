@@ -18,10 +18,6 @@ vi.mock('../extensions/terminal/xterm-init', () => ({
   createXtermTerminal: createXtermTerminalMock,
 }))
 
-vi.mock('../extensions/terminal/ghostty-init', () => ({
-  createGhosttyTerminal: vi.fn(),
-}))
-
 vi.mock('../lib/terminal-api', () => ({
   createTerminal: vi.fn(),
   writeTerminal: vi.fn(),
@@ -29,6 +25,7 @@ vi.mock('../lib/terminal-api', () => ({
   killTerminal: vi.fn(),
   setAutoPilot: vi.fn(),
   setTmuxOption: vi.fn(),
+  capturePane: vi.fn().mockResolvedValue(null),
   onTerminalData: vi.fn(),
   offTerminalData: vi.fn(),
   onTerminalExit: vi.fn(),
