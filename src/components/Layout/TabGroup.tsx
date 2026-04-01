@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator as CtxMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator as CtxMenuSeparator, ContextMenuTrigger, ContextMenuSub, ContextMenuSubTrigger, ContextMenuSubContent, ContextMenuLabel } from '@/components/ui/context-menu'
 import { useTabsStore, type Tab } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useSidebarStore } from '@/store/sidebar'
@@ -59,7 +59,7 @@ function RecentProjects() {
   )
 }
 
-function EmptyState({ groupId, menuItems }: { groupId: string, menuItems: ReturnType<typeof extensionRegistry.getNewTabMenuItems> }) {
+function EmptyState({ groupId, renderContextMenuItems }: { groupId: string, renderContextMenuItems: () => React.ReactNode }) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [projectName, setProjectName] = useState('')
   const [directory, setDirectory] = useState('')
@@ -120,19 +120,7 @@ function EmptyState({ groupId, menuItems }: { groupId: string, menuItems: Return
       </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
-        {menuItems.map((item, i) => (
-          <React.Fragment key={i}>
-            {item.separator === 'before' && <CtxMenuSeparator />}
-            <ContextMenuItem
-              onClick={() => item.action(groupId)}
-              className="gap-2 text-ui-base cursor-pointer"
-            >
-              <item.icon className={item.iconClassName || "w-3.5 h-3.5 shrink-0"} />
-              <span>{item.label}</span>
-            </ContextMenuItem>
-            {item.separator === 'after' && <CtxMenuSeparator />}
-          </React.Fragment>
-        ))}
+        {renderContextMenuItems()}
       </ContextMenuContent>
       </ContextMenu>
 
@@ -541,6 +529,134 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     )
   }
 
+  function renderContextMenuItems() {
+    return (
+      <>
+        {/* Current directory */}
+        <ContextMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5">
+          Current directory
+        </ContextMenuLabel>
+        <ContextMenuLabel className="text-ui-xs text-zinc-400 font-normal truncate max-w-[200px] py-0.5 -mt-1">
+          {rootPath ? friendly(rootPath) : 'No project'}
+        </ContextMenuLabel>
+        <CtxMenuSeparator className="bg-zinc-700" />
+
+        {/* Claude submenu */}
+        <ContextMenuSub>
+          <ContextMenuSubTrigger className="gap-2 text-ui-base cursor-pointer">
+            <ClaudeIcon className="w-3.5 h-3.5 text-[#D97757] shrink-0" />
+            <span>Claude</span>
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="bg-zinc-900 border-zinc-700">
+            <ContextMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5">Claude Accounts</ContextMenuLabel>
+            <CtxMenuSeparator className="bg-zinc-700" />
+            <ContextMenuItem
+              onClick={() => addClaudeTab()}
+              className="gap-2 text-ui-base cursor-pointer"
+            >
+              Default
+            </ContextMenuItem>
+            {claudeAccounts.length > 0 && <CtxMenuSeparator className="bg-zinc-700" />}
+            {claudeAccounts.map(account => (
+              <ContextMenuItem
+                key={account.id}
+                onClick={() => addClaudeTab(account.apiKey, account.name)}
+                className="gap-2 text-ui-base cursor-pointer"
+              >
+                {account.name}
+              </ContextMenuItem>
+            ))}
+            <CtxMenuSeparator className="bg-zinc-700" />
+            <ContextMenuItem
+              onClick={() => useSettingsDialogStore.getState().openToSection('ai-cli')}
+              className="gap-2 text-ui-base cursor-pointer text-zinc-400"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Account</span>
+            </ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+
+        {/* Codex */}
+        <ContextMenuItem
+          onClick={() => {
+            const cwd = rootPath || undefined
+            useTabsStore.getState().addTab(groupId, {
+              id: nextSessionId('codex'),
+              type: 'codex',
+              title: 'Codex',
+              filePath: cwd,
+              initialCommand: 'codex\n',
+            })
+          }}
+          className="gap-2 text-ui-base cursor-pointer"
+        >
+          <CodexIcon className="w-3.5 h-3.5 text-[#10a37f] shrink-0" />
+          <span>Codex</span>
+        </ContextMenuItem>
+
+        {/* Terminal */}
+        <ContextMenuItem
+          onClick={() => {
+            const cwd = rootPath || undefined
+            useTabsStore.getState().addTab(groupId, {
+              type: 'terminal',
+              title: 'Terminal',
+              filePath: cwd,
+            })
+          }}
+          className="gap-2 text-ui-base cursor-pointer"
+        >
+          <Terminal className="w-3.5 h-3.5 text-green-400 shrink-0" />
+          <span>Terminal</span>
+        </ContextMenuItem>
+
+        {/* Browser submenu */}
+        <ContextMenuSub>
+          <ContextMenuSubTrigger className="gap-2 text-ui-base cursor-pointer">
+            <Globe className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+            <span>Browser</span>
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="bg-zinc-900 border-zinc-700">
+            <ContextMenuItem
+              onClick={() => {
+                useTabsStore.getState().addTab(groupId, {
+                  type: 'browser',
+                  title: 'Browser',
+                  url: 'https://google.com',
+                })
+              }}
+              className="gap-2 text-ui-base cursor-pointer"
+            >
+              Internal
+            </ContextMenuItem>
+            <ContextMenuItem
+              onClick={() => {
+                window.electronAPI.openExternal('https://google.com')
+              }}
+              className="gap-2 text-ui-base cursor-pointer"
+            >
+              System
+            </ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+
+        {/* Extra items from third-party extensions */}
+        {extraMenuItems.length > 0 && <CtxMenuSeparator className="bg-zinc-700" />}
+        {extraMenuItems.map((item, i) => (
+          <ContextMenuItem
+            key={i}
+            onClick={() => item.action(groupId)}
+            className="gap-2 text-ui-base cursor-pointer"
+          >
+            <item.icon className={item.iconClassName || "w-3.5 h-3.5 shrink-0"} />
+            <span>{item.label}</span>
+          </ContextMenuItem>
+        ))}
+      </>
+    )
+  }
+
   return (
     <div
       className={cn(
@@ -683,7 +799,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
         onDrop={handleContentDrop}
       >
         {group.tabs.length === 0 ? (
-          <EmptyState groupId={groupId} menuItems={menuItems} />
+          <EmptyState groupId={groupId} renderContextMenuItems={renderContextMenuItems} />
         ) : (
           group.tabs.map(tab => {
             const Component = extensionRegistry.getTabComponent(tab.type)
