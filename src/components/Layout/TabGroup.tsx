@@ -13,6 +13,7 @@ import { extensionRegistry } from '@/extensions'
 import { openProjectDialog, openProject, createNewProject } from '@/lib/project-io'
 import { useProjectStore } from '@/store/project'
 import { useConfigStore } from '@/store/config'
+import { useSettingsDialogStore } from '@/store/settingsDialog'
 import { killTerminal } from '@/lib/terminal-api'
 import { nextSessionId } from '@/lib/session-id'
 import { setSessionTitle } from '@/lib/session-titles'
@@ -43,15 +44,15 @@ function RecentProjects() {
 
   return (
     <div className="flex flex-col gap-1.5 mt-4 w-full max-w-xs">
-      <div className="text-[11px] text-zinc-500 uppercase tracking-wider px-1">Recent Projects</div>
+      <div className="text-ui-sm text-zinc-500 uppercase tracking-wider px-1">Recent Projects</div>
       {filtered.map(p => (
         <button
           key={p.path}
           onClick={() => openProject(p.path)}
           className="flex flex-col gap-0.5 px-2 py-1.5 rounded text-left hover:bg-zinc-800/50 transition-colors group"
         >
-          <span className="text-xs text-zinc-300 group-hover:text-zinc-100 truncate">{p.name}</span>
-          <span className="text-[10px] text-zinc-500 truncate">{friendly(p.path)}</span>
+          <span className="text-ui-base text-zinc-300 group-hover:text-zinc-100 truncate">{p.name}</span>
+          <span className="text-ui-xs text-zinc-500 truncate">{friendly(p.path)}</span>
         </button>
       ))}
     </div>
@@ -105,14 +106,14 @@ function EmptyState({ groupId, menuItems }: { groupId: string, menuItems: Return
             className="flex flex-col items-center gap-3 w-40 py-6 rounded-lg border border-zinc-700/60 bg-zinc-900/50 hover:bg-zinc-800/60 hover:border-zinc-600 transition-colors group"
           >
             <FolderOpen className="w-8 h-8 text-zinc-500 group-hover:text-blue-400 transition-colors" />
-            <span className="text-xs text-zinc-400 group-hover:text-zinc-200 transition-colors">Open Project</span>
+            <span className="text-ui-base text-zinc-400 group-hover:text-zinc-200 transition-colors">Open Project</span>
           </button>
           <button
             onClick={openDialog}
             className="flex flex-col items-center gap-3 w-40 py-6 rounded-lg border border-zinc-700/60 bg-zinc-900/50 hover:bg-zinc-800/60 hover:border-zinc-600 transition-colors group"
           >
             <FilePlus2 className="w-8 h-8 text-zinc-500 group-hover:text-blue-400 transition-colors" />
-            <span className="text-xs text-zinc-400 group-hover:text-zinc-200 transition-colors">New Project</span>
+            <span className="text-ui-base text-zinc-400 group-hover:text-zinc-200 transition-colors">New Project</span>
           </button>
         </div>
         <RecentProjects />
@@ -124,7 +125,7 @@ function EmptyState({ groupId, menuItems }: { groupId: string, menuItems: Return
             {item.separator === 'before' && <CtxMenuSeparator />}
             <ContextMenuItem
               onClick={() => item.action(groupId)}
-              className="gap-2 text-xs cursor-pointer"
+              className="gap-2 text-ui-base cursor-pointer"
             >
               <item.icon className={item.iconClassName || "w-3.5 h-3.5 shrink-0"} />
               <span>{item.label}</span>
@@ -141,7 +142,7 @@ function EmptyState({ groupId, menuItems }: { groupId: string, menuItems: Return
           <div className="space-y-4">
             <div className="text-sm text-zinc-300 font-medium">New Project</div>
             <div className="space-y-1.5">
-              <label className="text-[11px] text-zinc-500 uppercase tracking-wider">Name</label>
+              <label className="text-ui-sm text-zinc-500 uppercase tracking-wider">Name</label>
               <input ref={inputRef}
                 className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-500 placeholder-zinc-500"
                 placeholder="my-project" value={projectName}
@@ -150,27 +151,27 @@ function EmptyState({ groupId, menuItems }: { groupId: string, menuItems: Return
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] text-zinc-500 uppercase tracking-wider">Directory</label>
+              <label className="text-ui-sm text-zinc-500 uppercase tracking-wider">Directory</label>
               <div className="flex gap-2">
                 <div className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-400 truncate min-w-0">
                   {directory ? friendly(directory) : 'Select a directory...'}
                 </div>
-                <Button variant="ghost" className="shrink-0 text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-700" onClick={handleBrowse}>
+                <Button variant="ghost" className="shrink-0 text-ui-base text-zinc-400 hover:text-zinc-200 border border-zinc-700" onClick={handleBrowse}>
                   <Folder className="w-3.5 h-3.5 mr-1.5" />
                   Browse
                 </Button>
               </div>
             </div>
-            {error && <div className="text-xs text-red-400">{error}</div>}
+            {error && <div className="text-ui-base text-red-400">{error}</div>}
             {projectName.trim() && directory && (
-              <div className="text-[11px] text-zinc-500">
+              <div className="text-ui-sm text-zinc-500">
                 Creates <span className="text-zinc-300">{friendly(directory)}/{projectName.trim()}.conductor</span>
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="ghost" className="text-xs text-zinc-400 hover:text-zinc-200" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button className="text-xs bg-zinc-700 hover:bg-zinc-600 text-zinc-200" onClick={handleCreate}>Create</Button>
+            <Button variant="ghost" className="text-ui-base text-zinc-400 hover:text-zinc-200" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button className="text-ui-base bg-zinc-700 hover:bg-zinc-600 text-zinc-200" onClick={handleCreate}>Create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -412,28 +413,34 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     return (
       <>
         {/* Current directory */}
-        <DropdownMenuLabel className="text-[10px] text-zinc-500 font-normal py-0.5">
+        <DropdownMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5">
           Current directory
         </DropdownMenuLabel>
-        <DropdownMenuLabel className="text-[10px] text-zinc-400 font-normal truncate max-w-[200px] py-0.5 -mt-1">
+        <DropdownMenuLabel className="text-ui-xs text-zinc-400 font-normal truncate max-w-[200px] py-0.5 -mt-1">
           {rootPath ? friendly(rootPath) : 'No project'}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
 
         {/* Claude submenu */}
         <DropdownMenuSub>
-          <DropdownMenuSubTrigger className="gap-2 text-xs cursor-pointer">
+          <DropdownMenuSubTrigger className="gap-2 text-ui-base cursor-pointer">
             <ClaudeIcon className="w-3.5 h-3.5 text-[#D97757] shrink-0" />
             <span>Claude</span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="bg-zinc-900 border-zinc-700 shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
-            <DropdownMenuLabel className="text-[10px] text-zinc-500 font-normal py-0.5">
-              Claude Accounts
+            <DropdownMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5 flex items-center justify-between">
+              <span>Claude Accounts</span>
+              <button
+                onClick={() => { useSettingsDialogStore.getState().openToSection('ai-cli') }}
+                className="text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                <Plus className="w-3 h-3" />
+              </button>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => { addClaudeTab(); onDone() }}
-              className="gap-2 text-xs cursor-pointer"
+              className="gap-2 text-ui-base cursor-pointer"
             >
               Default
             </DropdownMenuItem>
@@ -442,7 +449,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
               <DropdownMenuItem
                 key={account.id}
                 onClick={() => { addClaudeTab(account.apiKey, account.name); onDone() }}
-                className="gap-2 text-xs cursor-pointer"
+                className="gap-2 text-ui-base cursor-pointer"
               >
                 {account.name}
               </DropdownMenuItem>
@@ -463,7 +470,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
             })
             onDone()
           }}
-          className="gap-2 text-xs cursor-pointer"
+          className="gap-2 text-ui-base cursor-pointer"
         >
           <CodexIcon className="w-3.5 h-3.5 text-[#10a37f] shrink-0" />
           <span>Codex</span>
@@ -480,7 +487,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
             })
             onDone()
           }}
-          className="gap-2 text-xs cursor-pointer"
+          className="gap-2 text-ui-base cursor-pointer"
         >
           <Terminal className="w-3.5 h-3.5 text-green-400 shrink-0" />
           <span>Terminal</span>
@@ -488,7 +495,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
 
         {/* Browser submenu */}
         <DropdownMenuSub>
-          <DropdownMenuSubTrigger className="gap-2 text-xs cursor-pointer">
+          <DropdownMenuSubTrigger className="gap-2 text-ui-base cursor-pointer">
             <Globe className="w-3.5 h-3.5 text-blue-400 shrink-0" />
             <span>Browser</span>
           </DropdownMenuSubTrigger>
@@ -502,7 +509,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                 })
                 onDone()
               }}
-              className="gap-2 text-xs cursor-pointer"
+              className="gap-2 text-ui-base cursor-pointer"
             >
               Internal
             </DropdownMenuItem>
@@ -511,7 +518,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                 window.electronAPI.openExternal('https://google.com')
                 onDone()
               }}
-              className="gap-2 text-xs cursor-pointer"
+              className="gap-2 text-ui-base cursor-pointer"
             >
               System
             </DropdownMenuItem>
@@ -524,7 +531,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
           <DropdownMenuItem
             key={i}
             onClick={() => { item.action(groupId); onDone() }}
-            className="gap-2 text-xs cursor-pointer"
+            className="gap-2 text-ui-base cursor-pointer"
           >
             <item.icon className={item.iconClassName || "w-3.5 h-3.5 shrink-0"} />
             <span>{item.label}</span>
@@ -579,7 +586,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                 {renamingTabId === tab.id ? (
                   <input
                     ref={renameInputRef}
-                    className="text-xs flex-1 min-w-0 bg-transparent border border-zinc-600 rounded px-1 outline-none text-zinc-100"
+                    className="text-ui-base flex-1 min-w-0 bg-transparent border border-zinc-600 rounded px-1 outline-none text-zinc-100"
                     value={renameValue}
                     onChange={e => setRenameValue(e.target.value)}
                     onKeyDown={e => {
@@ -592,7 +599,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                   />
                 ) : (
                   <span
-                    className="text-xs truncate flex-1"
+                    className="text-ui-base truncate flex-1"
                     onDoubleClick={e => { e.stopPropagation(); startRename(tab) }}
                   >
                     {tab.isDirty ? '● ' : ''}{tab.title}
@@ -613,7 +620,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
               </ContextMenuTrigger>
               <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
                 <ContextMenuItem
-                  className="gap-2 text-xs cursor-pointer"
+                  className="gap-2 text-ui-base cursor-pointer"
                   onClick={() => startRename(tab)}
                 >
                   <Pencil className="w-3.5 h-3.5" />
@@ -623,7 +630,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                   <>
                     <CtxMenuSeparator />
                     <ContextMenuItem
-                      className="gap-2 text-xs cursor-pointer"
+                      className="gap-2 text-ui-base cursor-pointer"
                       onClick={() => refreshTab(tab)}
                     >
                       <RotateCw className="w-3.5 h-3.5" />
@@ -633,7 +640,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                 )}
                 <CtxMenuSeparator />
                 <ContextMenuItem
-                  className="gap-2 text-xs cursor-pointer"
+                  className="gap-2 text-ui-base cursor-pointer"
                   onClick={() => closeTab(tab.id)}
                 >
                   <X className="w-3.5 h-3.5" />
@@ -641,7 +648,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                 </ContextMenuItem>
                 {isTerminalLike(tab.type) && (
                   <ContextMenuItem
-                    className="gap-2 text-xs cursor-pointer text-red-400 focus:text-red-300"
+                    className="gap-2 text-ui-base cursor-pointer text-red-400 focus:text-red-300"
                     onClick={() => killAndCloseTab(tab.id)}
                   >
                     <Skull className="w-3.5 h-3.5" />
