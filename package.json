@@ -9,6 +9,7 @@
     "preview": "electron-vite preview",
     "prepare-tmux": "bash scripts/prepare-tmux.sh",
     "package": "bash scripts/prepare-tmux.sh && cd conductord && go build -o conductord . && cd .. && electron-vite build && electron-builder",
+    "typecheck": "tsc --build --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npx playwright test"

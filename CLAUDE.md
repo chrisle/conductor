@@ -1,5 +1,9 @@
 # Conductor App
 
+## Type Checking
+
+After editing any `.tsx` or `.ts` file, run `npm run typecheck` from the `app/` directory and fix any errors in the files you touched before considering the task done. Vite does not type-check — it only strips types — so `tsc` is the only guard against prop mismatches, missing imports, and type errors.
+
 ## Context Menu Rules
 
 All right-click context menus MUST follow the established patterns used throughout the app. Do NOT deviate from these rules.
@@ -75,3 +79,33 @@ When nesting submenus, follow this pattern:
 ### For links/URLs
 
 Use the `<LinkContextMenu>` component from `@/components/ui/link-context-menu` instead of building a custom context menu. It provides "Open in Conductor" and "Open in System Browser" actions.
+
+## Session Info Panel Extension
+
+Extensions can add custom rows to the expanded session info panel in the Sessions sidebar. Use the session info registry:
+
+```tsx
+import { useSessionInfoRegistry } from '@/extensions/work-sessions'
+import type { SessionInfoContext } from '@/extensions/work-sessions'
+
+// Register on mount (e.g. in a useEffect or at module level)
+useSessionInfoRegistry.getState().register({
+  id: 'my-extension-info',   // unique id — re-registering replaces previous
+  order: 110,                // sort order (built-in rows use 0–50, default 100)
+  render: (ctx: SessionInfoContext) => {
+    // Return a ReactNode or null to skip
+    if (!ctx.workSession) return null
+    return (
+      <div className="flex items-center gap-1.5">
+        <MyIcon className="w-3 h-3 text-zinc-500 shrink-0" />
+        <span className="text-zinc-300">Custom info</span>
+      </div>
+    )
+  },
+})
+
+// Unregister when done
+useSessionInfoRegistry.getState().unregister('my-extension-info')
+```
+
+`SessionInfoContext` provides: `tmuxName`, `cwd`, `command`, `connected`, `hasOpenTab`, `isThinking`, `workSession`.
