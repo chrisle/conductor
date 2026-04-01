@@ -1,85 +1,16 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { Server, CheckCircle, XCircle, RefreshCw, X, Trash2, ShieldCheck, ShieldAlert } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Server, CheckCircle, XCircle, RefreshCw, ShieldCheck, ShieldAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Separator } from '@/components/ui/separator'
 import type { TabProps } from '@/extensions/types'
 
-interface TmuxSession {
-  name: string
-  connected: boolean
-  command: string
-  cwd: string
-  created: number
-  activity: number
-}
-
-function shortPath(p: string): string {
-  return p.replace(/^\/Users\/[^/]+/, '~')
-}
-
-function timeAgo(epoch: number): string {
-  if (!epoch) return ''
-  const diff = Math.floor(Date.now() / 1000) - epoch
-  if (diff < 60) return 'just now'
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
-}
-
 /**
- * Standalone panel for Conductor Daemon settings.
+ * Standalone panel for System Tray settings.
  * Used by the settings dialog. Pass visible=true when the panel is shown.
  */
 export function ConductorDaemonPanel({ visible = true }: { visible?: boolean }): React.ReactElement {
   const [serviceRunning, setServiceRunning] = useState<boolean | null>(null)
   const [fullDiskAccess, setFullDiskAccess] = useState<boolean | null>(null)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const [sessions, setSessions] = useState<TmuxSession[]>([])
-  const [sessionsLoading, setSessionsLoading] = useState(false)
-
-  const loadSessions = useCallback(async () => {
-    setSessionsLoading(true)
-    try {
-      const list: TmuxSession[] = await window.electronAPI.conductordGetTmuxSessions()
-      setSessions(list)
-    } catch {
-      setSessions([])
-    } finally {
-      setSessionsLoading(false)
-    }
-  }, [])
-
-  const { connected, orphaned } = useMemo(() => {
-    const connected: TmuxSession[] = []
-    const orphaned: TmuxSession[] = []
-    for (const s of sessions) {
-      if (s.connected) connected.push(s)
-      else orphaned.push(s)
-    }
-    return { connected, orphaned }
-  }, [sessions])
-
-  async function killSession(name: string) {
-    try {
-      await window.electronAPI.conductordKillTmuxSession(name)
-      setSessions(prev => prev.filter(s => s.name !== name))
-    } catch {
-      setMessage({ type: 'error', text: `Failed to kill session ${name}` })
-    }
-  }
-
-  async function killOrphaned() {
-    try {
-      const data = await window.electronAPI.conductordKillOrphanedTmux()
-      if (data.ok) {
-        setMessage({ type: 'success', text: `Killed ${data.killed} orphaned session${data.killed === 1 ? '' : 's'}` })
-        loadSessions()
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Failed to kill orphaned sessions' })
-    }
-  }
 
   async function checkStatus() {
     try {
@@ -100,9 +31,8 @@ export function ConductorDaemonPanel({ visible = true }: { visible?: boolean }):
   useEffect(() => {
     if (visible) {
       checkStatus()
-      loadSessions()
     }
-  }, [visible, loadSessions])
+  }, [visible])
 
   useEffect(() => {
     if (!visible) return
@@ -117,7 +47,7 @@ export function ConductorDaemonPanel({ visible = true }: { visible?: boolean }):
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Server className="w-5 h-5 text-zinc-400" />
-          <h3 className="text-sm font-medium text-zinc-200">Conductor Daemon</h3>
+          <h3 className="text-sm font-medium text-zinc-200">System Tray</h3>
         </div>
         <Button variant="ghost" size="icon" onClick={checkStatus} className="h-7 w-7 text-zinc-500 hover:text-zinc-300">
           <RefreshCw className="w-4 h-4" />
@@ -126,7 +56,7 @@ export function ConductorDaemonPanel({ visible = true }: { visible?: boolean }):
 
       {/* Status message */}
       {message && (
-        <div className={`px-3 py-2 text-xs rounded-md ${
+        <div className={`px-3 py-2 text-ui-base rounded-md ${
           message.type === 'success' ? 'text-green-400 bg-green-950/30 border border-green-900/50' : 'text-red-400 bg-red-950/30 border border-red-900/50'
         }`}>
           {message.text}
@@ -154,7 +84,7 @@ export function ConductorDaemonPanel({ visible = true }: { visible?: boolean }):
                 variant="ghost"
                 size="sm"
                 onClick={() => window.electronAPI.openFullDiskAccessSettings()}
-                className="h-6 px-2 text-[10px] text-amber-500 hover:text-amber-400"
+                className="h-6 px-2 text-ui-xs text-amber-500 hover:text-amber-400"
                 title="Open System Settings to grant Full Disk Access"
               >
                 Grant access
@@ -171,86 +101,7 @@ export function ConductorDaemonPanel({ visible = true }: { visible?: boolean }):
         </div>
       </div>
 
-      <Separator className="bg-zinc-800" />
-
-      {/* Tmux sessions */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-zinc-400">Tmux sessions</span>
-          <div className="flex items-center gap-1">
-            {orphaned.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={killOrphaned}
-                className="h-6 px-2 text-[10px] text-zinc-500 hover:text-red-400"
-                title={`Kill ${orphaned.length} orphaned session${orphaned.length === 1 ? '' : 's'}`}
-              >
-                <Trash2 className="w-3 h-3 mr-1" />
-                Kill {orphaned.length} orphaned
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={loadSessions}
-              disabled={sessionsLoading}
-              className="h-6 w-6 text-zinc-500 hover:text-zinc-300"
-              title="Refresh sessions"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${sessionsLoading ? 'animate-spin' : ''}`} />
-            </Button>
-          </div>
-        </div>
-        {sessionsLoading && sessions.length === 0 ? (
-          <div className="space-y-1">
-            {[...Array(2)].map((_, i) => (
-              <div key={i} className="flex items-center justify-between rounded bg-zinc-900 px-2 py-1.5 border border-zinc-800">
-                <Skeleton className="h-3.5 w-32" />
-                <Skeleton className="h-5 w-5 rounded" />
-              </div>
-            ))}
-          </div>
-        ) : sessions.length === 0 ? (
-          <p className="text-xs text-zinc-600">No tmux sessions</p>
-        ) : (
-          <div className="space-y-1">
-            {[...connected, ...orphaned].map(s => (
-              <div key={s.name} className="flex items-center gap-2 rounded bg-zinc-900 px-2 py-1.5 border border-zinc-800">
-                <span
-                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.connected ? 'bg-emerald-500' : 'bg-zinc-600'}`}
-                  title={s.connected ? 'Connected' : 'Orphaned'}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-mono text-zinc-400 truncate">{s.name}</span>
-                    {s.command && (
-                      <span className="text-[10px] text-zinc-600 shrink-0">{s.command}</span>
-                    )}
-                  </div>
-                  {s.cwd && (
-                    <div className="text-[10px] text-zinc-600 truncate">{shortPath(s.cwd)}</div>
-                  )}
-                </div>
-                <span className="text-[10px] text-zinc-700 shrink-0">{timeAgo(s.activity)}</span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => killSession(s.name)}
-                  className="h-5 w-5 shrink-0 text-zinc-600 hover:text-red-400"
-                  title="Kill session"
-                >
-                  <X className="w-3 h-3" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <Separator className="bg-zinc-800" />
-
-      <p className="text-xs text-zinc-500 leading-relaxed">
+      <p className="text-ui-base text-zinc-500 leading-relaxed">
         conductord runs in your menu bar. Terminals persist when the Conductor window is closed. Quit from the menu bar icon to stop.
       </p>
     </div>

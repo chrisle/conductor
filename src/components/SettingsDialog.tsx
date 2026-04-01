@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import {
   Server, Download, Trash2,
-  Package, RefreshCw, Puzzle,
+  Package, RefreshCw, Puzzle, Monitor,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -14,6 +14,9 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/comp
 import { useSettingsDialogStore } from '@/store/settingsDialog'
 import { extensionRegistry } from '@/extensions'
 import { ConductorDaemonPanel } from '@/extensions/settings/TerminalServiceTab'
+import { useProjectStore } from '@/store/project'
+import { useResolvedSettings } from '@/hooks/useResolvedSettings'
+import { DEFAULT_PROJECT_SETTINGS } from '@/types/project-settings'
 
 interface InstalledExtension {
   id: string
@@ -32,14 +35,15 @@ export default function SettingsDialog(): React.ReactElement {
 
   const settingsPanels = extensionRegistry.getSettingsPanels()
 
-  // Build nav items: extension panels + conductor daemon + extensions
+  // Build nav items: extension panels + terminal + system tray + extensions
   const navItems: { id: string; label: string; icon: React.ElementType }[] = [
     ...settingsPanels.map(({ extension }) => ({
       id: extension.id,
       label: extension.name,
       icon: extension.icon || Puzzle,
     })),
-    { id: 'conductor-daemon', label: 'Conductor Daemon', icon: Server },
+    { id: 'terminal', label: 'Terminal', icon: Monitor },
+    { id: 'conductor-daemon', label: 'System Tray', icon: Server },
     { id: 'extensions', label: 'Extensions', icon: Package },
   ]
 
@@ -66,7 +70,7 @@ export default function SettingsDialog(): React.ReactElement {
                     key={item.id}
                     onClick={() => setActiveSection(item.id)}
                     className={cn(
-                      'flex items-center gap-2 px-2 py-1.5 rounded text-left transition-colors text-xs',
+                      'flex items-center gap-2 px-2 py-1.5 rounded text-left transition-colors text-ui-sm',
                       isActive
                         ? 'bg-zinc-700/60 text-zinc-100'
                         : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
@@ -113,6 +117,10 @@ function SettingsContent({
     )
   }
 
+  if (section === 'terminal') {
+    return <TerminalSection />
+  }
+
   if (section === 'conductor-daemon') {
     return <ConductorDaemonSection />
   }
@@ -121,7 +129,81 @@ function SettingsContent({
     return <ExtensionsSection />
   }
 
-  return <div className="text-xs text-zinc-500">Select a section from the sidebar.</div>
+  return <div className="text-ui-base text-zinc-500">Select a section from the sidebar.</div>
+}
+
+function TerminalSection(): React.ReactElement {
+  const projectSettings = useProjectStore(s => s.projectSettings)
+  const workspaceSettings = useProjectStore(s => s.workspaceSettings)
+  const activeWorkspace = useProjectStore(s => s.activeWorkspace)
+  const { setProjectSettings, setWorkspaceSettings } = useProjectStore.getState()
+  const resolved = useResolvedSettings()
+
+  return (
+    <div>
+      <h3 className="text-sm font-medium text-zinc-200 mb-4">Terminal</h3>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <div>
+            <label className="text-ui-sm text-zinc-400 font-medium">tmux Mouse Scrolling</label>
+            <div className="text-ui-xs text-zinc-500">Mouse wheel for scrollback instead of arrow keys</div>
+          </div>
+
+          <div className="flex items-center justify-between bg-zinc-900/50 rounded px-2 py-1">
+            <span className="text-ui-xs text-zinc-400">Project default</span>
+            <select
+              className="bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0.5 text-ui-xs text-zinc-200 outline-none focus:border-blue-500"
+              value={projectSettings?.terminal?.tmuxMouse === undefined ? '__default__' : String(projectSettings.terminal.tmuxMouse)}
+              onChange={e => {
+                const val = e.target.value
+                if (val === '__default__') {
+                  const { terminal: _, ...rest } = projectSettings ?? {}
+                  setProjectSettings(Object.keys(rest).length > 0 ? rest : undefined)
+                } else {
+                  setProjectSettings({
+                    ...projectSettings,
+                    terminal: { ...projectSettings?.terminal, tmuxMouse: val === 'true' },
+                  })
+                }
+              }}
+            >
+              <option value="__default__">Default ({DEFAULT_PROJECT_SETTINGS.terminal.tmuxMouse ? 'On' : 'Off'})</option>
+              <option value="true">On</option>
+              <option value="false">Off</option>
+            </select>
+          </div>
+
+          <div className="flex items-center justify-between bg-zinc-900/50 rounded px-2 py-1">
+            <span className="text-ui-xs text-zinc-400">Workspace{activeWorkspace ? ` (${activeWorkspace})` : ''}</span>
+            <select
+              className="bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0.5 text-ui-xs text-zinc-200 outline-none focus:border-blue-500"
+              value={workspaceSettings?.terminal?.tmuxMouse === undefined ? '__inherit__' : String(workspaceSettings.terminal.tmuxMouse)}
+              onChange={e => {
+                const val = e.target.value
+                if (val === '__inherit__') {
+                  const { terminal: _, ...rest } = workspaceSettings ?? {}
+                  setWorkspaceSettings(Object.keys(rest).length > 0 ? rest : undefined)
+                } else {
+                  setWorkspaceSettings({
+                    ...workspaceSettings,
+                    terminal: { ...workspaceSettings?.terminal, tmuxMouse: val === 'true' },
+                  })
+                }
+              }}
+            >
+              <option value="__inherit__">Inherit from project</option>
+              <option value="true">On</option>
+              <option value="false">Off</option>
+            </select>
+          </div>
+
+          <div className="text-ui-xs text-zinc-600">
+            Effective: <span className="text-zinc-400">{resolved.terminal.tmuxMouse ? 'On' : 'Off'}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function ConductorDaemonSection(): React.ReactElement {
@@ -212,7 +294,7 @@ function ExtensionsSection(): React.ReactElement {
         </div>
 
         {extMessage && (
-          <div className={`mb-3 px-3 py-2 text-xs rounded ${
+          <div className={`mb-3 px-3 py-2 text-ui-base rounded ${
             extMessage.type === 'success' ? 'text-green-400 bg-green-950/30' : 'text-red-400 bg-red-950/30'
           }`}>
             {extMessage.text}
@@ -222,7 +304,7 @@ function ExtensionsSection(): React.ReactElement {
         {/* Installed external extensions */}
         {externalExtensions.length > 0 && (
           <div className="mb-4">
-            <div className="text-[11px] text-zinc-500 uppercase tracking-wider mb-2">Installed</div>
+            <div className="text-ui-sm text-zinc-500 uppercase tracking-wider mb-2">Installed</div>
             <div className="space-y-1">
               {externalExtensions.map(ext => {
                 const enabled = extensionRegistry.isEnabled(ext.id)
@@ -236,9 +318,9 @@ function ExtensionsSection(): React.ReactElement {
                   >
                     <Package className="w-4 h-4 text-zinc-400 group-hover:text-zinc-300 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs text-zinc-200 truncate">{ext.name}</div>
+                      <div className="text-ui-base text-zinc-200 truncate">{ext.name}</div>
                       {ext.description && (
-                        <div className="text-[10px] text-zinc-500 truncate">{ext.description}</div>
+                        <div className="text-ui-xs text-zinc-500 truncate">{ext.description}</div>
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -279,7 +361,7 @@ function ExtensionsSection(): React.ReactElement {
 
         {/* Built-in extensions */}
         <div>
-          <div className="text-[11px] text-zinc-500 uppercase tracking-wider mb-2">Built-in</div>
+          <div className="text-ui-sm text-zinc-500 uppercase tracking-wider mb-2">Built-in</div>
           <div className="space-y-1">
             {builtinExtensions.map(ext => {
               const Icon = ext.icon || Puzzle
@@ -290,12 +372,12 @@ function ExtensionsSection(): React.ReactElement {
                 >
                   <Icon className="w-4 h-4 text-zinc-500 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs text-zinc-300 truncate">{ext.name}</div>
+                    <div className="text-ui-base text-zinc-300 truncate">{ext.name}</div>
                     {ext.description && (
-                      <div className="text-[10px] text-zinc-500 truncate">{ext.description}</div>
+                      <div className="text-ui-xs text-zinc-500 truncate">{ext.description}</div>
                     )}
                   </div>
-                  <span className="text-[10px] text-zinc-600 shrink-0">v{ext.version}</span>
+                  <span className="text-ui-xs text-zinc-600 shrink-0">v{ext.version}</span>
                 </div>
               )
             })}
