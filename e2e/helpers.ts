@@ -13,6 +13,10 @@ export async function installTestMocks(page: Page) {
     const dataListeners = new Set<Function>()
     const exitListeners = new Set<Function>()
     const writes: Array<{ id: string; data: string }> = []
+    const creates: Array<{ id: string; cwd?: string; command?: string }> = []
+    const knownSessions = new Set<string>()
+
+    let mockTmuxSessions: any[] = []
 
     const testTerminal = {
       /** Push data into xterm as if it came from the PTY */
@@ -25,6 +29,10 @@ export async function installTestMocks(page: Page) {
       },
       /** All writeTerminal calls recorded here for assertions */
       writes,
+      /** All createTerminal calls recorded here for assertions */
+      creates,
+      /** Set tmux sessions returned by conductordGetTmuxSessions */
+      setTmuxSessions(sessions: any[]) { mockTmuxSessions = sessions },
     }
 
     ;(window as any).__testTerminal__ = testTerminal
@@ -65,10 +73,13 @@ export async function installTestMocks(page: Page) {
       invalidateCache: noop,
 
       // Terminal — pure in-memory mock, no conductord needed
-      createTerminal: async (id: string) => {
+      createTerminal: async (id: string, cwd?: string, command?: string) => {
+        const isNew = !knownSessions.has(id)
+        knownSessions.add(id)
+        creates.push({ id, cwd, command })
         // Emit a shell prompt so TerminalTab's "wait for idle" logic fires
         setTimeout(() => testTerminal.feedData(id, '$ '), 50)
-        return { isNew: true }
+        return { isNew }
       },
       writeTerminal: async (id: string, data: string) => {
         writes.push({ id, data })
@@ -128,7 +139,7 @@ export async function installTestMocks(page: Page) {
       offConductordLogs: () => {},
       conductordHealth: async () => true,
       conductordGetSessions: async () => [],
-      conductordGetTmuxSessions: async () => [],
+      conductordGetTmuxSessions: async () => mockTmuxSessions,
       conductordKillTmuxSession: async () => ({ ok: true }),
       conductordKillOrphanedTmux: async () => ({ ok: true, killed: 0 }),
 
@@ -146,6 +157,33 @@ export async function installTestMocks(page: Page) {
       platform: 'darwin',
     }
   })
+}
+
+/** Set the tmux sessions returned by the conductordGetTmuxSessions mock. */
+export async function setTmuxSessions(
+  page: Page,
+  sessions: Array<{
+    name: string
+    connected?: boolean
+    command?: string
+    cwd?: string
+    created?: number
+    activity?: number
+  }>,
+) {
+  const now = Math.floor(Date.now() / 1000)
+  const filled = sessions.map(s => ({
+    connected: false,
+    command: '/bin/zsh',
+    cwd: '/tmp',
+    created: now,
+    activity: now,
+    ...s,
+  }))
+  await page.evaluate(
+    (data) => (window as any).__testTerminal__.setTmuxSessions(data),
+    filled,
+  )
 }
 
 /** Feed raw data into a terminal as if it came from the PTY. */
