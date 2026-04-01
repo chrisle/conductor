@@ -87,7 +87,7 @@ export default function SettingsDialog(): React.ReactElement {
           {/* Content area */}
           <div className="flex-1 min-w-0 overflow-hidden">
             <ScrollArea className="h-full">
-              <div className="p-6">
+              <div className="pt-10 px-6 pb-6">
                 <SettingsContent section={currentSection} settingsPanels={settingsPanels} />
               </div>
             </ScrollArea>
