@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator as CtxMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { useTabsStore, type Tab } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
@@ -12,7 +12,11 @@ import { useSidebarStore } from '@/store/sidebar'
 import { extensionRegistry } from '@/extensions'
 import { openProjectDialog, openProject, createNewProject } from '@/lib/project-io'
 import { useProjectStore } from '@/store/project'
+import { useConfigStore } from '@/store/config'
 import { killTerminal } from '@/lib/terminal-api'
+import ClaudeIcon from '@/components/ui/ClaudeIcon'
+import CodexIcon from '@/components/ui/CodexIcon'
+import { Terminal, Globe } from 'lucide-react'
 
 interface TabGroupProps {
   groupId: string
@@ -370,23 +374,159 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     setRenamingTabId(null)
   }
 
-  // Get menu items from plugin registry
+  const claudeAccounts = useConfigStore(s => s.config.claudeAccounts)
+
+  function nextSessionId(prefix: string): string {
+    const groups = useTabsStore.getState().groups
+    const existing = new Set<string>()
+    for (const g of Object.values(groups)) {
+      for (const t of g.tabs) {
+        if (t.id.startsWith(`${prefix}-`)) existing.add(t.id)
+      }
+    }
+    let n = 1
+    while (existing.has(`${prefix}-${n}`)) n++
+    return `${prefix}-${n}`
+  }
+
+  function addClaudeTab(apiKey?: string, accountName?: string) {
+    const cwd = rootPath || undefined
+    useTabsStore.getState().addTab(groupId, {
+      id: nextSessionId('claude-code'),
+      type: 'claude-code',
+      title: accountName ? `Claude (${accountName})` : 'Claude Code',
+      filePath: cwd,
+      initialCommand: 'claude\n',
+      apiKey,
+    })
+  }
+
+  const friendly = (p: string) => p.replace(/^\/Users\/[^/]+/, '~')
+
+  // Get menu items from plugin registry (for third-party extensions)
   const menuItems = extensionRegistry.getNewTabMenuItems()
+  // Filter out built-in items we render ourselves
+  const extraMenuItems = menuItems.filter(item =>
+    !['Claude Code', 'Claude Code (continue)', 'Claude Code (resume)', 'Codex', 'Terminal', 'Browser'].includes(item.label)
+  )
 
   function renderMenuItems(onDone: () => void) {
-    return menuItems.map((item, i) => (
-      <React.Fragment key={i}>
-        {item.separator === 'before' && <DropdownMenuSeparator />}
+    return (
+      <>
+        {/* Current directory */}
+        <DropdownMenuLabel className="text-[10px] text-zinc-500 font-normal truncate max-w-[200px] py-1">
+          {rootPath ? friendly(rootPath) : 'No project'}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+
+        {/* Claude submenu */}
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className="gap-2 text-xs cursor-pointer">
+            <ClaudeIcon className="w-3.5 h-3.5 text-[#D97757] shrink-0" />
+            <span>Claude</span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="bg-zinc-900 border-zinc-700">
+            <DropdownMenuItem
+              onClick={() => { addClaudeTab(); onDone() }}
+              className="gap-2 text-xs cursor-pointer"
+            >
+              Default
+            </DropdownMenuItem>
+            {claudeAccounts.length > 0 && <DropdownMenuSeparator />}
+            {claudeAccounts.map(account => (
+              <DropdownMenuItem
+                key={account.id}
+                onClick={() => { addClaudeTab(account.apiKey, account.name); onDone() }}
+                className="gap-2 text-xs cursor-pointer"
+              >
+                {account.name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        {/* Codex */}
         <DropdownMenuItem
-          onClick={() => { item.action(groupId); onDone() }}
+          onClick={() => {
+            const cwd = rootPath || undefined
+            useTabsStore.getState().addTab(groupId, {
+              id: nextSessionId('codex'),
+              type: 'codex',
+              title: 'Codex',
+              filePath: cwd,
+              initialCommand: 'codex\n',
+            })
+            onDone()
+          }}
           className="gap-2 text-xs cursor-pointer"
         >
-          <item.icon className={item.iconClassName || "w-3.5 h-3.5 shrink-0"} />
-          <span>{item.label}</span>
+          <CodexIcon className="w-3.5 h-3.5 text-[#10a37f] shrink-0" />
+          <span>Codex</span>
         </DropdownMenuItem>
-        {item.separator === 'after' && <DropdownMenuSeparator />}
-      </React.Fragment>
-    ))
+
+        {/* Terminal */}
+        <DropdownMenuItem
+          onClick={() => {
+            const cwd = rootPath || undefined
+            useTabsStore.getState().addTab(groupId, {
+              type: 'terminal',
+              title: 'Terminal',
+              filePath: cwd,
+            })
+            onDone()
+          }}
+          className="gap-2 text-xs cursor-pointer"
+        >
+          <Terminal className="w-3.5 h-3.5 text-green-400 shrink-0" />
+          <span>Terminal</span>
+        </DropdownMenuItem>
+
+        {/* Browser submenu */}
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className="gap-2 text-xs cursor-pointer">
+            <Globe className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+            <span>Browser</span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="bg-zinc-900 border-zinc-700">
+            <DropdownMenuItem
+              onClick={() => {
+                useTabsStore.getState().addTab(groupId, {
+                  type: 'browser',
+                  title: 'Browser',
+                  url: 'https://google.com',
+                })
+                onDone()
+              }}
+              className="gap-2 text-xs cursor-pointer"
+            >
+              Internal
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                window.electronAPI.openExternal('https://google.com')
+                onDone()
+              }}
+              className="gap-2 text-xs cursor-pointer"
+            >
+              System
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        {/* Extra items from third-party extensions */}
+        {extraMenuItems.length > 0 && <DropdownMenuSeparator />}
+        {extraMenuItems.map((item, i) => (
+          <DropdownMenuItem
+            key={i}
+            onClick={() => { item.action(groupId); onDone() }}
+            className="gap-2 text-xs cursor-pointer"
+          >
+            <item.icon className={item.iconClassName || "w-3.5 h-3.5 shrink-0"} />
+            <span>{item.label}</span>
+          </DropdownMenuItem>
+        ))}
+      </>
+    )
   }
 
   return (
