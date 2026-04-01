@@ -75,10 +75,17 @@ export function ConductorDaemonPanel({ visible = true }: { visible?: boolean }):
             <XCircle className="w-4 h-4 text-zinc-600" />
           )}
         </div>
+      </div>
 
-        <div className="flex items-center justify-between">
-          <span className="text-zinc-400">Full Disk Access</span>
-          <div className="flex items-center gap-1.5">
+      {/* Permissions */}
+      <div className="space-y-3">
+        <div className="text-ui-sm text-zinc-500 uppercase tracking-wider">Permissions</div>
+        <div className="flex items-center justify-between text-sm">
+          <div>
+            <div className="text-zinc-400">Full Disk Access</div>
+            <div className="text-ui-xs text-zinc-600 mt-0.5">Required to read files in protected directories (Desktop, Documents, etc.)</div>
+          </div>
+          <div className="flex items-center gap-1.5 ml-4 shrink-0">
             {fullDiskAccess === false && (
               <Button
                 variant="ghost"
