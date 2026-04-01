@@ -121,8 +121,6 @@ interface ElectronAPI {
   onConductordLogs: (callback: (event: IpcRendererEvent, watchId: string, data: string) => void) => void
   offConductordLogs: (callback: (event: IpcRendererEvent, watchId: string, data: string) => void) => void
 
-  hasFullDiskAccess: () => Promise<boolean>
-  openFullDiskAccessSettings: () => Promise<void>
 
   // Conductord REST proxy
   conductordHealth: () => Promise<boolean>

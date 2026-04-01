@@ -188,8 +188,6 @@ const mock: ElectronAPI = {
   onConductordLogs: noop,
   offConductordLogs: noop,
 
-  hasFullDiskAccess: async () => false,
-  openFullDiskAccessSettings: noopAsync,
 
   // Conductord REST proxy (dev-web mode uses direct HTTP)
   conductordHealth: async () => {

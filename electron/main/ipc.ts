@@ -824,17 +824,6 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
     }
   })
 
-  ipcMain.handle('conductord:hasFullDiskAccess', async () => {
-    try {
-      const { body } = await conductordFetch('/health')
-      return body?.fullDiskAccess === true
-    } catch {
-      return false
-    }
-  })
-  ipcMain.handle('conductord:openFullDiskAccessSettings', () => {
-    shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles')
-  })
 
   // Conductord REST proxy (renderer can't reach Unix socket directly)
   ipcMain.handle('conductord:health', async () => {

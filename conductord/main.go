@@ -782,20 +782,10 @@ func handleSessions(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(list)
 }
 
-func hasFullDiskAccess() bool {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return false
-	}
-	_, err = os.ReadDir(filepath.Join(home, "Library", "Safari"))
-	return err == nil
-}
-
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":         "ok",
-		"fullDiskAccess": hasFullDiskAccess(),
+		"status": "ok",
 	})
 }
 

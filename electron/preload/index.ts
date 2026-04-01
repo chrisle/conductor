@@ -114,8 +114,6 @@ const electronAPI = {
   offConductordLogs: (callback: (event: IpcRendererEvent, watchId: string, data: string) => void) =>
     ipcRenderer.removeListener('conductord:logs', callback),
 
-  hasFullDiskAccess: () => ipcRenderer.invoke('conductord:hasFullDiskAccess'),
-  openFullDiskAccessSettings: () => ipcRenderer.invoke('conductord:openFullDiskAccessSettings'),
 
   // Conductord REST proxy (routes through main process -> Unix socket)
   conductordHealth: () => ipcRenderer.invoke('conductord:health'),
