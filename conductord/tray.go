@@ -44,6 +44,7 @@ func onTrayReady(socketPath string) {
 	systray.AddSeparator()
 
 	mOpen := systray.AddMenuItem("Open Conductor", "Open the Conductor window")
+	mLogs := systray.AddMenuItem("View Logs", "Open the conductord log file")
 
 	systray.AddSeparator()
 
@@ -74,6 +75,8 @@ func onTrayReady(socketPath string) {
 			select {
 			case <-mOpen.ClickedCh:
 				openConductorApp()
+			case <-mLogs.ClickedCh:
+				openLogFile()
 			case <-mQuit.ClickedCh:
 				log.Println("[tray] quit requested by user")
 				systray.Quit()
@@ -90,6 +93,24 @@ func onTrayExit(socketPath string) {
 	}
 	os.Remove(socketPath)
 	os.Exit(0)
+}
+
+func openLogFile() {
+	path := logFilePath()
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", path)
+	case "linux":
+		cmd = exec.Command("xdg-open", path)
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", path)
+	default:
+		return
+	}
+	if err := cmd.Start(); err != nil {
+		log.Printf("[tray] failed to open log file: %v", err)
+	}
 }
 
 func openConductorApp() {

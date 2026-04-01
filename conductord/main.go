@@ -1146,11 +1146,39 @@ func startServer(socketPath string, devPort int) {
 	go http.Serve(ln, nil)
 }
 
+// logFilePath returns the path to the conductord log file.
+func logFilePath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = os.TempDir()
+	}
+	return filepath.Join(home, "Library", "Logs", "conductord.log")
+}
+
+// initLogFile redirects the standard logger to the log file (appending),
+// while also keeping stderr output for debugging.
+func initLogFile() {
+	path := logFilePath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		log.Printf("failed to create log directory: %v", err)
+		return
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		log.Printf("failed to open log file %s: %v", path, err)
+		return
+	}
+	log.SetOutput(io.MultiWriter(os.Stderr, f))
+}
+
 func main() {
 	socketPath := flag.String("socket", defaultSocketPath(), "Unix socket path")
 	devPort := flag.Int("dev-port", 0, "optional TCP port for web dev mode (0 = disabled)")
 	trayMode := flag.Bool("tray", false, "show system tray icon instead of running as a headless daemon")
 	flag.Parse()
+
+	// Write logs to ~/Library/Logs/conductord.log as well as stderr.
+	initLogFile()
 
 	// Extract bundled tmux (if available) and set tmuxPath.
 	initTmux()
