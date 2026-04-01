@@ -428,15 +428,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
             <span>Claude</span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="bg-zinc-900 border-zinc-700 shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
-            <DropdownMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5 flex items-center justify-between">
-              <span>Claude Accounts</span>
-              <button
-                onClick={() => { useSettingsDialogStore.getState().openToSection('ai-cli') }}
-                className="text-zinc-500 hover:text-zinc-300 transition-colors"
-              >
-                <Plus className="w-3 h-3" />
-              </button>
-            </DropdownMenuLabel>
+            <DropdownMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5">Claude Accounts</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => { addClaudeTab(); onDone() }}
@@ -454,6 +446,14 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                 {account.name}
               </DropdownMenuItem>
             ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => { useSettingsDialogStore.getState().openToSection('ai-cli') }}
+              className="gap-2 text-ui-base cursor-pointer text-zinc-400"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Account</span>
+            </DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
