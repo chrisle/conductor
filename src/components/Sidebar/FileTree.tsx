@@ -96,7 +96,7 @@ export default function FileTree({ groupId }: FileTreeProps): React.ReactElement
       <div className="py-1">
         {rootPath && rootPath !== '/' && (
           <div
-            className="flex items-center gap-1 px-2 py-0.5 cursor-pointer select-none text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 transition-colors  text-[13px]"
+            className="flex items-center gap-1 px-2 py-0.5 cursor-pointer select-none text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 transition-colors  text-ui-md"
             onDoubleClick={() => {
               const parent = rootPath.substring(0, rootPath.lastIndexOf('/')) || '/'
               setRootPath(parent)
@@ -108,12 +108,12 @@ export default function FileTree({ groupId }: FileTreeProps): React.ReactElement
         )}
 
         {creating && (
-          <div className="flex items-center gap-1 px-2 py-0.5  text-[13px]">
+          <div className="flex items-center gap-1 px-2 py-0.5  text-ui-md">
             <span className="w-3 h-3 shrink-0" />
             <span className="text-zinc-500">{creating === 'folder' ? '📁' : '📄'}</span>
             <input
               ref={inputRef}
-              className="flex-1 bg-zinc-700 text-zinc-100 px-1 text-[13px]  outline-none border border-blue-500"
+              className="flex-1 bg-zinc-700 text-zinc-100 px-1 text-ui-md  outline-none border border-blue-500"
               value={newName}
               onChange={e => setNewName(e.target.value)}
               onKeyDown={e => {

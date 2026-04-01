@@ -51,7 +51,7 @@ export default function ExcelTab({ tabId, groupId, isActive, tab }: TabProps): R
     return (
       <div className="flex flex-col h-full w-full">
         <div className="flex-1 overflow-hidden p-0">
-          <table className="w-full border-collapse text-xs">
+          <table className="w-full border-collapse text-ui-base">
             <thead>
               <tr>
                 <th className="bg-zinc-800 px-3 py-1.5 border-r border-b border-zinc-700 w-12"><Skeleton className="h-3 w-4" /></th>
@@ -105,7 +105,7 @@ export default function ExcelTab({ tabId, groupId, isActive, tab }: TabProps): R
             <button
               key={s.name}
               onClick={() => setActiveSheet(i)}
-              className={`px-3 py-1.5 text-xs border-r border-zinc-800 transition-colors ${
+              className={`px-3 py-1.5 text-ui-base border-r border-zinc-800 transition-colors ${
                 i === activeSheet
                   ? 'bg-zinc-950 text-zinc-100 border-b-2 border-b-green-500'
                   : 'text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300'
@@ -119,7 +119,7 @@ export default function ExcelTab({ tabId, groupId, isActive, tab }: TabProps): R
 
       {/* Table */}
       <div className="flex-1 overflow-auto">
-        <table className="w-full border-collapse text-xs">
+        <table className="w-full border-collapse text-ui-base">
           <thead className="sticky top-0 z-10">
             <tr>
               <th className="bg-zinc-800 text-zinc-500 px-3 py-1.5 text-right border-r border-b border-zinc-700 w-12 font-normal">

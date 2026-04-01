@@ -94,7 +94,7 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
     >
       {/* Status message */}
       {message && (
-        <div className={`px-3 py-2 text-xs border-b border-zinc-800 ${
+        <div className={`px-3 py-2 text-ui-base border-b border-zinc-800 ${
           message.type === 'success' ? 'text-green-400 bg-green-950/30' : 'text-red-400 bg-red-950/30'
         }`}>
           {message.text}
@@ -106,7 +106,7 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
           {/* Installed external extensions */}
           {externalExtensions.length > 0 && (
             <>
-              <div className="px-1 py-1.5 text-[11px] text-zinc-500 uppercase tracking-wider font-medium">
+              <div className="px-1 py-1.5 text-ui-sm text-zinc-500 uppercase tracking-wider font-medium">
                 Installed
               </div>
               {externalExtensions.map(ext => (
@@ -117,15 +117,15 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
                   <Package className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-zinc-200 truncate">{ext.name}</span>
-                      <Badge variant="outline" className="h-4 px-1 text-[9px] border-zinc-700 text-zinc-500">
+                      <span className="text-ui-base text-zinc-200 truncate">{ext.name}</span>
+                      <Badge variant="outline" className="h-4 px-1 text-ui-2xs border-zinc-700 text-zinc-500">
                         v{ext.version}
                       </Badge>
                     </div>
                     {ext.description && (
-                      <div className="text-[11px] text-zinc-500 truncate">{ext.description}</div>
+                      <div className="text-ui-sm text-zinc-500 truncate">{ext.description}</div>
                     )}
-                    <div className="text-[11px] text-zinc-600 truncate">{ext.id}</div>
+                    <div className="text-ui-sm text-zinc-600 truncate">{ext.id}</div>
                   </div>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -151,10 +151,10 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
           <Collapsible defaultOpen={false}>
             <CollapsibleTrigger className="flex items-center gap-1 px-1 py-1.5 w-full group cursor-pointer">
               <ChevronRight className="w-3 h-3 text-zinc-500 transition-transform group-data-[state=open]:rotate-90" />
-              <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-medium">
+              <span className="text-ui-sm text-zinc-500 uppercase tracking-wider font-medium">
                 Built-in
               </span>
-              <Badge variant="outline" className="ml-auto h-4 px-1.5 text-[9px] border-zinc-700 text-zinc-600">
+              <Badge variant="outline" className="ml-auto h-4 px-1.5 text-ui-2xs border-zinc-700 text-zinc-600">
                 {builtinExtensions.length}
               </Badge>
             </CollapsibleTrigger>
@@ -169,15 +169,15 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
                     <Icon className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-zinc-300 truncate">{ext.name}</span>
+                        <span className="text-ui-base text-zinc-300 truncate">{ext.name}</span>
                         {ext.version && (
-                          <Badge variant="outline" className="h-4 px-1 text-[9px] border-zinc-700 text-zinc-600">
+                          <Badge variant="outline" className="h-4 px-1 text-ui-2xs border-zinc-700 text-zinc-600">
                             v{ext.version}
                           </Badge>
                         )}
                       </div>
                       {ext.description && (
-                        <div className="text-[11px] text-zinc-600">{ext.description}</div>
+                        <div className="text-ui-sm text-zinc-600">{ext.description}</div>
                       )}
                     </div>
                   </div>
@@ -188,7 +188,7 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
 
           {/* Empty state */}
           {externalExtensions.length === 0 && builtinExtensions.length === 0 && (
-            <div className="px-3 py-8 text-center text-xs text-zinc-600">
+            <div className="px-3 py-8 text-center text-ui-base text-zinc-600">
               No extensions installed
             </div>
           )}

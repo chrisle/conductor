@@ -126,7 +126,7 @@ export default function TextTab({ tabId, groupId, isActive, tab }: TabProps): Re
         onChange={handleChange}
         theme="vs-dark"
         options={{
-          fontSize: 13,
+          fontSize: 14,
           fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
           fontLigatures: true,
           lineHeight: 1.6,

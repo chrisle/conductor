@@ -127,7 +127,7 @@ export default function SettingsSidebar({ groupId }: SettingsSidebarProps): Reac
               <Collapsible defaultOpen>
                 <CollapsibleTrigger className="flex items-center gap-1 px-3 py-1.5 w-full group cursor-pointer">
                   <ChevronRight className="w-3 h-3 text-zinc-500 transition-transform group-data-[state=open]:rotate-90" />
-                  <span className="text-[11px] text-zinc-400 uppercase tracking-wider font-medium">{extension.name}</span>
+                  <span className="text-ui-sm text-zinc-400 uppercase tracking-wider font-medium">{extension.name}</span>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <div className="px-3 py-2">
@@ -143,7 +143,7 @@ export default function SettingsSidebar({ groupId }: SettingsSidebarProps): Reac
           <Collapsible defaultOpen>
             <CollapsibleTrigger className="flex items-center gap-1 px-3 py-1.5 w-full group cursor-pointer">
               <ChevronRight className="w-3 h-3 text-zinc-500 transition-transform group-data-[state=open]:rotate-90" />
-              <span className="text-[11px] text-zinc-400 uppercase tracking-wider font-medium">Conductor Daemon</span>
+              <span className="text-ui-sm text-zinc-400 uppercase tracking-wider font-medium">Conductor Daemon</span>
             </CollapsibleTrigger>
             <CollapsibleContent>
               {conductorDaemonItems.map(item => (
@@ -153,7 +153,7 @@ export default function SettingsSidebar({ groupId }: SettingsSidebarProps): Reac
                   className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-zinc-800/50 transition-colors group"
                 >
                   <item.icon className="w-4 h-4 text-zinc-400 group-hover:text-zinc-300 shrink-0" />
-                  <span className="text-xs text-zinc-300 group-hover:text-zinc-100 truncate">{item.label}</span>
+                  <span className="text-ui-base text-zinc-300 group-hover:text-zinc-100 truncate">{item.label}</span>
                   <ChevronRight className="w-3 h-3 text-zinc-500 ml-auto shrink-0" />
                 </button>
               ))}
@@ -166,7 +166,7 @@ export default function SettingsSidebar({ groupId }: SettingsSidebarProps): Reac
           <Collapsible defaultOpen>
             <CollapsibleTrigger className="flex items-center gap-1 px-3 py-1.5 w-full group cursor-pointer">
               <ChevronRight className="w-3 h-3 text-zinc-500 transition-transform group-data-[state=open]:rotate-90" />
-              <span className="text-[11px] text-zinc-400 uppercase tracking-wider font-medium">Extensions</span>
+              <span className="text-ui-sm text-zinc-400 uppercase tracking-wider font-medium">Extensions</span>
               <div className="ml-auto flex items-center gap-1" onClick={e => e.stopPropagation()}>
                 <Button variant="ghost" size="icon" onClick={loadExtensions} className="h-5 w-5 text-zinc-400 hover:text-zinc-200">
                   <RefreshCw className="w-3 h-3" />
@@ -179,7 +179,7 @@ export default function SettingsSidebar({ groupId }: SettingsSidebarProps): Reac
             <CollapsibleContent>
               {/* Status message */}
               {extMessage && (
-                <div className={`mx-3 mb-2 px-2 py-1.5 text-xs rounded ${
+                <div className={`mx-3 mb-2 px-2 py-1.5 text-ui-base rounded ${
                   extMessage.type === 'success' ? 'text-green-400 bg-green-950/30' : 'text-red-400 bg-red-950/30'
                 }`}>
                   {extMessage.text}
@@ -195,7 +195,7 @@ export default function SettingsSidebar({ groupId }: SettingsSidebarProps): Reac
                     className={`w-full flex items-center gap-2 px-3 py-2 hover:bg-zinc-800/50 transition-colors group ${!enabled ? 'opacity-50' : ''}`}
                   >
                     <Package className="w-4 h-4 text-zinc-400 group-hover:text-zinc-300 shrink-0" />
-                    <span className="text-xs text-zinc-300 group-hover:text-zinc-100 truncate">{ext.name}</span>
+                    <span className="text-ui-base text-zinc-300 group-hover:text-zinc-100 truncate">{ext.name}</span>
                     <div className="ml-auto flex items-center gap-1 shrink-0">
                       <button
                         onClick={() => extensionRegistry.setEnabled(ext.id, !enabled)}
@@ -232,7 +232,7 @@ export default function SettingsSidebar({ groupId }: SettingsSidebarProps): Reac
                     className="w-full flex items-center gap-2 px-3 py-2 transition-colors"
                   >
                     <Icon className="w-4 h-4 text-zinc-400 shrink-0" />
-                    <span className="text-xs text-zinc-300 truncate">{ext.name}</span>
+                    <span className="text-ui-base text-zinc-300 truncate">{ext.name}</span>
                   </div>
                 )
               })}

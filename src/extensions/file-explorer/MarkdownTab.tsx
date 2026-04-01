@@ -101,7 +101,7 @@ export default function MarkdownTab({ tabId, groupId, isActive, tab }: TabProps)
           onChange={handleChange}
           theme="vs-dark"
           options={{
-            fontSize: 13,
+            fontSize: 14,
             fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
             fontLigatures: true,
             lineHeight: 1.6,
@@ -129,7 +129,7 @@ export default function MarkdownTab({ tabId, groupId, isActive, tab }: TabProps)
 
       {/* Preview */}
       <div className="h-full w-1/2 overflow-auto p-8">
-        <div className="max-w-3xl mx-auto prose prose-invert prose-zinc prose-sm
+        <div className="max-w-3xl mx-auto prose prose-invert prose-zinc prose-base
           prose-headings:text-zinc-100 prose-headings:font-semibold
           prose-p:text-zinc-300 prose-p:leading-relaxed
           prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline

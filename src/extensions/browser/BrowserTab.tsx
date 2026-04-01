@@ -192,7 +192,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
               type="text"
               value={inputUrl}
               onChange={e => setInputUrl(e.target.value)}
-              className="flex-1 bg-transparent text-zinc-200 text-xs font-mono outline-none placeholder:text-zinc-500"
+              className="flex-1 bg-transparent text-zinc-200 text-ui-base font-mono outline-none placeholder:text-zinc-500"
               placeholder="Enter URL or search..."
               onFocus={e => e.target.select()}
             />

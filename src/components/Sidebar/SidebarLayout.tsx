@@ -22,7 +22,7 @@ export default function SidebarLayout({
         </div>
 
         {footer && (
-          <div className="px-3 py-1.5 border-t border-zinc-700/50 shrink-0 text-[10px] text-zinc-500 truncate">
+          <div className="px-3 py-1.5 border-t border-zinc-700/50 shrink-0 text-ui-xs text-zinc-500 truncate">
             {footer}
           </div>
         )}

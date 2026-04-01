@@ -22,7 +22,7 @@ export default function Toggle({ on, onToggle, label, color = '#eab308' }: Toggl
       </button>
       <label
         onClick={onToggle}
-        className="text-[10px] cursor-pointer select-none leading-none"
+        className="text-ui-xs cursor-pointer select-none leading-none"
         style={{ color: on ? color : '#52525b' }}
       >
         {label}

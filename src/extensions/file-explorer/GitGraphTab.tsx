@@ -168,7 +168,7 @@ function RefBadge({ refName }: { refName: string }) {
   const label = isTag ? cleaned.replace('tag: ', '') : cleaned
   const isOrigin = label.startsWith('origin/')
 
-  let cls = 'inline-flex items-center px-1.5 py-0 text-[11px] font-medium rounded border leading-snug '
+  let cls = 'inline-flex items-center px-1.5 py-0 text-ui-sm font-medium rounded border leading-snug '
   if (isHead && !isOrigin) cls += 'bg-green-500/20 text-green-400 border-green-500/30'
   else if (isTag) cls += 'bg-amber-500/20 text-amber-400 border-amber-500/30'
   else if (isOrigin) cls += 'bg-purple-500/15 text-purple-400 border-purple-500/25'
@@ -217,7 +217,7 @@ function CommitDetailPanel({ commit, detail, loading }: { commit: Commit; detail
   return (
     <div className="border-t border-zinc-800/50 bg-zinc-900/50 px-4 py-3 space-y-3">
       {/* Commit metadata */}
-      <div className="flex flex-col gap-1 text-xs">
+      <div className="flex flex-col gap-1 text-ui-base">
         <div className="flex gap-2">
           <span className="text-zinc-500 w-12 shrink-0">Commit</span>
           <span className="font-mono text-zinc-400">{commit.hash}</span>
@@ -240,7 +240,7 @@ function CommitDetailPanel({ commit, detail, loading }: { commit: Commit; detail
 
       {/* Extended commit message */}
       {extendedBody && (
-        <pre className="text-xs text-zinc-300 whitespace-pre-wrap font-mono leading-relaxed border-l-2 border-zinc-700 pl-3">{extendedBody}</pre>
+        <pre className="text-ui-base text-zinc-300 whitespace-pre-wrap font-mono leading-relaxed border-l-2 border-zinc-700 pl-3">{extendedBody}</pre>
       )}
 
       {/* Changed files */}
@@ -253,12 +253,12 @@ function CommitDetailPanel({ commit, detail, loading }: { commit: Commit; detail
         </div>
       ) : detail && detail.files.length > 0 ? (
         <div className="space-y-0.5">
-          <div className="text-[11px] text-zinc-500 font-medium mb-1">{detail.files.length} file{detail.files.length !== 1 ? 's' : ''} changed</div>
+          <div className="text-ui-sm text-zinc-500 font-medium mb-1">{detail.files.length} file{detail.files.length !== 1 ? 's' : ''} changed</div>
           {detail.files.map((f) => (
-            <div key={f.file} className="flex items-center gap-2 py-0.5 text-xs group/file hover:bg-zinc-800/30 rounded px-1 -mx-1">
+            <div key={f.file} className="flex items-center gap-2 py-0.5 text-ui-base group/file hover:bg-zinc-800/30 rounded px-1 -mx-1">
               {fileStatusIcon(f.status)}
               <span className="text-zinc-300 truncate">{f.file}</span>
-              <span className="text-[10px] text-zinc-600 shrink-0">{fileStatusLabel(f.status)}</span>
+              <span className="text-ui-xs text-zinc-600 shrink-0">{fileStatusLabel(f.status)}</span>
             </div>
           ))}
         </div>
@@ -380,7 +380,7 @@ export default function GitGraphTab({ tab }: TabProps): React.ReactElement {
   return (
     <div className="flex h-full flex-col bg-zinc-950">
       <div className="flex items-center justify-between border-b border-zinc-800/50 px-4 py-2">
-        <span className="text-xs text-zinc-400">{commits.length} commits</span>
+        <span className="text-ui-base text-zinc-400">{commits.length} commits</span>
         <button onClick={load} className="text-zinc-500 hover:text-zinc-300 transition-colors" title="Refresh">
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
@@ -390,13 +390,13 @@ export default function GitGraphTab({ tab }: TabProps): React.ReactElement {
         {/* Sticky column headers */}
         <div className="flex sticky top-0 z-10 bg-zinc-950 border-b border-zinc-800/50">
           <div className="shrink-0" style={{ width: graphWidth }}>
-            <div className="px-2 py-1.5 text-[10px] font-medium text-zinc-500 uppercase tracking-wider">Graph</div>
+            <div className="px-2 py-1.5 text-ui-xs font-medium text-zinc-500 uppercase tracking-wider">Graph</div>
           </div>
           <div className="flex-1 min-w-0 flex items-center px-3 gap-2" style={{ height: ROW_HEIGHT }}>
-            <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider shrink-0 w-14 text-right">Hash</span>
-            <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider flex-1">Message</span>
-            <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider shrink-0 ml-auto pl-4">Author</span>
-            <span className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider shrink-0 w-16 text-right">Date</span>
+            <span className="text-ui-xs font-medium text-zinc-500 uppercase tracking-wider shrink-0 w-14 text-right">Hash</span>
+            <span className="text-ui-xs font-medium text-zinc-500 uppercase tracking-wider flex-1">Message</span>
+            <span className="text-ui-xs font-medium text-zinc-500 uppercase tracking-wider shrink-0 ml-auto pl-4">Author</span>
+            <span className="text-ui-xs font-medium text-zinc-500 uppercase tracking-wider shrink-0 w-16 text-right">Date</span>
           </div>
         </div>
 
@@ -422,7 +422,7 @@ export default function GitGraphTab({ tab }: TabProps): React.ReactElement {
                         style={{ height: ROW_HEIGHT }}
                         onClick={() => toggleExpand(row.commit.hash)}
                       >
-                        <span className="font-mono text-[11px] text-zinc-500 shrink-0 w-14 text-right group-hover:text-zinc-400">
+                        <span className="font-mono text-ui-sm text-zinc-500 shrink-0 w-14 text-right group-hover:text-zinc-400">
                           {row.commit.abbrev}
                         </span>
 
@@ -441,37 +441,37 @@ export default function GitGraphTab({ tab }: TabProps): React.ReactElement {
                           }
                         </span>
 
-                        <span className="text-[11px] text-zinc-600 shrink-0 pl-4">{row.commit.author}</span>
-                        <span className="text-[11px] text-zinc-600 shrink-0 w-16 text-right">{formatDate(row.commit.date)}</span>
+                        <span className="text-ui-sm text-zinc-600 shrink-0 pl-4">{row.commit.author}</span>
+                        <span className="text-ui-sm text-zinc-600 shrink-0 w-16 text-right">{formatDate(row.commit.date)}</span>
                       </div>
                     </ContextMenuTrigger>
                     <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
-                      <ContextMenuItem className="gap-2 text-xs cursor-pointer" onClick={() => navigator.clipboard.writeText(row.commit.hash)}>
+                      <ContextMenuItem className="gap-2 text-ui-base cursor-pointer" onClick={() => navigator.clipboard.writeText(row.commit.hash)}>
                         <Hash className="w-3.5 h-3.5" />
                         Copy Hash
                       </ContextMenuItem>
-                      <ContextMenuItem className="gap-2 text-xs cursor-pointer" onClick={() => navigator.clipboard.writeText(row.commit.subject)}>
+                      <ContextMenuItem className="gap-2 text-ui-base cursor-pointer" onClick={() => navigator.clipboard.writeText(row.commit.subject)}>
                         <Copy className="w-3.5 h-3.5" />
                         Copy Title
                       </ContextMenuItem>
-                      <ContextMenuItem className="gap-2 text-xs cursor-pointer" onClick={() => navigator.clipboard.writeText(
+                      <ContextMenuItem className="gap-2 text-ui-base cursor-pointer" onClick={() => navigator.clipboard.writeText(
                         row.commit.body ? `${row.commit.subject}\n\n${row.commit.body}` : row.commit.subject
                       )}>
                         <MessageSquare className="w-3.5 h-3.5" />
                         Copy Commit Message
                       </ContextMenuItem>
-                      <ContextMenuItem className="gap-2 text-xs cursor-pointer" onClick={() => navigator.clipboard.writeText(row.commit.email)}>
+                      <ContextMenuItem className="gap-2 text-ui-base cursor-pointer" onClick={() => navigator.clipboard.writeText(row.commit.email)}>
                         <Mail className="w-3.5 h-3.5" />
                         Copy Author Email
                       </ContextMenuItem>
                       {commitUrl && (
                         <>
                           <ContextMenuSeparator className="bg-zinc-700" />
-                          <ContextMenuItem className="gap-2 text-xs cursor-pointer" onClick={() => navigator.clipboard.writeText(commitUrl)}>
+                          <ContextMenuItem className="gap-2 text-ui-base cursor-pointer" onClick={() => navigator.clipboard.writeText(commitUrl)}>
                             <Link className="w-3.5 h-3.5" />
                             Copy Commit Link
                           </ContextMenuItem>
-                          <ContextMenuItem className="gap-2 text-xs cursor-pointer" onClick={() => window.electronAPI.openExternal(commitUrl)}>
+                          <ContextMenuItem className="gap-2 text-ui-base cursor-pointer" onClick={() => window.electronAPI.openExternal(commitUrl)}>
                             <Link className="w-3.5 h-3.5" />
                             Open in Browser
                           </ContextMenuItem>

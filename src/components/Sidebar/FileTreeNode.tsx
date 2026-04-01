@@ -177,7 +177,7 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
           <div
             className={cn(
               'flex items-center gap-1 px-2 py-[3px] cursor-pointer select-none text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100 transition-colors group',
-              'text-[13px]'
+              'text-ui-md'
             )}
             style={{ paddingLeft: `${8 + indent}px` }}
             onClick={handleClick}
@@ -209,7 +209,7 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
 
             {isRenaming ? (
               <input
-                className="flex-1 bg-zinc-700 text-zinc-100 px-1 text-xs outline-none border border-blue-500"
+                className="flex-1 bg-zinc-700 text-zinc-100 px-1 text-ui-base outline-none border border-blue-500"
                 value={renameValue}
                 onChange={e => setRenameValue(e.target.value)}
                 onBlur={handleRename}
@@ -227,13 +227,13 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
         </ContextMenuTrigger>
         <ContextMenuContent className="bg-zinc-900 border-zinc-700 min-w-[140px]">
           {entry.isFile && (
-            <ContextMenuItem className="text-xs text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={openFile}>
+            <ContextMenuItem className="text-ui-base text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={openFile}>
               <FileUp className="w-3.5 h-3.5 mr-2" />
               Open
             </ContextMenuItem>
           )}
           {entry.isDirectory && (
-            <ContextMenuItem className="text-xs text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => {
+            <ContextMenuItem className="text-ui-base text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => {
               const store = useSidebarStore.getState()
               if (store.isFavorite(entry.path)) {
                 store.removeFavorite(entry.path)
@@ -248,13 +248,13 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
               )}
             </ContextMenuItem>
           )}
-          <ContextMenuItem className="text-xs text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => { setIsRenaming(true); setRenameValue(entry.name) }}>
+          <ContextMenuItem className="text-ui-base text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => { setIsRenaming(true); setRenameValue(entry.name) }}>
             <Pencil className="w-3.5 h-3.5 mr-2" />
             Rename
           </ContextMenuItem>
           <ContextMenuSeparator className="bg-zinc-700" />
           <ContextMenuItem
-            className="text-xs text-red-400 focus:bg-zinc-800 focus:text-red-300"
+            className="text-ui-base text-red-400 focus:bg-zinc-800 focus:text-red-300"
             onClick={handleDelete}
           >
             <Trash2 className="w-3.5 h-3.5 mr-2" />

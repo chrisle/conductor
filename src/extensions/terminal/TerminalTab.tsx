@@ -343,15 +343,24 @@ export default function TerminalTab({
         processWatchers(term, start, end);
       });
 
-      // Track user scroll-up via wheel events.
-      // We set the flag immediately on scroll-up and clear it only when
-      // the user actively scrolls back to the bottom (no timeout race).
+      // Scroll handling.
+      // When tmuxMouse is off, intercept wheel events to always scroll the
+      // xterm buffer (instead of letting tmux convert them to arrow keys).
+      // Uses { capture: true } to fire before xterm's own wheel handler.
       const el = containerRef.current;
       const onWheel = (e: WheelEvent) => {
+        if (!tmuxMouseRef.current) {
+          // Prevent xterm.js (and tmux) from seeing the wheel event.
+          // Manually scroll the viewport instead.
+          e.preventDefault();
+          e.stopPropagation();
+          const lines = Math.round(e.deltaY / 20) || (e.deltaY > 0 ? 1 : -1);
+          term.scrollLines(lines);
+        }
+
         if (e.deltaY < 0) {
           userScrolledUpRef.current = true;
         } else if (e.deltaY > 0) {
-          // Check synchronously after xterm processes the scroll
           requestAnimationFrame(() => {
             if (disposed) return;
             const buf = term.buffer.active;
@@ -361,7 +370,7 @@ export default function TerminalTab({
           });
         }
       };
-      el?.addEventListener("wheel", onWheel);
+      el?.addEventListener("wheel", onWheel, { capture: true });
 
       let resizeTimer: ReturnType<typeof setTimeout> | null = null;
       const scheduleRefit = () => {
@@ -388,7 +397,7 @@ export default function TerminalTab({
         window.removeEventListener("resize", onWindowResize);
         termAPI.offTerminalData(handleTerminalData);
         termAPI.offTerminalExit(handleTerminalExit);
-        el?.removeEventListener("wheel", onWheel);
+        el?.removeEventListener("wheel", onWheel, { capture: true });
         resizeObserver.disconnect();
         watchLastMatchRef.current.clear();
         watchLastFireRef.current.clear();
@@ -524,17 +533,17 @@ export default function TerminalTab({
       {connectionStatus !== 'connected' && (
         <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
           {connectionStatus === 'connecting' && (
-            <div className="flex items-center gap-2 text-zinc-500 text-xs">
+            <div className="flex items-center gap-2 text-zinc-500 text-ui-base">
               <div className="w-3 h-3 border-2 border-zinc-600 border-t-zinc-400 rounded-full animate-spin" />
               Connecting to conductord...
             </div>
           )}
           {connectionStatus === 'error' && (
             <div className="flex flex-col items-center gap-2 pointer-events-auto">
-              <span className="text-red-400 text-xs">Failed to connect to conductord</span>
+              <span className="text-red-400 text-ui-base">Failed to connect to conductord</span>
               <button
                 onClick={handleRefresh}
-                className="flex items-center gap-1.5 text-[11px] text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded border border-zinc-700 hover:border-zinc-600 transition-colors"
+                className="flex items-center gap-1.5 text-ui-sm text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded border border-zinc-700 hover:border-zinc-600 transition-colors"
               >
                 <RotateCw className="w-3 h-3" />
                 Retry
@@ -561,7 +570,7 @@ export default function TerminalTab({
         <RotateCw className="w-3 h-3" />
       </button>
       <span
-        className="text-[10px] font-mono text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors truncate max-w-[180px]"
+        className="text-ui-xs font-mono text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors truncate max-w-[180px]"
         title={tabId}
         onClick={() => navigator.clipboard.writeText(tabId)}
       >

@@ -63,7 +63,7 @@ export default function WordTab({ tabId, groupId, isActive, tab }: TabProps): Re
   return (
     <div className="h-full w-full overflow-auto p-8">
       <div
-        className="max-w-3xl mx-auto prose prose-invert prose-zinc prose-sm
+        className="max-w-3xl mx-auto prose prose-invert prose-zinc prose-base
           prose-headings:text-zinc-100 prose-headings:font-semibold
           prose-p:text-zinc-300 prose-p:leading-relaxed
           prose-a:text-blue-400

@@ -84,7 +84,7 @@ export default function ClaudeCodeTab({ tabId, groupId, isActive, tab }: TabProp
         <>
           <div className="w-px h-3 bg-zinc-700" />
           <span
-            className="text-[10px] font-mono text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors truncate max-w-[220px]"
+            className="text-ui-xs font-mono text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors truncate max-w-[220px]"
             title={sessionId}
             onClick={() => navigator.clipboard.writeText(sessionId)}
           >

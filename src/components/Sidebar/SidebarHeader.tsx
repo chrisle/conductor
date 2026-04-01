@@ -32,11 +32,11 @@ export default function SidebarHeader({
   return (
     <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-700/50 shrink-0">
       <div className="flex flex-col min-w-0">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+        <span className="text-ui-sm font-semibold uppercase tracking-wider text-zinc-400">
           {title}
         </span>
         {subtitle && (
-          <span className="text-[11px] text-zinc-300 truncate leading-tight">
+          <span className="text-ui-sm text-zinc-300 truncate leading-tight">
             {subtitle}
           </span>
         )}
