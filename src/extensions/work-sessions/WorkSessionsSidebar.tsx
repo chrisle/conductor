@@ -1018,9 +1018,7 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
     refresh()
   }
 
-  const subtitle = enriched.length > 0
-    ? `${enriched.length} live`
-    : undefined
+  const subtitle = undefined
 
   const SortIcon = SORT_ICONS[sessionSort]
 
