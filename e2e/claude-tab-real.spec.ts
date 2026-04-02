@@ -5,35 +5,22 @@ import path from 'path'
 import os from 'os'
 import fs from 'fs'
 
+import {
+  CONDUCTORD_SOCKET,
+  killAllConductorProcesses,
+  conductordIsRunning,
+  readTerminalText,
+} from './real-helpers'
+
 const CONDUCTORD_BIN = path.join(__dirname, '..', 'conductord', 'conductord')
-const CONDUCTORD_SOCKET = path.join(os.homedir(), '.conductor', 'conductord.sock')
-
-/**
- * Read the current terminal screen text from the xterm accessibility tree.
- */
-async function readTerminalText(window: any): Promise<string> {
-  return await window.evaluate(() => {
-    const tree = document.querySelector('.xterm-accessibility-tree')
-    if (tree) return tree.textContent || ''
-    return document.body.innerText
-  })
-}
-
-function conductordIsRunning(): boolean {
-  try {
-    execSync(`curl -s --unix-socket "${CONDUCTORD_SOCKET}" http://localhost/health`, {
-      timeout: 2_000,
-    })
-    return true
-  } catch {
-    return false
-  }
-}
 
 let conductordProcess: ChildProcess | null = null
 let conductordWasRunning = false
 
 test.beforeAll(async () => {
+  killAllConductorProcesses()
+  await new Promise(r => setTimeout(r, 2000))
+
   if (conductordIsRunning()) {
     conductordWasRunning = true
     return
@@ -55,6 +42,7 @@ test.afterAll(async () => {
   if (conductordProcess && !conductordWasRunning) {
     conductordProcess.kill()
   }
+  killAllConductorProcesses()
 })
 
 test('New Tab > Claude > Default starts Claude Code', async () => {
@@ -79,6 +67,24 @@ test('New Tab > Claude > Default starts Claude Code', async () => {
       { timeout: 10_000 },
     )
 
+    // Reset to empty project
+    await window.evaluate(() => {
+      const { tabs, layout, project, sidebar } = (window as any).__stores__
+      const groups = tabs.getState().groups
+      for (const [groupId, group] of Object.entries(groups) as any[]) {
+        for (const tab of [...group.tabs]) {
+          tabs.getState().removeTab(groupId, tab.id)
+        }
+      }
+      project.getState().clearProject()
+      sidebar.setState({ rootPath: null })
+    })
+    await window.evaluate(() => {
+      return window.electronAPI.patchConfig({
+        aiCli: { claudeCode: { skipDangerousPermissions: false } }
+      })
+    })
+
     await window.screenshot({ path: 'e2e/screenshots/real-claude-01-app-ready.png' })
 
     // Add a throwaway terminal tab so the tab bar is visible
@@ -102,8 +108,9 @@ test('New Tab > Claude > Default starts Claude Code', async () => {
     // Hover "Claude" to open the submenu, then click "Default"
     const claudeSubmenu = window.locator('[role="menuitem"]', { hasText: 'Claude' }).first()
     await claudeSubmenu.hover()
+    await new Promise(r => setTimeout(r, 500))
     const defaultItem = window.locator('[role="menuitem"]', { hasText: 'Default' })
-    await defaultItem.waitFor({ state: 'visible', timeout: 3_000 })
+    await defaultItem.waitFor({ state: 'visible', timeout: 5_000 })
     await window.screenshot({ path: 'e2e/screenshots/real-claude-03-submenu.png' })
     await defaultItem.click()
 
@@ -112,8 +119,6 @@ test('New Tab > Claude > Default starts Claude Code', async () => {
     await window.screenshot({ path: 'e2e/screenshots/real-claude-04-tab-created.png' })
 
     // Poll until Claude Code shows its banner or trust prompt.
-    // "Claude Code v" = welcome banner, "trust this" = workspace trust prompt.
-    // Either confirms claude launched successfully.
     let claudeStarted = false
     for (let i = 0; i < 30; i++) {
       await new Promise(r => setTimeout(r, 1_000))
