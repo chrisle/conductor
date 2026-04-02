@@ -77,6 +77,13 @@ export function registerTerminalBridge(): void {
               }
               return
             }
+            if (msg.type === 'autopilot_match') {
+              // Notify renderer that autopilot matched a prompt (before auto-response)
+              if (!session.webContents.isDestroyed()) {
+                session.webContents.send('terminal:autopilot_match', id, msg.response)
+              }
+              return
+            }
             if (msg.type === 'error') {
               console.error('[terminal-bridge]', msg.data)
               return

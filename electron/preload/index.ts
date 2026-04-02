@@ -59,6 +59,10 @@ const electronAPI = {
     ipcRenderer.on('terminal:exit', callback),
   offTerminalExit: (callback: (event: IpcRendererEvent, id: string) => void) =>
     ipcRenderer.removeListener('terminal:exit', callback),
+  onAutopilotMatch: (callback: (event: IpcRendererEvent, id: string, response: string) => void) =>
+    ipcRenderer.on('terminal:autopilot_match', callback),
+  offAutopilotMatch: (callback: (event: IpcRendererEvent, id: string, response: string) => void) =>
+    ipcRenderer.removeListener('terminal:autopilot_match', callback),
 
   // Git
   worktreeList: (repoPath: string) => ipcRenderer.invoke('git:worktreeList', repoPath),

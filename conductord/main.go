@@ -72,9 +72,15 @@ type session struct {
 // ---------------------------------------------------------------------------
 
 var ansiEscape = regexp.MustCompile(`\x1b(\[[0-9;]*[A-Za-z]|\][^\x07]*\x07|[()][0-9A-Za-z]|\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e])`)
+var multiSpace = regexp.MustCompile(`[^\S\n]{2,}`)
 
 func stripAnsi(s string) string {
-	return ansiEscape.ReplaceAllString(s, "")
+	// Replace ANSI escape sequences with a space (not empty string) because
+	// TUI apps use cursor-positioning escapes to lay out text — stripping them
+	// to "" collapses words together (e.g. "3. No" + "Esc" → "3.NoEsc") which
+	// breaks prompt detection regexes.  Then collapse runs of spaces.
+	out := ansiEscape.ReplaceAllString(s, " ")
+	return multiSpace.ReplaceAllString(out, " ")
 }
 
 // ---------------------------------------------------------------------------
@@ -536,6 +542,18 @@ func (s *session) readLoop() {
 			if apResponse != "" {
 				resp := apResponse
 				delay := apDelay
+
+				// Notify attached client that autopilot matched a prompt
+				// BEFORE sending the auto-response, so the UI can react.
+				if conn != nil {
+					payload := map[string]interface{}{
+						"type":     "autopilot_match",
+						"response": resp,
+					}
+					_ = conn.WriteJSON(payload)
+				}
+				log.Printf("[autopilot %s] matched prompt, sending %q after %v", s.id, resp, delay)
+
 				go func() {
 					time.Sleep(delay)
 					s.write([]byte(resp))
