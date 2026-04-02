@@ -64,6 +64,7 @@ export default function CodexTab({ tabId, groupId, isActive, tab }: TabProps): R
       onSessionReady={() => updateTab(groupId, tabId, { hasTmuxSession: true })}
       interceptKeys={interceptKeys}
       footer={footer}
+      footerPosition="bottom"
     />
   )
 }

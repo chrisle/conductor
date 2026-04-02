@@ -7,6 +7,7 @@ import * as termAPI from "@/lib/terminal-api";
 import { useResolvedSettings } from "@/hooks/useResolvedSettings";
 import { useTabsStore } from "@/store/tabs";
 import { createXtermTerminal } from "./xterm-init";
+import type { Terminal, SerializeAddon } from "./xterm-init";
 import { terminalConfig } from "./theme";
 
 export type { TerminalWatcher, TerminalTabExtraProps } from "./types";
@@ -23,6 +24,7 @@ export default function TerminalTab({
   onSessionReady,
   interceptKeys,
   footer,
+  footerPosition = 'top',
 }: TabProps & TerminalTabExtraProps): React.ReactElement {
   const cwd = tab.filePath;
   const initialCommand = tab.initialCommand;
@@ -493,8 +495,31 @@ export default function TerminalTab({
     }
   }, [isActive]);
 
+  const toolbar = (
+    <div className={`flex items-center gap-3 px-2 h-5 shrink-0 ${footerPosition === 'bottom' ? 'border-t border-zinc-800' : 'border-b border-zinc-800'}`}>
+      {footerPosition !== 'bottom' && footer}
+      <div className="flex-1" />
+      <button
+        onClick={handleRefresh}
+        className="text-zinc-500 hover:text-zinc-300 transition-colors"
+        title="Refresh terminal"
+      >
+        <RotateCw className="w-3 h-3" />
+      </button>
+      <span
+        className="text-ui-xs font-mono text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors truncate max-w-[180px]"
+        title={tabId}
+        onClick={() => navigator.clipboard.writeText(tabId)}
+      >
+        tmux: {tabId}
+      </span>
+      {footerPosition === 'bottom' && footer}
+    </div>
+  )
+
   return (
     <div className="flex flex-col h-full w-full min-w-0 bg-zinc-950">
+    {footerPosition !== 'bottom' && toolbar}
     <div className="flex-1 min-h-0">
     <div
       ref={wrapperRef}
@@ -507,7 +532,7 @@ export default function TerminalTab({
           setShowSearch(true);
         }
         // Allow extensions to intercept keys (e.g. Shift+Enter → Alt+Enter)
-        if (interceptKeys?.(e, (data) => termAPI.writeTerminal(tabId, data))) {
+        if (interceptKeys?.(e, (data: string) => termAPI.writeTerminal(tabId, data))) {
           return;
         }
         // Prevent browser from using Tab/Shift+Tab for focus navigation;
@@ -559,24 +584,7 @@ export default function TerminalTab({
       />
     </div>
     </div>
-    <div className="flex items-center gap-3 px-2 h-5 border-t border-zinc-800 shrink-0">
-      {footer}
-      <div className="flex-1" />
-      <button
-        onClick={handleRefresh}
-        className="text-zinc-500 hover:text-zinc-300 transition-colors"
-        title="Refresh terminal"
-      >
-        <RotateCw className="w-3 h-3" />
-      </button>
-      <span
-        className="text-ui-xs font-mono text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors truncate max-w-[180px]"
-        title={tabId}
-        onClick={() => navigator.clipboard.writeText(tabId)}
-      >
-        tmux: {tabId}
-      </span>
-    </div>
+    {footerPosition === 'bottom' && toolbar}
 </div>
   );
 }
