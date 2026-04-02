@@ -1,10 +1,75 @@
-import React, { useEffect, useRef } from "react";
-import { useLayoutStore } from "@/store/layout";
+import React, { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
+import { useLayoutStore, type LayoutNode } from "@/store/layout";
 import { useTabsStore } from "@/store/tabs";
 import ActivityBar from "../ActivityBar";
 import Sidebar from "../Sidebar";
 import SplitPane from "./SplitPane";
 import SettingsDialog from "../SettingsDialog";
+
+const DRAGGING_TAB_KEY = "__dragging_tab__";
+const DRAGGING_GROUP_KEY = "__dragging_group__";
+
+function EdgeDropZone({ side }: { side: "west" | "east" }) {
+  const [active, setActive] = useState(false);
+  const { insertAtEdge, removeGroup } = useLayoutStore();
+  const { moveTab, createGroup } = useTabsStore();
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setActive(true);
+    e.dataTransfer.dropEffect = "move";
+  }
+
+  function handleDragLeave() {
+    setActive(false);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setActive(false);
+
+    const tabId = e.dataTransfer.getData(DRAGGING_TAB_KEY);
+    const sourceGroupId = e.dataTransfer.getData(DRAGGING_GROUP_KEY);
+    if (!tabId) return;
+
+    const newGroupId = createGroup();
+    insertAtEdge(side, newGroupId);
+    moveTab(sourceGroupId, tabId, newGroupId);
+
+    setTimeout(() => {
+      const src = useTabsStore.getState().groups[sourceGroupId];
+      if (src && src.tabs.length === 0) {
+        removeGroup(sourceGroupId);
+        useTabsStore.getState().removeGroup(sourceGroupId);
+      }
+    }, 0);
+  }
+
+  return (
+    <div
+      className={cn(
+        "absolute top-0 bottom-0 w-4 z-20 transition-all",
+        side === "west" ? "left-0" : "right-0",
+        active && "w-8"
+      )}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {active && (
+        <div
+          className={cn(
+            "absolute inset-y-0 w-1 bg-blue-500",
+            side === "west" ? "left-0" : "right-0"
+          )}
+        />
+      )}
+    </div>
+  );
+}
 
 export default function MainLayout(): React.ReactElement {
   const { root, setRoot, setFocusedGroup } = useLayoutStore();
@@ -33,8 +98,10 @@ export default function MainLayout(): React.ReactElement {
     <div className="flex h-full w-full overflow-hidden">
       <ActivityBar />
       <Sidebar defaultGroupId={getFirstGroupId(root)} />
-      <div className="flex-1 min-w-0 overflow-hidden">
+      <div className="flex-1 min-w-0 overflow-hidden relative">
+        <EdgeDropZone side="west" />
         <SplitPane node={root} />
+        <EdgeDropZone side="east" />
       </div>
       <SettingsDialog />
     </div>
@@ -46,5 +113,5 @@ function getFirstGroupId(
 ): string {
   if (!node) return "";
   if (node.type === "leaf") return node.groupId;
-  return getFirstGroupId(node.first);
+  return getFirstGroupId(node.children[0]?.node ?? null);
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useLayoutStore, type LayoutNode } from '../store/layout'
+import { useLayoutStore, type LayoutNode, migrateLayout } from '../store/layout'
 
 function resetStore() {
   useLayoutStore.setState({ root: null, focusedGroupId: null })
@@ -25,59 +25,141 @@ describe('useLayoutStore', () => {
     })
   })
 
-  describe('splitGroup', () => {
-    it('splits a leaf into a horizontal split', () => {
+  describe('insertPanel', () => {
+    it('wraps a leaf in a row when inserting east', () => {
       useLayoutStore.getState().setRoot({ type: 'leaf', groupId: 'g1' })
-      useLayoutStore.getState().splitGroup('g1', 'horizontal', 'g2')
+      useLayoutStore.getState().insertPanel('g1', 'east', 'g2')
 
       const root = useLayoutStore.getState().root!
-      expect(root.type).toBe('split')
-      if (root.type === 'split') {
-        expect(root.direction).toBe('horizontal')
-        expect(root.ratio).toBe(0.5)
-        expect(root.first).toEqual({ type: 'leaf', groupId: 'g1' })
-        expect(root.second).toEqual({ type: 'leaf', groupId: 'g2' })
+      expect(root.type).toBe('row')
+      if (root.type === 'row') {
+        expect(root.children).toHaveLength(2)
+        expect(root.children[0].node).toEqual({ type: 'leaf', groupId: 'g1' })
+        expect(root.children[1].node).toEqual({ type: 'leaf', groupId: 'g2' })
       }
     })
 
-    it('splits a nested leaf correctly', () => {
-      const initial: LayoutNode = {
-        type: 'split',
-        direction: 'horizontal',
-        ratio: 0.5,
-        first: { type: 'leaf', groupId: 'g1' },
-        second: { type: 'leaf', groupId: 'g2' }
-      }
-      useLayoutStore.getState().setRoot(initial)
-      useLayoutStore.getState().splitGroup('g2', 'vertical', 'g3')
+    it('wraps a leaf in a column when inserting south', () => {
+      useLayoutStore.getState().setRoot({ type: 'leaf', groupId: 'g1' })
+      useLayoutStore.getState().insertPanel('g1', 'south', 'g2')
 
       const root = useLayoutStore.getState().root!
-      expect(root.type).toBe('split')
-      if (root.type === 'split') {
-        expect(root.first).toEqual({ type: 'leaf', groupId: 'g1' })
-        expect(root.second.type).toBe('split')
-        if (root.second.type === 'split') {
-          expect(root.second.direction).toBe('vertical')
-          expect(root.second.first).toEqual({ type: 'leaf', groupId: 'g2' })
-          expect(root.second.second).toEqual({ type: 'leaf', groupId: 'g3' })
+      expect(root.type).toBe('column')
+      if (root.type === 'column') {
+        expect(root.children).toHaveLength(2)
+        expect(root.children[0].node).toEqual({ type: 'leaf', groupId: 'g1' })
+        expect(root.children[1].node).toEqual({ type: 'leaf', groupId: 'g2' })
+      }
+    })
+
+    it('inserts west (before) into existing row flatly', () => {
+      const initial: LayoutNode = {
+        type: 'row',
+        children: [
+          { node: { type: 'leaf', groupId: 'g1' }, size: 1 },
+          { node: { type: 'leaf', groupId: 'g2' }, size: 1 },
+        ],
+      }
+      useLayoutStore.getState().setRoot(initial)
+      useLayoutStore.getState().insertPanel('g1', 'west', 'g3')
+
+      const root = useLayoutStore.getState().root!
+      expect(root.type).toBe('row')
+      if (root.type === 'row') {
+        expect(root.children).toHaveLength(3)
+        expect(root.children[0].node).toEqual({ type: 'leaf', groupId: 'g3' })
+        expect(root.children[1].node).toEqual({ type: 'leaf', groupId: 'g1' })
+        expect(root.children[2].node).toEqual({ type: 'leaf', groupId: 'g2' })
+      }
+    })
+
+    it('inserts east (after) into existing row flatly', () => {
+      const initial: LayoutNode = {
+        type: 'row',
+        children: [
+          { node: { type: 'leaf', groupId: 'g1' }, size: 1 },
+          { node: { type: 'leaf', groupId: 'g2' }, size: 1 },
+        ],
+      }
+      useLayoutStore.getState().setRoot(initial)
+      useLayoutStore.getState().insertPanel('g1', 'east', 'g3')
+
+      const root = useLayoutStore.getState().root!
+      expect (root.type).toBe('row')
+      if (root.type === 'row') {
+        expect(root.children).toHaveLength(3)
+        expect(root.children[0].node).toEqual({ type: 'leaf', groupId: 'g1' })
+        expect(root.children[1].node).toEqual({ type: 'leaf', groupId: 'g3' })
+        expect(root.children[2].node).toEqual({ type: 'leaf', groupId: 'g2' })
+      }
+    })
+
+    it('wraps target in column when inserting north into a row child', () => {
+      const initial: LayoutNode = {
+        type: 'row',
+        children: [
+          { node: { type: 'leaf', groupId: 'g1' }, size: 1 },
+          { node: { type: 'leaf', groupId: 'g2' }, size: 1 },
+        ],
+      }
+      useLayoutStore.getState().setRoot(initial)
+      useLayoutStore.getState().insertPanel('g2', 'north', 'g3')
+
+      const root = useLayoutStore.getState().root!
+      expect(root.type).toBe('row')
+      if (root.type === 'row') {
+        expect(root.children).toHaveLength(2)
+        const secondChild = root.children[1].node
+        expect(secondChild.type).toBe('column')
+        if (secondChild.type === 'column') {
+          expect(secondChild.children[0].node).toEqual({ type: 'leaf', groupId: 'g3' })
+          expect(secondChild.children[1].node).toEqual({ type: 'leaf', groupId: 'g2' })
         }
       }
     })
+  })
 
-    it('does nothing when root is null', () => {
-      useLayoutStore.getState().splitGroup('g1', 'horizontal', 'g2')
-      expect(useLayoutStore.getState().root).toBeNull()
+  describe('insertAtEdge', () => {
+    it('prepends to root when inserting at west edge', () => {
+      useLayoutStore.getState().setRoot({ type: 'leaf', groupId: 'g1' })
+      useLayoutStore.getState().insertAtEdge('west', 'g2')
+
+      const root = useLayoutStore.getState().root!
+      expect(root.type).toBe('row')
+      if (root.type === 'row') {
+        expect(root.children[0].node).toEqual({ type: 'leaf', groupId: 'g2' })
+        expect(root.children[1].node).toEqual({ type: 'leaf', groupId: 'g1' })
+      }
+    })
+
+    it('appends to existing row when inserting at east edge', () => {
+      const initial: LayoutNode = {
+        type: 'row',
+        children: [
+          { node: { type: 'leaf', groupId: 'g1' }, size: 1 },
+          { node: { type: 'leaf', groupId: 'g2' }, size: 1 },
+        ],
+      }
+      useLayoutStore.getState().setRoot(initial)
+      useLayoutStore.getState().insertAtEdge('east', 'g3')
+
+      const root = useLayoutStore.getState().root!
+      expect(root.type).toBe('row')
+      if (root.type === 'row') {
+        expect(root.children).toHaveLength(3)
+        expect(root.children[2].node).toEqual({ type: 'leaf', groupId: 'g3' })
+      }
     })
   })
 
   describe('removeGroup', () => {
     it('removes a group and promotes the sibling', () => {
       const initial: LayoutNode = {
-        type: 'split',
-        direction: 'horizontal',
-        ratio: 0.5,
-        first: { type: 'leaf', groupId: 'g1' },
-        second: { type: 'leaf', groupId: 'g2' }
+        type: 'row',
+        children: [
+          { node: { type: 'leaf', groupId: 'g1' }, size: 1 },
+          { node: { type: 'leaf', groupId: 'g2' }, size: 1 },
+        ],
       }
       useLayoutStore.getState().setRoot(initial)
       useLayoutStore.getState().removeGroup('g2')
@@ -91,47 +173,44 @@ describe('useLayoutStore', () => {
       expect(useLayoutStore.getState().root).toBeNull()
     })
 
-    it('preserves other nodes when removing from deep tree', () => {
+    it('preserves other nodes when removing from flat row', () => {
       const initial: LayoutNode = {
-        type: 'split',
-        direction: 'horizontal',
-        ratio: 0.5,
-        first: { type: 'leaf', groupId: 'g1' },
-        second: {
-          type: 'split',
-          direction: 'vertical',
-          ratio: 0.5,
-          first: { type: 'leaf', groupId: 'g2' },
-          second: { type: 'leaf', groupId: 'g3' }
-        }
+        type: 'row',
+        children: [
+          { node: { type: 'leaf', groupId: 'g1' }, size: 1 },
+          { node: { type: 'leaf', groupId: 'g2' }, size: 1 },
+          { node: { type: 'leaf', groupId: 'g3' }, size: 1 },
+        ],
       }
       useLayoutStore.getState().setRoot(initial)
       useLayoutStore.getState().removeGroup('g2')
 
       const root = useLayoutStore.getState().root!
-      expect(root.type).toBe('split')
-      if (root.type === 'split') {
-        expect(root.first).toEqual({ type: 'leaf', groupId: 'g1' })
-        expect(root.second).toEqual({ type: 'leaf', groupId: 'g3' })
+      expect(root.type).toBe('row')
+      if (root.type === 'row') {
+        expect(root.children).toHaveLength(2)
+        expect(root.children[0].node).toEqual({ type: 'leaf', groupId: 'g1' })
+        expect(root.children[1].node).toEqual({ type: 'leaf', groupId: 'g3' })
       }
     })
   })
 
-  describe('setRatio', () => {
-    it('updates ratio for a split containing the target group', () => {
+  describe('setSizes', () => {
+    it('updates sizes for a container holding the target group', () => {
       const initial: LayoutNode = {
-        type: 'split',
-        direction: 'horizontal',
-        ratio: 0.5,
-        first: { type: 'leaf', groupId: 'g1' },
-        second: { type: 'leaf', groupId: 'g2' }
+        type: 'row',
+        children: [
+          { node: { type: 'leaf', groupId: 'g1' }, size: 1 },
+          { node: { type: 'leaf', groupId: 'g2' }, size: 1 },
+        ],
       }
       useLayoutStore.getState().setRoot(initial)
-      useLayoutStore.getState().setRatio('g1', 0.7)
+      useLayoutStore.getState().setSizes('g1', [0.7, 0.3])
 
       const root = useLayoutStore.getState().root!
-      if (root.type === 'split') {
-        expect(root.ratio).toBe(0.7)
+      if (root.type === 'row') {
+        expect(root.children[0].size).toBe(0.7)
+        expect(root.children[1].size).toBe(0.3)
       }
     })
   })
@@ -143,20 +222,115 @@ describe('useLayoutStore', () => {
 
     it('returns all group ids from the tree', () => {
       const tree: LayoutNode = {
+        type: 'row',
+        children: [
+          { node: { type: 'leaf', groupId: 'g1' }, size: 1 },
+          {
+            node: {
+              type: 'column',
+              children: [
+                { node: { type: 'leaf', groupId: 'g2' }, size: 1 },
+                { node: { type: 'leaf', groupId: 'g3' }, size: 1 },
+              ],
+            },
+            size: 1,
+          },
+        ],
+      }
+      useLayoutStore.getState().setRoot(tree)
+      expect(useLayoutStore.getState().getAllGroupIds()).toEqual(['g1', 'g2', 'g3'])
+    })
+  })
+
+  describe('migrateLayout', () => {
+    it('converts old binary split format to new N-ary format', () => {
+      const oldFormat = {
+        type: 'split',
+        direction: 'horizontal',
+        ratio: 0.5,
+        first: { type: 'leaf', groupId: 'g1' },
+        second: { type: 'leaf', groupId: 'g2' },
+      }
+      const result = migrateLayout(oldFormat)
+      expect(result.type).toBe('row')
+      if (result.type === 'row') {
+        expect(result.children).toHaveLength(2)
+        expect(result.children[0].node).toEqual({ type: 'leaf', groupId: 'g1' })
+        expect(result.children[1].node).toEqual({ type: 'leaf', groupId: 'g2' })
+      }
+    })
+
+    it('converts nested old format and flattens same-direction', () => {
+      const oldFormat = {
         type: 'split',
         direction: 'horizontal',
         ratio: 0.5,
         first: { type: 'leaf', groupId: 'g1' },
         second: {
           type: 'split',
-          direction: 'vertical',
+          direction: 'horizontal',
           ratio: 0.5,
           first: { type: 'leaf', groupId: 'g2' },
-          second: { type: 'leaf', groupId: 'g3' }
-        }
+          second: { type: 'leaf', groupId: 'g3' },
+        },
       }
-      useLayoutStore.getState().setRoot(tree)
-      expect(useLayoutStore.getState().getAllGroupIds()).toEqual(['g1', 'g2', 'g3'])
+      const result = migrateLayout(oldFormat)
+      expect(result.type).toBe('row')
+      if (result.type === 'row') {
+        // Should be flattened to 3 children, not nested
+        expect(result.children).toHaveLength(3)
+        expect(result.children[0].node).toEqual({ type: 'leaf', groupId: 'g1' })
+        expect(result.children[1].node).toEqual({ type: 'leaf', groupId: 'g2' })
+        expect(result.children[2].node).toEqual({ type: 'leaf', groupId: 'g3' })
+      }
+    })
+
+    it('passes through new format unchanged', () => {
+      const newFormat: LayoutNode = {
+        type: 'row',
+        children: [
+          { node: { type: 'leaf', groupId: 'g1' }, size: 1 },
+          { node: { type: 'leaf', groupId: 'g2' }, size: 1 },
+        ],
+      }
+      const result = migrateLayout(newFormat)
+      expect(result).toEqual(newFormat)
+    })
+  })
+
+  // Legacy compat
+  describe('splitGroup (legacy)', () => {
+    it('works as insertPanel east', () => {
+      useLayoutStore.getState().setRoot({ type: 'leaf', groupId: 'g1' })
+      useLayoutStore.getState().splitGroup('g1', 'horizontal', 'g2')
+
+      const root = useLayoutStore.getState().root!
+      expect(root.type).toBe('row')
+      if (root.type === 'row') {
+        expect(root.children).toHaveLength(2)
+        expect(root.children[0].node).toEqual({ type: 'leaf', groupId: 'g1' })
+        expect(root.children[1].node).toEqual({ type: 'leaf', groupId: 'g2' })
+      }
+    })
+  })
+
+  describe('setRatio (legacy)', () => {
+    it('updates sizes using ratio', () => {
+      const initial: LayoutNode = {
+        type: 'row',
+        children: [
+          { node: { type: 'leaf', groupId: 'g1' }, size: 1 },
+          { node: { type: 'leaf', groupId: 'g2' }, size: 1 },
+        ],
+      }
+      useLayoutStore.getState().setRoot(initial)
+      useLayoutStore.getState().setRatio('g1', 0.7)
+
+      const root = useLayoutStore.getState().root!
+      if (root.type === 'row') {
+        expect(root.children[0].size).toBeCloseTo(0.7)
+        expect(root.children[1].size).toBeCloseTo(0.3)
+      }
     })
   })
 })

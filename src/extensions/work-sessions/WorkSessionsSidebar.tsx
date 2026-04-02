@@ -122,13 +122,13 @@ function sortSessions(
 
 function buildTileTree(ids: string[], depth: number): LayoutNode {
   if (ids.length === 1) return { type: 'leaf', groupId: ids[0] }
-  const mid = Math.ceil(ids.length / 2)
+  const containerType = depth % 2 === 0 ? 'row' : 'column'
   return {
-    type: 'split',
-    direction: depth % 2 === 0 ? 'horizontal' : 'vertical',
-    ratio: 0.5,
-    first: buildTileTree(ids.slice(0, mid), depth + 1),
-    second: buildTileTree(ids.slice(mid), depth + 1),
+    type: containerType,
+    children: ids.map(id => ({
+      node: { type: 'leaf' as const, groupId: id },
+      size: 1,
+    })),
   }
 }
 
@@ -230,13 +230,13 @@ function tileSessions(sessions: EnrichedSession[]) {
   // Build a vertical stack for the tiled sessions
   const tileTree = buildTileTree(newGroupIds, 0)
 
-  // Insert as a horizontal split: tiled group on the left, existing layout on the right
+  // Insert as a horizontal row: tiled group on the left, existing layout on the right
   layoutStore.setRoot({
-    type: 'split',
-    direction: 'horizontal',
-    ratio: 0.5,
-    first: tileTree,
-    second: currentRoot,
+    type: 'row',
+    children: [
+      { node: tileTree, size: 1 },
+      { node: currentRoot, size: 1 },
+    ],
   })
   layoutStore.setFocusedGroup(newGroupIds[0])
 }
