@@ -9,7 +9,7 @@ import (
 
 // trayIconBytes is a programmatically generated 22x22 template PNG.
 // Black on transparent — macOS recolors it for dark/light mode automatically.
-// Draws a ">_" terminal prompt icon.
+// Draws a conductor's baton: a diagonal wand with a round handle.
 var trayIconBytes []byte
 
 func init() {
@@ -17,16 +17,19 @@ func init() {
 	img := image.NewNRGBA(image.Rect(0, 0, size, size))
 	c := color.NRGBA{0, 0, 0, 255}
 
-	// ">" chevron: top half (3,4)->(10,11), bottom half (10,11)->(3,18)
-	for i := 0; i <= 7; i++ {
-		setThick(img, 3+i, 4+i, c)
-		setThick(img, 10-i, 11+i, c)
+	// Handle: rounded blob at lower-left (where the conductor grips the baton)
+	for _, p := range [][2]int{
+		{3, 16}, {4, 16}, {5, 16},
+		{2, 17}, {3, 17}, {4, 17}, {5, 17},
+		{2, 18}, {3, 18}, {4, 18}, {5, 18},
+		{3, 19}, {4, 19},
+	} {
+		img.SetNRGBA(p[0], p[1], c)
 	}
 
-	// "_" cursor underline
-	for x := 12; x <= 18; x++ {
-		img.SetNRGBA(x, 17, c)
-		img.SetNRGBA(x, 18, c)
+	// Stick: 2px-wide diagonal line from handle to upper-right tip
+	for i := 0; i <= 11; i++ {
+		setThick(img, 5+i, 16-i, c)
 	}
 
 	var buf bytes.Buffer

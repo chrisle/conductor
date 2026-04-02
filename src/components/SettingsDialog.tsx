@@ -60,7 +60,7 @@ export default function SettingsDialog(): React.ReactElement {
         <div className="flex h-full">
           {/* Side nav */}
           <nav className="w-48 shrink-0 border-r border-zinc-800 bg-zinc-900/80 py-3 flex flex-col">
-            <h2 className="px-4 mb-3 text-sm font-semibold text-zinc-200">Settings</h2>
+            <h2 className="px-4 mb-3 text-ui-base font-semibold text-zinc-200">Settings</h2>
             <div className="flex flex-col gap-0.5 px-2">
               {navItems.map(item => {
                 const Icon = item.icon
@@ -111,7 +111,7 @@ function SettingsContent({
     const Panel = panelMatch.panel
     return (
       <div>
-        <h3 className="text-sm font-medium text-zinc-200 mb-4">{panelMatch.extension.name}</h3>
+        <h3 className="text-ui-base font-medium text-zinc-200 mb-4">{panelMatch.extension.name}</h3>
         <Panel />
       </div>
     )
@@ -141,7 +141,7 @@ function TerminalSection(): React.ReactElement {
 
   return (
     <div>
-      <h3 className="text-sm font-medium text-zinc-200 mb-4">Terminal</h3>
+      <h3 className="text-ui-base font-medium text-zinc-200 mb-4">Terminal</h3>
       <div className="space-y-4">
         <div className="space-y-2">
           <div>
@@ -282,7 +282,7 @@ function ExtensionsSection(): React.ReactElement {
     <TooltipProvider delayDuration={400}>
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-medium text-zinc-200">Extensions</h3>
+          <h3 className="text-ui-base font-medium text-zinc-200">Extensions</h3>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" onClick={loadExtensions} className="h-7 w-7 text-zinc-400 hover:text-zinc-200">
               <RefreshCw className="w-3.5 h-3.5" />

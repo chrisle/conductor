@@ -39,7 +39,7 @@ export function ConductorDaemonPanel({ visible = true }: { visible?: boolean }):
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Server className="w-5 h-5 text-zinc-400" />
-          <h3 className="text-sm font-medium text-zinc-200">System Tray</h3>
+          <h3 className="text-ui-base font-medium text-zinc-200">System Tray</h3>
         </div>
         <Button variant="ghost" size="icon" onClick={checkStatus} className="h-7 w-7 text-zinc-500 hover:text-zinc-300">
           <RefreshCw className="w-4 h-4" />
@@ -56,7 +56,7 @@ export function ConductorDaemonPanel({ visible = true }: { visible?: boolean }):
       )}
 
       {/* Status indicators */}
-      <div className="space-y-3 text-sm">
+      <div className="space-y-3 text-ui-base">
         <div className="flex items-center justify-between">
           <span className="text-zinc-400">Running</span>
           {serviceRunning === null ? (

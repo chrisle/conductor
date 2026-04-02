@@ -99,7 +99,7 @@ function EmptyState({ groupId, renderContextMenuItems }: { groupId: string, rend
       <div
         className="flex flex-col items-center justify-center h-full gap-6"
       >
-        <div className="text-2xl font-light text-zinc-300 tracking-wide">Conductor</div>
+        <div className="text-ui-xl font-light text-zinc-300 tracking-wide">Conductor</div>
         <div className="flex gap-4">
           <button
             onClick={() => openProjectDialog()}
@@ -128,11 +128,11 @@ function EmptyState({ groupId, renderContextMenuItems }: { groupId: string, rend
         <DialogContent className="bg-zinc-900 border-zinc-700 max-w-sm" hideClose>
           <VisuallyHidden><DialogTitle>New Project</DialogTitle></VisuallyHidden>
           <div className="space-y-4">
-            <div className="text-sm text-zinc-300 font-medium">New Project</div>
+            <div className="text-ui-base text-zinc-300 font-medium">New Project</div>
             <div className="space-y-1.5">
               <label className="text-ui-sm text-zinc-500 uppercase tracking-wider">Name</label>
               <input ref={inputRef}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-500 placeholder-zinc-500"
+                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-ui-base text-zinc-200 outline-none focus:border-zinc-500 placeholder-zinc-500"
                 placeholder="my-project" value={projectName}
                 onChange={e => { setProjectName(e.target.value); setError('') }}
                 onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setDialogOpen(false) }}
@@ -141,7 +141,7 @@ function EmptyState({ groupId, renderContextMenuItems }: { groupId: string, rend
             <div className="space-y-1.5">
               <label className="text-ui-sm text-zinc-500 uppercase tracking-wider">Directory</label>
               <div className="flex gap-2">
-                <div className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-400 truncate min-w-0">
+                <div className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-ui-base text-zinc-400 truncate min-w-0">
                   {directory ? friendly(directory) : 'Select a directory...'}
                 </div>
                 <Button variant="ghost" className="shrink-0 text-ui-base text-zinc-400 hover:text-zinc-200 border border-zinc-700" onClick={handleBrowse}>

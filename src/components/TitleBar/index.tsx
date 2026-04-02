@@ -161,30 +161,30 @@ export default function TitleBar(): React.ReactElement {
 
         {/* Breadcrumb — individual buttons are no-drag, gaps between them remain draggable */}
         <div className="flex-1 flex items-center justify-center gap-1 overflow-hidden px-4">
-          <span className="text-xs text-zinc-500">Conductor</span>
+          <span className="text-ui-sm text-zinc-500">Conductor</span>
 
           {projectName && (
             <>
-              <span className="text-xs text-zinc-600">›</span>
+              <span className="text-ui-sm text-zinc-600">›</span>
 
               {/* Project dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="no-drag flex items-center gap-0.5 text-xs text-zinc-300 hover:text-zinc-100 transition-colors rounded px-1 py-0.5 hover:bg-zinc-800/50">
+                  <button className="no-drag flex items-center gap-0.5 text-ui-sm text-zinc-300 hover:text-zinc-100 transition-colors rounded px-1 py-0.5 hover:bg-zinc-800/50">
                     {projectName}{isAnyDirty() ? ' *' : ''}
                     <ChevronDown className="w-2.5 h-2.5 text-zinc-500" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="center" className="w-56 shadow-xl shadow-black/50">
-                  <DropdownMenuItem onSelect={() => { setInputValue(projectName); setDialog({ type: 'renameProject' }) }} className="text-xs">
+                  <DropdownMenuItem onSelect={() => { setInputValue(projectName); setDialog({ type: 'renameProject' }) }} className="text-ui-sm">
                     <Pencil className="w-3 h-3 mr-2 text-zinc-500" />
                     Rename Project
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => saveProjectAs()} className="text-xs">
+                  <DropdownMenuItem onSelect={() => saveProjectAs()} className="text-ui-sm">
                     <SaveAll className="w-3 h-3 mr-2 text-zinc-500" />
                     Save Project As...
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => { setNewProjectName(''); setNewProjectDir(''); setNewProjectError(''); setDialog({ type: 'newProject' }) }} className="text-xs">
+                  <DropdownMenuItem onSelect={() => { setNewProjectName(''); setNewProjectDir(''); setNewProjectError(''); setDialog({ type: 'newProject' }) }} className="text-ui-sm">
                     <FilePlus2 className="w-3 h-3 mr-2 text-zinc-500" />
                     New Project...
                   </DropdownMenuItem>
@@ -192,7 +192,7 @@ export default function TitleBar(): React.ReactElement {
                   {otherProjects.length > 0 && (
                     <>
                       {otherProjects.slice(0, 8).map((p) => (
-                        <DropdownMenuItem key={p.path} onSelect={() => openProject(p.path)} className="text-xs">
+                        <DropdownMenuItem key={p.path} onSelect={() => openProject(p.path)} className="text-ui-sm">
                           <FolderOpen className="w-3 h-3 mr-2 text-zinc-500" />
                           <span className="truncate">{p.name}</span>
                         </DropdownMenuItem>
@@ -200,7 +200,7 @@ export default function TitleBar(): React.ReactElement {
                       <DropdownMenuSeparator />
                     </>
                   )}
-                  <DropdownMenuItem onSelect={() => openProjectDialog()} className="text-xs">
+                  <DropdownMenuItem onSelect={() => openProjectDialog()} className="text-ui-sm">
                     Open Project...
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -208,12 +208,12 @@ export default function TitleBar(): React.ReactElement {
 
               {activeWorkspace && workspaceNames.length > 0 && (
                 <>
-                  <span className="text-xs text-zinc-600">›</span>
+                  <span className="text-ui-sm text-zinc-600">›</span>
 
                   {/* Workspace dropdown */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button className="no-drag flex items-center gap-0.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors rounded px-1 py-0.5 hover:bg-zinc-800/50">
+                      <button className="no-drag flex items-center gap-0.5 text-ui-sm text-zinc-400 hover:text-zinc-200 transition-colors rounded px-1 py-0.5 hover:bg-zinc-800/50">
                         {activeWorkspace}
                         <ChevronDown className="w-2.5 h-2.5 text-zinc-500" />
                       </button>
@@ -223,16 +223,16 @@ export default function TitleBar(): React.ReactElement {
                         <DropdownMenuItem
                           key={name}
                           onSelect={() => name !== activeWorkspace && handleSwitchWorkspace(name)}
-                          className={`text-xs ${name === activeWorkspace ? 'text-blue-400' : ''}`}
+                          className={`text-ui-sm ${name === activeWorkspace ? 'text-blue-400' : ''}`}
                         >
                           <span className="flex-1">{name}</span>
                           {name === activeWorkspace && (
-                            <span className="text-[10px] text-zinc-600">current</span>
+                            <span className="text-ui-xs text-zinc-600">current</span>
                           )}
                         </DropdownMenuItem>
                       ))}
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onSelect={() => addWorkspace()} className="text-xs">
+                      <DropdownMenuItem onSelect={() => addWorkspace()} className="text-ui-sm">
                         <Plus className="w-3 h-3 mr-2 text-zinc-500" />
                         New Workspace
                       </DropdownMenuItem>
@@ -240,7 +240,7 @@ export default function TitleBar(): React.ReactElement {
                         <>
                           <DropdownMenuItem
                             onSelect={() => { setInputValue(activeWorkspace); setDialog({ type: 'renameWorkspace', name: activeWorkspace }) }}
-                            className="text-xs"
+                            className="text-ui-sm"
                           >
                             <Pencil className="w-3 h-3 mr-2 text-zinc-500" />
                             Rename "{activeWorkspace}"
@@ -248,7 +248,7 @@ export default function TitleBar(): React.ReactElement {
                           {workspaceNames.length > 1 && (
                             <DropdownMenuItem
                               onSelect={() => setDialog({ type: 'deleteWorkspace', name: activeWorkspace })}
-                              className="text-xs text-red-400"
+                              className="text-ui-sm text-red-400"
                             >
                               <Trash2 className="w-3 h-3 mr-2" />
                               Delete "{activeWorkspace}"
@@ -264,7 +264,7 @@ export default function TitleBar(): React.ReactElement {
           )}
 
           {!projectName && (
-            <span className="text-xs text-zinc-500 ml-1">No project open</span>
+            <span className="text-ui-sm text-zinc-500 ml-1">No project open</span>
           )}
         </div>
 
@@ -289,17 +289,17 @@ export default function TitleBar(): React.ReactElement {
         <DialogContent className="bg-zinc-900 border-zinc-700 max-w-sm" hideClose>
           <VisuallyHidden><DialogTitle>Unsaved Changes</DialogTitle></VisuallyHidden>
           <div className="space-y-3">
-            <div className="text-sm text-zinc-300 font-medium">Unsaved Changes</div>
-            <div className="text-xs text-zinc-400">
+            <div className="text-ui-base text-zinc-300 font-medium">Unsaved Changes</div>
+            <div className="text-ui-sm text-zinc-400">
               {dialog?.type === 'unsaved' && dialog.action.type === 'switchWorkspace'
                 ? 'You have unsaved changes. Save before switching workspaces?'
                 : 'You have unsaved changes. Save before closing?'}
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="ghost" className="text-xs text-zinc-400 hover:text-zinc-200" onClick={() => setDialog(null)}>Cancel</Button>
-            <Button variant="ghost" className="text-xs text-zinc-400 hover:text-zinc-200" onClick={handleUnsavedDiscard}>Don't Save</Button>
-            <Button className="text-xs bg-blue-600 hover:bg-blue-500 text-white" onClick={handleUnsavedSave}>Save</Button>
+            <Button variant="ghost" className="text-ui-sm text-zinc-400 hover:text-zinc-200" onClick={() => setDialog(null)}>Cancel</Button>
+            <Button variant="ghost" className="text-ui-sm text-zinc-400 hover:text-zinc-200" onClick={handleUnsavedDiscard}>Don't Save</Button>
+            <Button className="text-ui-sm bg-blue-600 hover:bg-blue-500 text-white" onClick={handleUnsavedSave}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -309,9 +309,9 @@ export default function TitleBar(): React.ReactElement {
         <DialogContent className="bg-zinc-900 border-zinc-700 max-w-sm" hideClose>
           <VisuallyHidden><DialogTitle>Rename Workspace</DialogTitle></VisuallyHidden>
           <div className="space-y-3">
-            <div className="text-sm text-zinc-300 font-medium">Rename Workspace</div>
+            <div className="text-ui-base text-zinc-300 font-medium">Rename Workspace</div>
             <input
-              className="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1.5 text-xs text-zinc-200 outline-none focus:border-blue-500"
+              className="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1.5 text-ui-sm text-zinc-200 outline-none focus:border-blue-500"
               value={inputValue}
               onChange={e => setInputValue(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && dialog?.type === 'renameWorkspace' && inputValue.trim() && renameWorkspace(dialog.name, inputValue.trim()).then(() => setDialog(null))}
@@ -319,9 +319,9 @@ export default function TitleBar(): React.ReactElement {
             />
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="ghost" className="text-xs text-zinc-400 hover:text-zinc-200" onClick={() => setDialog(null)}>Cancel</Button>
+            <Button variant="ghost" className="text-ui-sm text-zinc-400 hover:text-zinc-200" onClick={() => setDialog(null)}>Cancel</Button>
             <Button
-              className="text-xs bg-blue-600 hover:bg-blue-500 text-white"
+              className="text-ui-sm bg-blue-600 hover:bg-blue-500 text-white"
               disabled={!inputValue.trim() || (dialog?.type === 'renameWorkspace' && inputValue.trim() === dialog.name)}
               onClick={async () => {
                 if (dialog?.type === 'renameWorkspace' && inputValue.trim()) {
@@ -341,9 +341,9 @@ export default function TitleBar(): React.ReactElement {
         <DialogContent className="bg-zinc-900 border-zinc-700 max-w-sm" hideClose>
           <VisuallyHidden><DialogTitle>Rename Project</DialogTitle></VisuallyHidden>
           <div className="space-y-3">
-            <div className="text-sm text-zinc-300 font-medium">Rename Project</div>
+            <div className="text-ui-base text-zinc-300 font-medium">Rename Project</div>
             <input
-              className="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1.5 text-xs text-zinc-200 outline-none focus:border-blue-500"
+              className="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1.5 text-ui-sm text-zinc-200 outline-none focus:border-blue-500"
               value={inputValue}
               onChange={e => setInputValue(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && inputValue.trim() && renameProject(inputValue.trim()).then(() => setDialog(null))}
@@ -351,9 +351,9 @@ export default function TitleBar(): React.ReactElement {
             />
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="ghost" className="text-xs text-zinc-400 hover:text-zinc-200" onClick={() => setDialog(null)}>Cancel</Button>
+            <Button variant="ghost" className="text-ui-sm text-zinc-400 hover:text-zinc-200" onClick={() => setDialog(null)}>Cancel</Button>
             <Button
-              className="text-xs bg-blue-600 hover:bg-blue-500 text-white"
+              className="text-ui-sm bg-blue-600 hover:bg-blue-500 text-white"
               disabled={!inputValue.trim() || inputValue.trim() === projectName}
               onClick={async () => {
                 if (inputValue.trim()) {
@@ -373,15 +373,15 @@ export default function TitleBar(): React.ReactElement {
         <DialogContent className="bg-zinc-900 border-zinc-700 max-w-sm" hideClose>
           <VisuallyHidden><DialogTitle>Delete Workspace</DialogTitle></VisuallyHidden>
           <div className="space-y-3">
-            <div className="text-sm text-zinc-300 font-medium">Delete Workspace</div>
-            <div className="text-xs text-zinc-400">
+            <div className="text-ui-base text-zinc-300 font-medium">Delete Workspace</div>
+            <div className="text-ui-sm text-zinc-400">
               Are you sure you want to delete "{dialog?.type === 'deleteWorkspace' ? dialog.name : ''}"? This cannot be undone.
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="ghost" className="text-xs text-zinc-400 hover:text-zinc-200" onClick={() => setDialog(null)}>Cancel</Button>
+            <Button variant="ghost" className="text-ui-sm text-zinc-400 hover:text-zinc-200" onClick={() => setDialog(null)}>Cancel</Button>
             <Button
-              className="text-xs bg-red-600 hover:bg-red-500 text-white"
+              className="text-ui-sm bg-red-600 hover:bg-red-500 text-white"
               onClick={async () => {
                 if (dialog?.type === 'deleteWorkspace') {
                   await deleteWorkspace(dialog.name)
@@ -399,11 +399,11 @@ export default function TitleBar(): React.ReactElement {
         <DialogContent className="bg-zinc-900 border-zinc-700 max-w-sm" hideClose>
           <VisuallyHidden><DialogTitle>New Project</DialogTitle></VisuallyHidden>
           <div className="space-y-4">
-            <div className="text-sm text-zinc-300 font-medium">New Project</div>
+            <div className="text-ui-base text-zinc-300 font-medium">New Project</div>
             <div className="space-y-1.5">
-              <label className="text-[11px] text-zinc-500 uppercase tracking-wider">Name</label>
+              <label className="text-ui-xs text-zinc-500 uppercase tracking-wider">Name</label>
               <input
-                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-zinc-500 placeholder-zinc-500"
+                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-ui-base text-zinc-200 outline-none focus:border-zinc-500 placeholder-zinc-500"
                 placeholder="my-project" value={newProjectName}
                 onChange={e => { setNewProjectName(e.target.value); setNewProjectError('') }}
                 onKeyDown={e => { if (e.key === 'Enter') handleCreateProject(); if (e.key === 'Escape') setDialog(null) }}
@@ -411,12 +411,12 @@ export default function TitleBar(): React.ReactElement {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] text-zinc-500 uppercase tracking-wider">Directory</label>
+              <label className="text-ui-xs text-zinc-500 uppercase tracking-wider">Directory</label>
               <div className="flex gap-2">
-                <div className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-400 truncate min-w-0">
+                <div className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-ui-base text-zinc-400 truncate min-w-0">
                   {newProjectDir ? newProjectDir.replace(/^\/Users\/[^/]+/, '~') : 'Select a directory...'}
                 </div>
-                <Button variant="ghost" className="shrink-0 text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-700" onClick={async () => {
+                <Button variant="ghost" className="shrink-0 text-ui-sm text-zinc-400 hover:text-zinc-200 border border-zinc-700" onClick={async () => {
                   const dir = await window.electronAPI.selectDirectory()
                   if (dir) setNewProjectDir(dir)
                 }}>
@@ -425,16 +425,16 @@ export default function TitleBar(): React.ReactElement {
                 </Button>
               </div>
             </div>
-            {newProjectError && <div className="text-xs text-red-400">{newProjectError}</div>}
+            {newProjectError && <div className="text-ui-sm text-red-400">{newProjectError}</div>}
             {newProjectName.trim() && newProjectDir && (
-              <div className="text-[11px] text-zinc-500">
+              <div className="text-ui-xs text-zinc-500">
                 Creates <span className="text-zinc-300">{newProjectDir.replace(/^\/Users\/[^/]+/, '~')}/{newProjectName.trim()}.conductor</span>
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="ghost" className="text-xs text-zinc-400 hover:text-zinc-200" onClick={() => setDialog(null)}>Cancel</Button>
-            <Button className="text-xs bg-zinc-700 hover:bg-zinc-600 text-zinc-200" onClick={handleCreateProject}>Create</Button>
+            <Button variant="ghost" className="text-ui-sm text-zinc-400 hover:text-zinc-200" onClick={() => setDialog(null)}>Cancel</Button>
+            <Button className="text-ui-sm bg-zinc-700 hover:bg-zinc-600 text-zinc-200" onClick={handleCreateProject}>Create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -101,7 +101,7 @@ export default function MarkdownTab({ tabId, groupId, isActive, tab }: TabProps)
           onChange={handleChange}
           theme="vs-dark"
           options={{
-            fontSize: 14,
+            fontSize: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--ui-text-base').trim(), 10) || 13,
             fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
             fontLigatures: true,
             lineHeight: 1.6,

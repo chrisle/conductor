@@ -1,9 +1,10 @@
 import { app, BrowserWindow, shell, screen } from 'electron'
 import { join } from 'path'
-import { readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { spawn } from 'child_process'
 import { registerIpcHandlers } from './ipc'
 import { conductordHealthCheck, CONDUCTORD_SOCKET } from './conductord-client'
+import { initLogger } from './logger'
 import os from 'os'
 
 let mainWindow: BrowserWindow | null = null
@@ -61,8 +62,12 @@ function validateBounds(bounds: Partial<WindowBounds>): Partial<WindowBounds> {
 }
 
 async function ensureConductord(): Promise<void> {
+  console.debug(`[ensureConductord] socket path: ${CONDUCTORD_SOCKET}`)
+
   // Check if conductord is already running (previous tray instance)
-  if (await conductordHealthCheck()) {
+  const alreadyRunning = await conductordHealthCheck()
+  console.debug(`[ensureConductord] initial health check: ${alreadyRunning}`)
+  if (alreadyRunning) {
     console.log('[conductord] already running')
     return
   }
@@ -73,15 +78,28 @@ async function ensureConductord(): Promise<void> {
     ? join(__dirname, '../../conductord/conductord')
     : join(process.resourcesPath!, 'conductord')
 
-  const child = spawn(binPath, ['-socket', CONDUCTORD_SOCKET, '-tray'], {
+  const binExists = existsSync(binPath)
+  console.debug(`[ensureConductord] isDev=${isDev} binPath=${binPath} exists=${binExists}`)
+
+  if (!binExists) {
+    console.error(`[ensureConductord] conductord binary not found at ${binPath}`)
+  }
+
+  const spawnArgs = ['-socket', CONDUCTORD_SOCKET, '-tray']
+  console.debug(`[ensureConductord] spawning: ${binPath} ${spawnArgs.join(' ')}`)
+
+  const child = spawn(binPath, spawnArgs, {
     stdio: 'ignore',
     detached: true,
     env: { ...process.env }
   })
+  console.debug(`[ensureConductord] spawn pid=${child.pid}`)
   child.unref()
 
   for (let i = 0; i < 30; i++) {
-    if (await conductordHealthCheck()) {
+    const ok = await conductordHealthCheck()
+    console.debug(`[ensureConductord] poll ${i + 1}/30: health=${ok}`)
+    if (ok) {
       console.log('[conductord] started with tray (pid %d)', child.pid)
       return
     }
@@ -151,21 +169,26 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
+  initLogger()
+  console.log('[main] app ready, electron version:', process.versions.electron, 'node:', process.versions.node)
   if (!process.env['CONDUCTOR_SKIP_TRAY']) {
     await ensureConductord()
   }
   registerIpcHandlers()
   createWindow()
 
-  app.on('activate', function () {
+  app.on('activate', async function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (!process.env['CONDUCTOR_SKIP_TRAY']) {
+      await ensureConductord()
+    }
   })
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  // Always quit the Electron app when all windows close — conductord runs
+  // as a detached process so its system tray keeps running independently.
+  app.quit()
 })
 
 export { mainWindow }

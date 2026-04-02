@@ -80,7 +80,7 @@ export default function ExcelTab({ tabId, groupId, isActive, tab }: TabProps): R
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full text-red-400 text-sm p-4">
+      <div className="flex items-center justify-center h-full text-red-400 text-ui-base p-4">
         {error}
       </div>
     )
@@ -88,7 +88,7 @@ export default function ExcelTab({ tabId, groupId, isActive, tab }: TabProps): R
 
   if (sheets.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-zinc-500 text-sm">
+      <div className="flex items-center justify-center h-full text-zinc-500 text-ui-base">
         No data
       </div>
     )

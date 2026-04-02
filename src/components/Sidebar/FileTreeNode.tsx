@@ -177,7 +177,7 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
           <div
             className={cn(
               'flex items-center gap-1 px-2 py-[3px] cursor-pointer select-none text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100 transition-colors group',
-              'text-ui-md'
+              'text-ui-base'
             )}
             style={{ paddingLeft: `${8 + indent}px` }}
             onClick={handleClick}

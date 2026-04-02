@@ -118,7 +118,7 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className="text-ui-base text-zinc-200 truncate">{ext.name}</span>
-                      <Badge variant="outline" className="h-4 px-1 text-ui-2xs border-zinc-700 text-zinc-500">
+                      <Badge variant="outline" className="h-4 px-1 text-ui-xs border-zinc-700 text-zinc-500">
                         v{ext.version}
                       </Badge>
                     </div>
@@ -154,7 +154,7 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
               <span className="text-ui-sm text-zinc-500 uppercase tracking-wider font-medium">
                 Built-in
               </span>
-              <Badge variant="outline" className="ml-auto h-4 px-1.5 text-ui-2xs border-zinc-700 text-zinc-600">
+              <Badge variant="outline" className="ml-auto h-4 px-1.5 text-ui-xs border-zinc-700 text-zinc-600">
                 {builtinExtensions.length}
               </Badge>
             </CollapsibleTrigger>
@@ -171,7 +171,7 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
                       <div className="flex items-center gap-1.5">
                         <span className="text-ui-base text-zinc-300 truncate">{ext.name}</span>
                         {ext.version && (
-                          <Badge variant="outline" className="h-4 px-1 text-ui-2xs border-zinc-700 text-zinc-600">
+                          <Badge variant="outline" className="h-4 px-1 text-ui-xs border-zinc-700 text-zinc-600">
                             v{ext.version}
                           </Badge>
                         )}

@@ -18,8 +18,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
+  DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import SidebarLayout from '@/components/Sidebar/SidebarLayout'
@@ -368,7 +367,7 @@ function TmuxRow({
               // Custom drag image
               const ghost = document.createElement('div')
               ghost.textContent = names.length > 1 ? `${names.length} sessions` : label
-              ghost.style.cssText = 'position:fixed;top:-1000px;padding:4px 10px;border-radius:6px;background:#27272a;color:#e4e4e7;font-size:11px;font-weight:500;white-space:nowrap;border:1px solid #3f3f46;box-shadow:0 4px 12px rgba(0,0,0,0.4);'
+              ghost.style.cssText = 'position:fixed;top:-1000px;padding:4px 10px;border-radius:6px;background:#27272a;color:#e4e4e7;font-size:var(--ui-text-xs);font-weight:500;white-space:nowrap;border:1px solid #3f3f46;box-shadow:0 4px 12px rgba(0,0,0,0.4);'
               document.body.appendChild(ghost)
               e.dataTransfer.setDragImage(ghost, 0, 0)
               setTimeout(() => document.body.removeChild(ghost), 0)
@@ -1046,20 +1045,20 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="bg-zinc-900 border-zinc-700" align="start">
-              <DropdownMenuRadioGroup
-                value={sessionSort}
-                onValueChange={v => useProjectStore.getState().setSessionSort(v as SessionSortOrder)}
-              >
-                {SORT_CYCLE.map(order => {
-                  const Icon = SORT_ICONS[order]
-                  return (
-                    <DropdownMenuRadioItem key={order} value={order} className="gap-2 text-ui-base cursor-pointer">
-                      <Icon className="w-3.5 h-3.5" />
-                      {SORT_LABELS[order]}
-                    </DropdownMenuRadioItem>
-                  )
-                })}
-              </DropdownMenuRadioGroup>
+              {SORT_CYCLE.map(order => {
+                const Icon = SORT_ICONS[order]
+                const isActive = order === sessionSort
+                return (
+                  <DropdownMenuItem
+                    key={order}
+                    className={`gap-2 text-ui-base cursor-pointer ${isActive ? 'bg-zinc-700 text-white' : ''}`}
+                    onSelect={() => useProjectStore.getState().setSessionSort(order)}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {SORT_LABELS[order]}
+                  </DropdownMenuItem>
+                )
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

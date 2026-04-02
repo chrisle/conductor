@@ -7,6 +7,7 @@ import { readDir, readFile, readFileBinary, writeFile, mkdirRecursive, deleteEnt
 
 import { conductordFetch } from './conductord-client'
 import { registerTerminalBridge } from './terminal-bridge'
+import { debugLog } from './logger'
 
 // Conductord log watchers: watchId -> { watcher, fd }
 const logWatchers = new Map<string, { watcher: fs.FSWatcher; offset: number; logPath: string }>()
@@ -825,12 +826,22 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
   })
 
 
+  // Renderer -> main process log forwarding
+  ipcMain.on('log:debug', (_event, msg: string) => {
+    debugLog(msg)
+  })
+
   // Conductord REST proxy (renderer can't reach Unix socket directly)
   ipcMain.handle('conductord:health', async () => {
+    console.debug('[ipc] conductord:health called by renderer')
     try {
       const { status } = await conductordFetch('/health')
-      return status === 200
-    } catch {
+      const ok = status === 200
+      console.debug(`[ipc] conductord:health -> ${ok}`)
+      return ok
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.debug(`[ipc] conductord:health -> false (error: ${msg})`)
       return false
     }
   })

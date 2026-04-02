@@ -25,7 +25,9 @@ export const terminalColors = {
 export const terminalConfig = {
   theme: terminalColors,
   fontFamily: "'FiraCode Nerd Font Mono', monospace",
-  fontSize: 12,
+  get fontSize() {
+    return parseInt(getComputedStyle(document.documentElement).getPropertyValue('--ui-text-sm').trim(), 10) || 12
+  },
   lineHeight: 1.0,
   cursorBlink: true,
   cursorStyle: "block" as const,

@@ -8,7 +8,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "prepare-tmux": "bash scripts/prepare-tmux.sh",
-    "package": "bash scripts/prepare-tmux.sh && cd conductord && go build -o conductord . && cd .. && electron-vite build && electron-builder",
+    "package": "bash scripts/package.sh",
     "typecheck": "tsc --build --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -70,16 +70,26 @@
     "vitest": "^3.2.4"
   },
   "build": {
-    "appId": "com.acn.cowork",
-    "productName": "ACN CoWork",
+    "appId": "com.iamchrisle.conductor",
+    "productName": "Conductor",
+    "icon": "build/icon.icns",
     "directories": {
       "output": "dist"
     },
     "files": [
       "out/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "conductord/conductord",
+        "to": "conductord"
+      }
+    ],
     "mac": {
-      "target": "dmg"
+      "target": "dmg",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
     },
     "win": {
       "target": "nsis"

@@ -34,7 +34,7 @@ export default function ImageTab({ tab }: TabProps): React.ReactElement {
 
   if (error) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+      <div className="flex h-full items-center justify-center text-ui-base text-zinc-500">
         {error}
       </div>
     )

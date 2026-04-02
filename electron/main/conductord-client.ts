@@ -13,12 +13,14 @@ export interface ConductordFetchOptions {
 }
 
 export function conductordFetch(urlPath: string, options?: ConductordFetchOptions): Promise<{ status: number; body: any }> {
+  const method = options?.method ?? 'GET'
+  console.debug(`[conductord-client] ${method} ${urlPath} via socket=${CONDUCTORD_SOCKET}`)
   return new Promise((resolve, reject) => {
     const req = http.request(
       {
         socketPath: CONDUCTORD_SOCKET,
         path: urlPath,
-        method: options?.method ?? 'GET',
+        method,
         headers: options?.body ? { 'Content-Type': 'application/json' } : undefined,
       },
       (res) => {
@@ -32,21 +34,30 @@ export function conductordFetch(urlPath: string, options?: ConductordFetchOption
           } catch {
             body = raw
           }
+          console.debug(`[conductord-client] ${method} ${urlPath} -> status=${res.statusCode}`)
           resolve({ status: res.statusCode ?? 0, body })
         })
       }
     )
-    req.on('error', reject)
+    req.on('error', (err: NodeJS.ErrnoException) => {
+      console.debug(`[conductord-client] ${method} ${urlPath} -> error: ${err.message} (code=${err.code})`)
+      reject(err)
+    })
     if (options?.body) req.write(options.body)
     req.end()
   })
 }
 
 export async function conductordHealthCheck(): Promise<boolean> {
+  console.debug('[conductord-client] conductordHealthCheck() called')
   try {
     const { status } = await conductordFetch('/health')
-    return status === 200
-  } catch {
+    const ok = status === 200
+    console.debug(`[conductord-client] conductordHealthCheck() -> ${ok} (status=${status})`)
+    return ok
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.debug(`[conductord-client] conductordHealthCheck() -> false (error: ${msg})`)
     return false
   }
 }

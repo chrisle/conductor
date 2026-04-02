@@ -232,6 +232,23 @@ func initTmux() {
 		tmuxConf = confDest
 	}
 
+	// On macOS, extracted binaries can hang in dyld due to security signature
+	// verification. Re-signing with an ad-hoc identity makes macOS validate the
+	// signature locally without any network calls, eliminating the hang.
+	if runtime.GOOS == "darwin" {
+		if codesign, err := exec.LookPath("codesign"); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					continue
+				}
+				dest := filepath.Join(extractDir, entry.Name())
+				if out, err := exec.Command(codesign, "--force", "--sign", "-", dest).CombinedOutput(); err != nil {
+					log.Printf("[tmux] codesign failed for %s: %v (%s)", dest, err, strings.TrimSpace(string(out)))
+				}
+			}
+		}
+	}
+
 	candidate := filepath.Join(extractDir, "tmux")
 	if _, err := os.Stat(candidate); err == nil {
 		tmuxPath = candidate

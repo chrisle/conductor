@@ -85,13 +85,17 @@ export default function Footer(): React.ReactElement {
   useEffect(() => {
     let cancelled = false
     const poll = async () => {
+      window.electronAPI.logDebug('[footer] polling conductord health...')
       try {
         const [ok, tmuxList] = await Promise.all([
           window.electronAPI.conductordHealth(),
           window.electronAPI.conductordGetTmuxSessions(),
         ])
+        window.electronAPI.logDebug(`[footer] health=${ok} tmux=${tmuxList.length}`)
         if (!cancelled) setConductord({ ok, tmux: tmuxList.length })
-      } catch {
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        window.electronAPI.logDebug(`[footer] poll error: ${msg}`)
         if (!cancelled) setConductord({ ok: false, tmux: 0 })
       }
     }

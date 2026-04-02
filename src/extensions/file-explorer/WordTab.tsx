@@ -54,7 +54,7 @@ export default function WordTab({ tabId, groupId, isActive, tab }: TabProps): Re
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full text-red-400 text-sm p-4">
+      <div className="flex items-center justify-center h-full text-red-400 text-ui-base p-4">
         {error}
       </div>
     )

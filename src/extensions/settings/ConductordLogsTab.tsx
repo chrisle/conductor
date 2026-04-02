@@ -86,7 +86,7 @@ export default function ConductordLogsTab({ isActive }: TabProps): React.ReactEl
         theme="vs-dark"
         options={{
           readOnly: true,
-          fontSize: 13,
+          fontSize: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--ui-text-base').trim(), 10) || 13,
           fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
           fontLigatures: true,
           lineHeight: 1.5,

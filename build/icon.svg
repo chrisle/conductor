@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- iOS/macOS-style rounded square background -->
+  <rect width="1024" height="1024" rx="224" fill="#09090b"/>
+
+  <!-- Conductor's baton: handle at lower-left, tip at upper-right -->
+  <line x1="268" y1="788" x2="748" y2="252"
+        stroke="white" stroke-width="68" stroke-linecap="round"/>
+
+  <!-- Round handle grip (the ball end the conductor holds) -->
+  <circle cx="268" cy="788" r="88" fill="white"/>
+</svg>

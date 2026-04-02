@@ -33,9 +33,9 @@ func runTray(socketPath string) {
 
 func onTrayReady(socketPath string) {
 	systray.SetTemplateIcon(trayIconBytes, trayIconBytes)
-	systray.SetTooltip("Conductor")
+	systray.SetTooltip("Conductor Service")
 
-	mTitle := systray.AddMenuItem("Conductor", "")
+	mTitle := systray.AddMenuItem("Conductor Service", "")
 	mTitle.Disable()
 
 	mSessions := systray.AddMenuItem("No active sessions", "")
@@ -48,7 +48,7 @@ func onTrayReady(socketPath string) {
 
 	systray.AddSeparator()
 
-	mQuit := systray.AddMenuItem("Quit Conductor", "Stop all sessions and quit")
+	mQuit := systray.AddMenuItem("Stop Conductor Service", "Stop all sessions and quit")
 
 	// Periodically update session count in the menu.
 	go func() {
