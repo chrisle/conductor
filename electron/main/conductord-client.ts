@@ -14,7 +14,6 @@ export interface ConductordFetchOptions {
 
 export function conductordFetch(urlPath: string, options?: ConductordFetchOptions): Promise<{ status: number; body: any }> {
   const method = options?.method ?? 'GET'
-  console.debug(`[conductord-client] ${method} ${urlPath} via socket=${CONDUCTORD_SOCKET}`)
   return new Promise((resolve, reject) => {
     const req = http.request(
       {
@@ -34,7 +33,6 @@ export function conductordFetch(urlPath: string, options?: ConductordFetchOption
           } catch {
             body = raw
           }
-          console.debug(`[conductord-client] ${method} ${urlPath} -> status=${res.statusCode}`)
           resolve({ status: res.statusCode ?? 0, body })
         })
       }
@@ -49,15 +47,10 @@ export function conductordFetch(urlPath: string, options?: ConductordFetchOption
 }
 
 export async function conductordHealthCheck(): Promise<boolean> {
-  console.debug('[conductord-client] conductordHealthCheck() called')
   try {
     const { status } = await conductordFetch('/health')
-    const ok = status === 200
-    console.debug(`[conductord-client] conductordHealthCheck() -> ${ok} (status=${status})`)
-    return ok
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.debug(`[conductord-client] conductordHealthCheck() -> false (error: ${msg})`)
+    return status === 200
+  } catch {
     return false
   }
 }

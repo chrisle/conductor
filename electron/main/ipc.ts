@@ -868,15 +868,10 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
 
   // Conductord REST proxy (renderer can't reach Unix socket directly)
   ipcMain.handle('conductord:health', async () => {
-    console.debug('[ipc] conductord:health called by renderer')
     try {
       const { status } = await conductordFetch('/health')
-      const ok = status === 200
-      console.debug(`[ipc] conductord:health -> ${ok}`)
-      return ok
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      console.debug(`[ipc] conductord:health -> false (error: ${msg})`)
+      return status === 200
+    } catch {
       return false
     }
   })

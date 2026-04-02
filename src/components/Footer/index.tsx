@@ -85,17 +85,13 @@ export default function Footer(): React.ReactElement {
   useEffect(() => {
     let cancelled = false
     const poll = async () => {
-      window.electronAPI.logDebug('[footer] polling conductord health...')
       try {
         const [ok, tmuxList] = await Promise.all([
           window.electronAPI.conductordHealth(),
           window.electronAPI.conductordGetTmuxSessions(),
         ])
-        window.electronAPI.logDebug(`[footer] health=${ok} tmux=${tmuxList.length}`)
         if (!cancelled) setConductord({ ok, tmux: tmuxList.length })
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err)
-        window.electronAPI.logDebug(`[footer] poll error: ${msg}`)
+      } catch {
         if (!cancelled) setConductord({ ok: false, tmux: 0 })
       }
     }
@@ -124,7 +120,7 @@ export default function Footer(): React.ReactElement {
               const tabsState = useTabsStore.getState()
               const layoutStore = useLayoutStore.getState()
               const layoutGroupIds = new Set(layoutStore.getAllGroupIds())
-              const focusedGroupId = layoutStore.focusedGroup
+              const focusedGroupId = layoutStore.focusedGroupId
 
               // Check if git-graph tab already exists
               for (const [gid, group] of Object.entries(tabsState.groups)) {
