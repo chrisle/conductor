@@ -93,8 +93,8 @@ func stripAnsi(s string) string {
 var (
 	// Menu-style Yes option: "1. Yes", "❯ Yes", "> Yes", "Yes Allow once"
 	apYesOption = regexp.MustCompile(`(?i)1\.?\s*Yes|[❯>]\s+Yes\b|Yes\s+(Allow once|and don't ask)`)
-	// Menu-style No option: "2. No", "Deny", "No, exit", "Decline", "No, and tell", "Cancel this"
-	apNoOption  = regexp.MustCompile(`(?i)2\.?\s*No|[❯>]\s+No\b|\bDeny\b|No,?\s+exit|\bDecline\b|No,\s+and\s+tell|Go back without|Cancel this`)
+	// Menu-style No option: "2. No", "3. No", any numbered "No", "Deny", "No, exit", "Decline", "No, and tell", "Cancel this"
+	apNoOption  = regexp.MustCompile(`(?i)\d+\.?\s*No\b|[❯>]\s+No\b|\bDeny\b|No,?\s+exit|\bDecline\b|No,\s+and\s+tell|Go back without|Cancel this`)
 	// Secondary context signal — at least one must accompany a menu prompt
 	apSecondary = regexp.MustCompile(`(?i)` +
 		`\bBash\b|\bRead\b|\bWrite\b|\bEdit\b|\bWebFetch\b|\bWebSearch\b|\bGrep\b|\bGlob\b|\bNotebookEdit\b|` +
