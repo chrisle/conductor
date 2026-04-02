@@ -97,7 +97,7 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
 
   const { isExpanded, toggleExpanded } = useSidebarStore()
   const { addTab } = useTabsStore()
-  const { focusedGroupId } = useLayoutStore()
+  const { focusedGroupId, setFocusedGroup } = useLayoutStore()
 
   const expanded = isExpanded(entry.path)
 
@@ -139,6 +139,15 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
   }
 
   function openFile() {
+    // If the file is already open in any group, focus that tab
+    for (const [gid, group] of Object.entries(useTabsStore.getState().groups)) {
+      const existing = group.tabs.find(t => t.filePath === entry.path)
+      if (existing) {
+        useTabsStore.getState().setActiveTab(gid, existing.id)
+        setFocusedGroup(gid)
+        return
+      }
+    }
     const targetGroupId = focusedGroupId || groupId
     addTab(targetGroupId, {
       type: extensionRegistry.getTabTypeForFile(entry.name),

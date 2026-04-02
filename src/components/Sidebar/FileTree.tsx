@@ -1,6 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { FilePlus, FolderPlus } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu'
 import FileTreeNode from './FileTreeNode'
 import { useSidebarStore, type FileEntry } from '@/store/sidebar'
 
@@ -36,6 +43,15 @@ export default function FileTree({ groupId }: FileTreeProps): React.ReactElement
     const handleRefresh = () => { if (rootPath) loadRoot() }
     window.addEventListener('sidebar:refresh', handleRefresh)
     return () => window.removeEventListener('sidebar:refresh', handleRefresh)
+  }, [rootPath])
+
+  useEffect(() => {
+    if (!rootPath) return
+    const id = setInterval(async () => {
+      const entries = await window.electronAPI.readDir(rootPath)
+      setRootEntries(entries)
+    }, 2000)
+    return () => clearInterval(id)
   }, [rootPath])
 
   useEffect(() => {
@@ -92,6 +108,8 @@ export default function FileTree({ groupId }: FileTreeProps): React.ReactElement
   }
 
   return (
+    <ContextMenu>
+    <ContextMenuTrigger asChild>
     <ScrollArea className="flex-1 h-full">
       <div className="py-1">
         {rootPath && rootPath !== '/' && (
@@ -136,5 +154,23 @@ export default function FileTree({ groupId }: FileTreeProps): React.ReactElement
         ))}
       </div>
     </ScrollArea>
+    </ContextMenuTrigger>
+    <ContextMenuContent className="bg-zinc-900 border-zinc-700 min-w-[140px]">
+      <ContextMenuItem
+        className="gap-2 text-xs cursor-pointer"
+        onClick={() => { setCreating('file'); setNewName('') }}
+      >
+        <FilePlus className="w-3.5 h-3.5" />
+        New File
+      </ContextMenuItem>
+      <ContextMenuItem
+        className="gap-2 text-xs cursor-pointer"
+        onClick={() => { setCreating('folder'); setNewName('') }}
+      >
+        <FolderPlus className="w-3.5 h-3.5" />
+        New Folder
+      </ContextMenuItem>
+    </ContextMenuContent>
+    </ContextMenu>
   )
 }
