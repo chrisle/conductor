@@ -109,3 +109,47 @@ useSessionInfoRegistry.getState().unregister('my-extension-info')
 ```
 
 `SessionInfoContext` provides: `tmuxName`, `cwd`, `command`, `connected`, `hasOpenTab`, `isThinking`, `workSession`.
+
+## E2E Testing
+
+When writing e2e tests that need to interact with the terminal or any feature requiring Electron IPC (e.g. conductord communication), connect Playwright to Electron's CDP (Chrome DevTools Protocol) port. The Vite dev server at `localhost:5173` is just the renderer — it does NOT have access to `window.electronAPI` or IPC.
+
+### How to launch
+
+Start the Electron app with a remote debugging port:
+
+```sh
+npx electron-vite dev -- --remote-debugging-port=9222
+```
+
+### How to connect Playwright
+
+```ts
+import { chromium } from 'playwright'
+
+const browser = await chromium.connectOverCDP('http://localhost:9222')
+const context = browser.contexts()[0]
+const page = context.pages()[0]
+// `page` is the actual Electron renderer with full IPC access
+```
+
+### Process cleanup
+
+Always kill stale processes before starting or iterating on tests. Leftover Electron, conductord, and tmux processes get stuck and cause flaky failures or port conflicts.
+
+```sh
+pkill -f conductord 2>/dev/null
+pkill -f "Electron" 2>/dev/null
+pkill -f "electron-vite" 2>/dev/null
+# Kill conductor's dedicated tmux server
+/Users/chrisle/Library/Caches/conductor/tmux/tmux -u -L conductor kill-server 2>/dev/null
+sleep 2
+```
+
+Run this cleanup at the start of every test run and between iterations.
+
+### What NOT to do
+
+- Do not use `page.goto('http://localhost:5173')` — that opens a plain browser tab without Electron IPC
+- Do not simulate conductord WebSocket connections with Node.js scripts — test through the real Electron app
+- Do not use AppleScript/screen coordinates to click UI elements — use Playwright selectors via CDP

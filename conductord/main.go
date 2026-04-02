@@ -298,16 +298,39 @@ func killTmuxServer() {
 // current process environment and ensures the essential variables are set,
 // filling in sensible defaults for essential variables (LANG, etc.).
 func tmuxEnv() []string {
-	env := os.Environ()
-	// Ensure UTF-8 locale — inject LANG if not already present so tmux
-	// always uses UTF-8 output.
+	// Strip variables inherited from Electron / VS Code that should not
+	// leak into user terminal sessions. NODE_OPTIONS is the critical one:
+	// VS Code injects a --require for its debug bootloader, which silently
+	// crashes Node.js CLI tools (like claude) that don't expect it.
+	stripPrefixes := []string{
+		"NODE_OPTIONS=",
+		"ELECTRON_",
+		"VSCODE_INSPECTOR_OPTIONS=",
+		"NODE_ENV=",
+		"INIT_CWD=",
+	}
+
+	raw := os.Environ()
+	env := make([]string, 0, len(raw))
 	hasLang := false
-	for _, e := range env {
+	for _, e := range raw {
+		skip := false
+		for _, prefix := range stripPrefixes {
+			if strings.HasPrefix(e, prefix) {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			continue
+		}
 		if strings.HasPrefix(e, "LANG=") || strings.HasPrefix(e, "LC_ALL=") {
 			hasLang = true
-			break
 		}
+		env = append(env, e)
 	}
+	// Ensure UTF-8 locale — inject LANG if not already present so tmux
+	// always uses UTF-8 output.
 	if !hasLang {
 		env = append(env, "LANG=en_US.UTF-8", "LC_ALL=en_US.UTF-8")
 	}
