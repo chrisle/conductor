@@ -10,6 +10,7 @@ import { buildClaudeCommand } from '../contexts/buildClaudeCommand'
 import { setAutoPilot as setAutoPilotWs } from '@/lib/terminal-api'
 import { useTabsStore } from '@/store/tabs'
 import { useWorkSessionsStore } from '@/store/work-sessions'
+import { useConfigStore } from '@/store/config'
 
 // Extract a Jira ticket key (e.g. "PROJ-123") from the tab title.
 function extractTicketKey(title: string): string | null {
@@ -21,6 +22,8 @@ export default function ClaudeCodeTab({ tabId, groupId, isActive, tab }: TabProp
   const settings = useClaudeCodeSettings()
   const [autoPilot, setAutoPilot] = useState(tab.autoPilot ?? false)
   const { rootPath } = useSidebarStore()
+  const claudeAccounts = useConfigStore(s => s.config.claudeAccounts)
+  const apiKeyAccount = tab.apiKey ? claudeAccounts.find(a => a.apiKey === tab.apiKey) : null
   const { updateTab } = useTabsStore()
   const writeRef = useRef<((data: string) => void) | null>(null)
   const autoPilotRef = useRef(autoPilot)
@@ -32,7 +35,7 @@ export default function ClaudeCodeTab({ tabId, groupId, isActive, tab }: TabProp
     setAutoPilotWs(tabId, autoPilot)
   }, [autoPilot, tabId])
 
-  const projectPath = tab.filePath || rootPath
+  const projectPath = tab.filePath || rootPath || undefined
   const sessionId = useSessionDetect(tab.initialCommand, projectPath)
   const onPtyData = usePtyHandlers(tabId, groupId)
 
@@ -92,6 +95,14 @@ export default function ClaudeCodeTab({ tabId, groupId, isActive, tab }: TabProp
           </span>
         </>
       )}
+      {apiKeyAccount && (
+        <>
+          <div className="w-px h-3 bg-zinc-700" />
+          <span className="text-ui-xs text-zinc-500">
+            API Key: <span className="text-zinc-400">{apiKeyAccount.name}</span>
+          </span>
+        </>
+      )}
     </>
   )
 
@@ -111,12 +122,13 @@ export default function ClaudeCodeTab({ tabId, groupId, isActive, tab }: TabProp
       }}
       onPtyData={onPtyData}
       onTerminalReady={handleTerminalReady}
-      onSessionReady={(isNew, opts) => {
+      onSessionReady={(isNew: boolean, opts?: { autoPilot?: boolean }) => {
         updateTab(groupId, tabId, { hasTmuxSession: true })
         handleSessionReady(isNew, opts)
       }}
       interceptKeys={interceptKeys}
       footer={footer}
+      footerPosition="bottom"
     />
   )
 }

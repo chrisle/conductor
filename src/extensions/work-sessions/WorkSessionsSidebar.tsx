@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowDownAZ, ArrowUpDown, Bot, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, Folder, FolderPlus, GitBranch, GripVertical, Hand, Hash, LayoutGrid, Link, Pencil, Square, Terminal, Trash2, X } from 'lucide-react'
+import { ArrowDownAZ, ArrowUpDown, Bot, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, Folder, FolderPlus, GitBranch, GripVertical, Hand, Hash, Key, LayoutGrid, Link, Pencil, Square, Terminal, Trash2, X } from 'lucide-react'
 import {
   Tooltip,
   TooltipContent,
@@ -25,6 +25,7 @@ import SidebarLayout from '@/components/Sidebar/SidebarLayout'
 import { getSessionTitle, setSessionTitle, clearSessionTitle } from '@/lib/session-titles'
 import { useWorkSessionsStore } from '@/store/work-sessions'
 import { useTabsStore } from '@/store/tabs'
+import { useConfigStore } from '@/store/config'
 import { useLayoutStore, type LayoutNode } from '@/store/layout'
 import { useProjectStore, type SessionGroup, type SessionSortOrder } from '@/store/project'
 import type { WorkSession } from '@/types/work-session'
@@ -257,6 +258,7 @@ function TmuxRow({
   const { addTab } = useTabsStore()
   const { focusedGroupId } = useLayoutStore()
   const groups = useTabsStore(s => s.groups)
+  const claudeAccounts = useConfigStore(s => s.config.claudeAccounts)
 
   const [isExpanded, setIsExpanded] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -518,10 +520,22 @@ function TmuxRow({
                 {/* Autopilot indicator */}
                 {openTab?.tab.autoPilot && (
                   <div className="flex items-center gap-1.5">
-                    <Bot className="w-3 h-3 text-indigo-400 shrink-0" />
-                    <span className="text-indigo-400 font-medium">Autopilot</span>
+                    <Bot className="w-3 h-3 text-red-400 shrink-0" />
+                    <span className="text-red-400 font-medium">Autopilot</span>
                   </div>
                 )}
+
+                {/* API Key indicator */}
+                {openTab?.tab.apiKey && (() => {
+                  const account = claudeAccounts.find(a => a.apiKey === openTab.tab.apiKey)
+                  if (!account) return null
+                  return (
+                    <div className="flex items-center gap-1.5">
+                      <Key className="w-3 h-3 text-zinc-500 shrink-0" />
+                      <span className="text-zinc-400">API Key: <span className="text-zinc-300">{account.name}</span></span>
+                    </div>
+                  )
+                })()}
 
                 {/* Extension-provided rows */}
                 {infoProviders.map(p => {
