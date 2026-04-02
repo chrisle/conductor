@@ -45,6 +45,41 @@ export function registerIpcHandlers(): void {
     return win?.isMaximized() ?? false
   })
 
+  ipcMain.handle('window:openNew', () => {
+    const newWin = new BrowserWindow({
+      width: 1400,
+      height: 900,
+      minWidth: 800,
+      minHeight: 600,
+      frame: false,
+      transparent: false,
+      backgroundColor: '#09090b',
+      show: false,
+      webPreferences: {
+        preload: path.join(__dirname, '../preload/index.js'),
+        sandbox: false,
+        nodeIntegration: false,
+        contextIsolation: true,
+        webviewTag: true,
+        webSecurity: true,
+      },
+    })
+    newWin.once('ready-to-show', () => newWin.show())
+    newWin.on('close', (e) => {
+      e.preventDefault()
+      newWin.webContents.send('window:closeRequested')
+    })
+    newWin.webContents.setWindowOpenHandler((details) => {
+      shell.openExternal(details.url)
+      return { action: 'deny' }
+    })
+    if (process.env['ELECTRON_RENDERER_URL']) {
+      newWin.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    } else {
+      newWin.loadFile(path.join(__dirname, '../renderer/index.html'))
+    }
+  })
+
   // File system
   ipcMain.handle('fs:getHomeDir', () => {
     return os.homedir()

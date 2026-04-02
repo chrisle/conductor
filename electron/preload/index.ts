@@ -8,6 +8,7 @@ const electronAPI = {
   close: () => ipcRenderer.invoke('window:close'),
   forceClose: () => ipcRenderer.invoke('window:forceClose'),
   isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+  openNewWindow: () => ipcRenderer.invoke('window:openNew'),
   onCloseRequested: (callback: () => void) =>
     ipcRenderer.on('window:closeRequested', callback),
   offCloseRequested: (callback: () => void) =>

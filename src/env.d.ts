@@ -21,6 +21,7 @@ interface ElectronAPI {
   close: () => Promise<void>
   forceClose: () => Promise<void>
   isMaximized: () => Promise<boolean>
+  openNewWindow: () => Promise<void>
   onCloseRequested: (callback: () => void) => void
   offCloseRequested: (callback: () => void) => void
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Minus, Square, X, Maximize2, ChevronDown, FolderOpen, Plus, Pencil, Trash2, FilePlus2, Folder, SaveAll } from 'lucide-react'
+import { Minus, Square, X, Maximize2, ChevronDown, FolderOpen, Plus, Pencil, Trash2, FilePlus2, Folder, SaveAll, AppWindow } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -161,7 +161,20 @@ export default function TitleBar(): React.ReactElement {
 
         {/* Breadcrumb — individual buttons are no-drag, gaps between them remain draggable */}
         <div className="flex-1 flex items-center justify-center gap-1 overflow-hidden px-4">
-          <span className="text-ui-sm text-zinc-500">Conductor</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="no-drag flex items-center gap-0.5 text-ui-sm text-zinc-500 hover:text-zinc-300 transition-colors rounded px-1 py-0.5 hover:bg-zinc-800/50">
+                Conductor
+                <ChevronDown className="w-2.5 h-2.5 text-zinc-600" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="w-44 shadow-xl shadow-black/50">
+              <DropdownMenuItem onSelect={() => window.electronAPI.openNewWindow()} className="text-ui-sm">
+                <AppWindow className="w-3 h-3 mr-2 text-zinc-500" />
+                New Window
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {projectName && (
             <>
