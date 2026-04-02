@@ -7,7 +7,7 @@ export interface FileEntry {
   isFile: boolean
 }
 
-interface SidebarState {
+export interface SidebarState {
   width: number
   isVisible: boolean
   rootPath: string | null

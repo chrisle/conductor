@@ -1,3 +1,4 @@
+/// <reference types="vitest/globals" />
 import '@testing-library/jest-dom/vitest'
 
 // Mock window.electronAPI for store tests that reference it

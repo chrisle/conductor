@@ -28,7 +28,7 @@ export interface TabGroup {
   worktree?: string
 }
 
-interface TabsState {
+export interface TabsState {
   groups: Record<string, TabGroup>
   createGroup: () => string
   removeGroup: (groupId: string) => void

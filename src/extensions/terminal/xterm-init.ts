@@ -34,7 +34,7 @@ function injectXtermStyles() {
   document.head.appendChild(style)
 }
 
-export async function createXtermTerminal(container: HTMLElement): Promise<{ term: Terminal; fitAddon: FitAddon }> {
+export async function createXtermTerminal(container: HTMLElement): Promise<{ term: Terminal; fitAddon: FitAddon; serializeAddon: SerializeAddon }> {
   injectXtermStyles()
 
   const term = new Terminal({

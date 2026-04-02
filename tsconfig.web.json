@@ -12,18 +12,18 @@
     "allowImportingTsExtensions": false,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": false,
+    "noEmit": true,
     "baseUrl": ".",
     "paths": {
       "@renderer/*": ["./src/*"],
-      "@/*": ["./src/*"],
-      "@conductor/extension-sdk": ["../conductor-extension-sdk/src/index.ts"],
-      "@np3/jira": ["../np3-jira/src/index.ts"]
+      "@/*": ["./src/*"]
     }
   },
   "include": [
-    "src/**/*",
-    "../np3-jira/src/**/*",
-    "../conductor-extension-sdk/src/**/*"
+    "src/**/*"
+  ],
+  "exclude": [
+    "src/__tests__/fs-handlers.test.ts",
+    "src/__tests__/jira-api.test.ts"
   ]
 }

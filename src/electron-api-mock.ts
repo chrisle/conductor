@@ -94,13 +94,14 @@ function killTerminalWS(id: string): Promise<void> {
   return Promise.resolve()
 }
 
-const mock: ElectronAPI = {
+const mock: typeof window.electronAPI = {
   // Window controls
   minimize: noopAsync,
   maximize: noopAsync,
   close: noopAsync,
   forceClose: noopAsync,
   isMaximized: async () => false,
+  openNewWindow: noopAsync,
   onCloseRequested: noop,
   offCloseRequested: noop,
 
@@ -118,6 +119,10 @@ const mock: ElectronAPI = {
   saveFavorites: noopAsync,
   gitBranch: async () => null,
   gitLog: async () => [],
+  gitShow: async () => ({ body: '', files: [] }),
+  gitRemoteUrl: async () => null,
+  gitShortstat: async () => ({ insertions: 0, deletions: 0 }),
+  capturePane: async () => null,
 
   // App config
   loadConfig: async () => null,
@@ -136,10 +141,10 @@ const mock: ElectronAPI = {
   killTerminal: killTerminalWS,
   setAutoPilot: noopAsync,
   setTmuxOption: noopAsync,
-  onTerminalData: (cb) => { terminalListeners.data.add(cb) },
-  offTerminalData: (cb) => { terminalListeners.data.delete(cb) },
-  onTerminalExit: (cb) => { terminalListeners.exit.add(cb) },
-  offTerminalExit: (cb) => { terminalListeners.exit.delete(cb) },
+  onTerminalData: (cb: Parameters<typeof window.electronAPI.onTerminalData>[0]) => { terminalListeners.data.add(cb) },
+  offTerminalData: (cb: Parameters<typeof window.electronAPI.offTerminalData>[0]) => { terminalListeners.data.delete(cb) },
+  onTerminalExit: (cb: Parameters<typeof window.electronAPI.onTerminalExit>[0]) => { terminalListeners.exit.add(cb) },
+  offTerminalExit: (cb: Parameters<typeof window.electronAPI.offTerminalExit>[0]) => { terminalListeners.exit.delete(cb) },
 
   // Git
   worktreeList: async () => [],
@@ -220,6 +225,10 @@ const mock: ElectronAPI = {
       return res.ok ? await res.json() : { ok: false, killed: 0 }
     } catch { return { ok: false, killed: 0 } }
   },
+
+  // Debug / shell
+  logDebug: noop,
+  openExternal: noopAsync,
 
   // Platform
   platform: 'darwin',

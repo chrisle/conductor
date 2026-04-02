@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { WorkSession } from '../types/work-session'
 
-interface WorkSessionsState {
+export interface WorkSessionsState {
   sessions: WorkSession[]
   ready: boolean
 

@@ -11,7 +11,7 @@ export type LayoutNode =
       second: LayoutNode
     }
 
-interface LayoutState {
+export interface LayoutState {
   root: LayoutNode | null
   focusedGroupId: string | null
   setRoot: (root: LayoutNode) => void

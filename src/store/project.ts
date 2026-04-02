@@ -61,7 +61,7 @@ export interface ConductorProject {
   sessionSort?: SessionSortOrder
 }
 
-interface ProjectState {
+export interface ProjectState {
   filePath: string | null
   name: string | null
   activeWorkspace: string | null

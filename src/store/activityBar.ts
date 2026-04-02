@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-interface ActivityBarState {
+export interface ActivityBarState {
   activeExtensionId: string | null
   setActiveExtension: (id: string | null) => void
   toggleExtension: (id: string) => void

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { AppConfig, ClaudeAccount, JiraConnection, DeepPartial } from '../types/app-config'
 import { DEFAULT_APP_CONFIG } from '../types/app-config'
 
-interface ConfigState {
+export interface ConfigState {
   config: AppConfig
   ready: boolean
 
