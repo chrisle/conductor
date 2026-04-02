@@ -12,7 +12,8 @@
     "typecheck": "tsc --build --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "npx playwright test"
+    "test:e2e": "npx playwright test",
+    "test:e2e:real": "npx playwright test --config playwright.real.config.ts"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
