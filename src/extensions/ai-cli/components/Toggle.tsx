@@ -7,7 +7,7 @@ interface ToggleProps {
   color?: string
 }
 
-export default function Toggle({ on, onToggle, label, color = '#eab308' }: ToggleProps) {
+export default function Toggle({ on, onToggle, label, color = '#ef4444' }: ToggleProps) {
   return (
     <div className="flex items-center gap-1.5">
       <button
