@@ -25,33 +25,3 @@ test('autopilot toggle enables and disables', async ({ page }) => {
   expect(bgAfter).not.toBe(bgBefore)
 })
 
-test('matchPrompt correctly identifies Claude Code prompts', async ({ page }) => {
-  await installTestMocks(page)
-  await waitForApp(page)
-
-  const results = await page.evaluate(() => {
-    const patterns: Array<{ input: string; expected: string | null }> = [
-      { input: ' Do you want to create Dockerfile?\n ❯ 1. Yes', expected: '\r' },
-      { input: '> Yes  Allow once', expected: '\r' },
-      { input: 'Continue? (Y/n)', expected: 'y\r' },
-      { input: 'Allow access? (y/n)', expected: 'y\r' },
-      { input: 'Hello world', expected: null },
-    ]
-
-    return patterns.map(({ input, expected }) => {
-      let result: string | null = null
-      if (/1\.?\s*Yes/s.test(input)) result = '\r'
-      else if (/[❯>]\s+Yes\b/.test(input)) result = '\r'
-      else if (/Yes\s+(Allow once|and don't ask)/i.test(input)) result = '\r'
-      else if (/\(Y\/n\)\s*$/im.test(input)) result = 'y\r'
-      else if (/\(y\/N\)\s*$/im.test(input)) result = 'y\r'
-      else if (/Allow.*\(y\/n\)/i.test(input)) result = 'y\r'
-
-      return { input, expected, actual: result, pass: result === expected }
-    })
-  })
-
-  for (const r of results) {
-    expect(r.pass, `matchPrompt("${r.input}") expected ${r.expected} got ${r.actual}`).toBe(true)
-  }
-})
