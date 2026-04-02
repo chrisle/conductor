@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildClaudeCommand } from '../extensions/ai-cli/contexts/buildClaudeCommand'
 
-const base = { skipDangerousPermissions: false, disableBackgroundTasks: false }
+const base = { skipDangerousPermissions: false, disableBackgroundTasks: false, agentTeams: false }
 
 describe('buildClaudeCommand', () => {
   it('returns the command unchanged when no options are set', () => {
@@ -22,6 +22,7 @@ describe('buildClaudeCommand', () => {
     const result = buildClaudeCommand('claude\n', {
       skipDangerousPermissions: true,
       disableBackgroundTasks: true,
+      agentTeams: false,
     })
     expect(result).toBe('CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude --dangerously-skip-permissions\n')
   })
@@ -30,6 +31,7 @@ describe('buildClaudeCommand', () => {
     const result = buildClaudeCommand('cd /some/path && claude\n', {
       skipDangerousPermissions: true,
       disableBackgroundTasks: true,
+      agentTeams: false,
     })
     expect(result).toBe('cd /some/path && CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude --dangerously-skip-permissions\n')
   })
@@ -38,6 +40,7 @@ describe('buildClaudeCommand', () => {
     const result = buildClaudeCommand('claude --resume abc123\n', {
       skipDangerousPermissions: true,
       disableBackgroundTasks: false,
+      agentTeams: false,
     })
     expect(result).toBe('claude --dangerously-skip-permissions --resume abc123\n')
   })
@@ -46,6 +49,7 @@ describe('buildClaudeCommand', () => {
     const result = buildClaudeCommand("cd /path && claude 'fix the bug'\n", {
       skipDangerousPermissions: false,
       disableBackgroundTasks: true,
+      agentTeams: false,
     })
     expect(result).toBe("cd /path && CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude 'fix the bug'\n")
   })
@@ -55,6 +59,7 @@ describe('buildClaudeCommand', () => {
     const result = buildClaudeCommand('claude --resume claude\n', {
       skipDangerousPermissions: true,
       disableBackgroundTasks: false,
+      agentTeams: false,
     })
     expect(result).toBe('claude --dangerously-skip-permissions --resume claude\n')
   })

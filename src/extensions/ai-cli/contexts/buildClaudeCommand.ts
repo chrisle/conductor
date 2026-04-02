@@ -15,12 +15,13 @@ import type { ClaudeCodeSettings } from './useClaudeCodeSettings'
  */
 export function buildClaudeCommand(
   command: string,
-  settings: Pick<ClaudeCodeSettings, 'skipDangerousPermissions' | 'disableBackgroundTasks'>,
+  settings: Pick<ClaudeCodeSettings, 'skipDangerousPermissions' | 'disableBackgroundTasks' | 'agentTeams'>,
   apiKey?: string,
 ): string {
   let envPrefix = ''
   if (apiKey) envPrefix += `ANTHROPIC_API_KEY=${apiKey} `
   if (settings.disableBackgroundTasks) envPrefix += 'CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 '
+  if (settings.agentTeams) envPrefix += 'CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 '
 
   const flags = settings.skipDangerousPermissions
     ? ' --dangerously-skip-permissions'

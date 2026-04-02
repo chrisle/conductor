@@ -5,12 +5,14 @@ export interface ClaudeCodeSettings {
   skipDangerousPermissions: boolean
   autoPilotScanMs: number
   disableBackgroundTasks: boolean
+  agentTeams: boolean
 }
 
 const defaults: ClaudeCodeSettings = {
   skipDangerousPermissions: false,
   autoPilotScanMs: 250,
   disableBackgroundTasks: true,
+  agentTeams: false,
 }
 
 interface ClaudeCodeSettingsStore extends ClaudeCodeSettings {

@@ -25,6 +25,7 @@ export interface AppConfig {
       skipDangerousPermissions: boolean
       autoPilotScanMs: number
       disableBackgroundTasks: boolean
+      agentTeams: boolean
     }
     codex: {
       autoPilotScanMs: number
@@ -48,6 +49,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
       skipDangerousPermissions: false,
       autoPilotScanMs: 250,
       disableBackgroundTasks: true,
+      agentTeams: false,
     },
     codex: {
       autoPilotScanMs: 250,

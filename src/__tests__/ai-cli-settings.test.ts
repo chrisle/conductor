@@ -75,6 +75,7 @@ describe('buildClaudeCommand with apiKey', () => {
     const result = buildClaudeCommand('claude\n', {
       skipDangerousPermissions: false,
       disableBackgroundTasks: false,
+      agentTeams: false,
     }, 'sk-ant-test-key')
     expect(result).toBe('ANTHROPIC_API_KEY=sk-ant-test-key claude\n')
   })
@@ -85,6 +86,7 @@ describe('buildClaudeCommand with apiKey', () => {
     const result = buildClaudeCommand('claude\n', {
       skipDangerousPermissions: true,
       disableBackgroundTasks: true,
+      agentTeams: false,
     }, 'sk-key')
     expect(result).toBe('ANTHROPIC_API_KEY=sk-key CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude --dangerously-skip-permissions\n')
   })
@@ -95,6 +97,7 @@ describe('buildClaudeCommand with apiKey', () => {
     const result = buildClaudeCommand('claude\n', {
       skipDangerousPermissions: false,
       disableBackgroundTasks: false,
+      agentTeams: false,
     })
     expect(result).toBe('claude\n')
   })

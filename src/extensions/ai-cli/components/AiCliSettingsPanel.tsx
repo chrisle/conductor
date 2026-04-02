@@ -163,6 +163,19 @@ export default function AiCliSettingsPanel(): React.ReactElement {
             onCheckedChange={(v) => claudeCode.update({ disableBackgroundTasks: v })}
           />
         </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-ui-base font-medium text-zinc-200">Agent teams</div>
+            <div className="text-ui-sm text-zinc-500 mt-0.5">
+              Sets CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+            </div>
+          </div>
+          <Switch
+            checked={claudeCode.agentTeams}
+            onCheckedChange={(v) => claudeCode.update({ agentTeams: v })}
+          />
+        </div>
       </div>
 
       <div className="w-full h-px bg-zinc-800" />
