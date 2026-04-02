@@ -89,7 +89,7 @@ async function ensureConductord(): Promise<void> {
   console.debug(`[ensureConductord] spawning: ${binPath} ${spawnArgs.join(' ')}`)
 
   const child = spawn(binPath, spawnArgs, {
-    stdio: 'ignore',
+    stdio: 'inherit',
     detached: true,
     env: { ...process.env }
   })
