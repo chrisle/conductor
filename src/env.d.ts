@@ -67,8 +67,7 @@ interface ElectronAPI {
   resizeTerminal: (id: string, cols: number, rows: number) => Promise<void>
   killTerminal: (id: string) => Promise<void>
   setAutoPilot: (id: string, enabled: boolean) => Promise<void>
-  setTmuxOption: (id: string, key: string, value: string) => Promise<void>
-  capturePane: (id: string) => Promise<string | null>
+  captureScrollback: (id: string) => Promise<string | null>
   onTerminalData: (callback: (event: IpcRendererEvent, id: string, data: string) => void) => void
   offTerminalData: (callback: (event: IpcRendererEvent, id: string, data: string) => void) => void
   onTerminalExit: (callback: (event: IpcRendererEvent, id: string) => void) => void
@@ -125,10 +124,7 @@ interface ElectronAPI {
 
   // Conductord REST proxy
   conductordHealth: () => Promise<boolean>
-  conductordGetSessions: () => Promise<Array<{ id: string; dead: boolean }>>
-  conductordGetTmuxSessions: () => Promise<Array<{ name: string; connected: boolean; command: string; cwd: string; created: number; activity: number }>>
-  conductordKillTmuxSession: (name: string) => Promise<{ ok: boolean }>
-  conductordKillOrphanedTmux: () => Promise<{ ok: boolean; killed: number }>
+  conductordGetSessions: () => Promise<Array<{ id: string; dead: boolean; cwd: string; command: string }>>
 
   // Debug logging
   logDebug: (msg: string) => void

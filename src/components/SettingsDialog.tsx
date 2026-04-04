@@ -14,9 +14,6 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/comp
 import { useSettingsDialogStore } from '@/store/settingsDialog'
 import { extensionRegistry } from '@/extensions'
 import { ConductorDaemonPanel } from '@/extensions/settings/TerminalServiceTab'
-import { useProjectStore } from '@/store/project'
-import { useResolvedSettings } from '@/hooks/useResolvedSettings'
-import { DEFAULT_PROJECT_SETTINGS } from '@/types/project-settings'
 
 interface InstalledExtension {
   id: string
@@ -133,75 +130,10 @@ function SettingsContent({
 }
 
 function TerminalSection(): React.ReactElement {
-  const projectSettings = useProjectStore(s => s.projectSettings)
-  const workspaceSettings = useProjectStore(s => s.workspaceSettings)
-  const activeWorkspace = useProjectStore(s => s.activeWorkspace)
-  const { setProjectSettings, setWorkspaceSettings } = useProjectStore.getState()
-  const resolved = useResolvedSettings()
-
   return (
     <div>
       <h3 className="text-ui-base font-medium text-zinc-200 mb-4">Terminal</h3>
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <div>
-            <label className="text-ui-sm text-zinc-400 font-medium">tmux Mouse Scrolling</label>
-            <div className="text-ui-xs text-zinc-500">Mouse wheel for scrollback instead of arrow keys</div>
-          </div>
-
-          <div className="flex items-center justify-between bg-zinc-900/50 rounded px-2 py-1">
-            <span className="text-ui-xs text-zinc-400">Project default</span>
-            <select
-              className="bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0.5 text-ui-xs text-zinc-200 outline-none focus:border-blue-500"
-              value={projectSettings?.terminal?.tmuxMouse === undefined ? '__default__' : String(projectSettings.terminal.tmuxMouse)}
-              onChange={e => {
-                const val = e.target.value
-                if (val === '__default__') {
-                  const { terminal: _, ...rest } = projectSettings ?? {}
-                  setProjectSettings(Object.keys(rest).length > 0 ? rest : undefined)
-                } else {
-                  setProjectSettings({
-                    ...projectSettings,
-                    terminal: { ...projectSettings?.terminal, tmuxMouse: val === 'true' },
-                  })
-                }
-              }}
-            >
-              <option value="__default__">Default ({DEFAULT_PROJECT_SETTINGS.terminal.tmuxMouse ? 'On' : 'Off'})</option>
-              <option value="true">On</option>
-              <option value="false">Off</option>
-            </select>
-          </div>
-
-          <div className="flex items-center justify-between bg-zinc-900/50 rounded px-2 py-1">
-            <span className="text-ui-xs text-zinc-400">Workspace{activeWorkspace ? ` (${activeWorkspace})` : ''}</span>
-            <select
-              className="bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0.5 text-ui-xs text-zinc-200 outline-none focus:border-blue-500"
-              value={workspaceSettings?.terminal?.tmuxMouse === undefined ? '__inherit__' : String(workspaceSettings.terminal.tmuxMouse)}
-              onChange={e => {
-                const val = e.target.value
-                if (val === '__inherit__') {
-                  const { terminal: _, ...rest } = workspaceSettings ?? {}
-                  setWorkspaceSettings(Object.keys(rest).length > 0 ? rest : undefined)
-                } else {
-                  setWorkspaceSettings({
-                    ...workspaceSettings,
-                    terminal: { ...workspaceSettings?.terminal, tmuxMouse: val === 'true' },
-                  })
-                }
-              }}
-            >
-              <option value="__inherit__">Inherit from project</option>
-              <option value="true">On</option>
-              <option value="false">Off</option>
-            </select>
-          </div>
-
-          <div className="text-ui-xs text-zinc-600">
-            Effective: <span className="text-zinc-400">{resolved.terminal.tmuxMouse ? 'On' : 'Off'}</span>
-          </div>
-        </div>
-      </div>
+      <div className="text-ui-sm text-zinc-500">No terminal settings available.</div>
     </div>
   )
 }

@@ -61,7 +61,7 @@ export default function CodexTab({ tabId, groupId, isActive, tab }: TabProps): R
       }}
       onPtyData={onPtyData}
       onTerminalReady={handleTerminalReady}
-      onSessionReady={() => updateTab(groupId, tabId, { hasTmuxSession: true })}
+      onSessionReady={() => updateTab(groupId, tabId, { hasSession: true })}
       interceptKeys={interceptKeys}
       footer={footer}
       footerPosition="bottom"

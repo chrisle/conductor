@@ -4,30 +4,21 @@
  * All fields are optional so partial overrides work naturally.
  */
 export interface ProjectSettings {
-  terminal?: {
-    tmuxMouse?: boolean
-  }
+  terminal?: Record<string, never>
 }
 
 export const DEFAULT_PROJECT_SETTINGS: Required<{
   terminal: Required<NonNullable<ProjectSettings['terminal']>>
 }> = {
-  terminal: {
-    tmuxMouse: false,
-  },
+  terminal: {},
 }
 
 /** Deep-merge workspace settings over project settings over defaults. */
 export function resolveSettings(
-  project?: ProjectSettings,
-  workspace?: ProjectSettings,
+  _project?: ProjectSettings,
+  _workspace?: ProjectSettings,
 ): Required<{ terminal: Required<NonNullable<ProjectSettings['terminal']>> }> {
   return {
-    terminal: {
-      tmuxMouse:
-        workspace?.terminal?.tmuxMouse ??
-        project?.terminal?.tmuxMouse ??
-        DEFAULT_PROJECT_SETTINGS.terminal.tmuxMouse,
-    },
+    terminal: {},
   }
 }

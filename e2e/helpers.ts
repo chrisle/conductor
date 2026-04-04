@@ -16,7 +16,7 @@ export async function installTestMocks(page: Page) {
     const creates: Array<{ id: string; cwd?: string; command?: string }> = []
     const knownSessions = new Set<string>()
 
-    let mockTmuxSessions: any[] = []
+    let mockSessions: any[] = []
 
     const testTerminal = {
       /** Push data into xterm as if it came from the PTY */
@@ -31,8 +31,8 @@ export async function installTestMocks(page: Page) {
       writes,
       /** All createTerminal calls recorded here for assertions */
       creates,
-      /** Set tmux sessions returned by conductordGetTmuxSessions */
-      setTmuxSessions(sessions: any[]) { mockTmuxSessions = sessions },
+      /** Set sessions returned by conductordGetSessions */
+      setSessions(sessions: any[]) { mockSessions = sessions },
     }
 
     ;(window as any).__testTerminal__ = testTerminal
@@ -87,7 +87,6 @@ export async function installTestMocks(page: Page) {
       resizeTerminal: noop,
       killTerminal: noop,
       setAutoPilot: noop,
-      setTmuxOption: noop,
       onTerminalData: (cb: Function) => { dataListeners.add(cb) },
       offTerminalData: (cb: Function) => { dataListeners.delete(cb) },
       onTerminalExit: (cb: Function) => { exitListeners.add(cb) },
@@ -138,10 +137,7 @@ export async function installTestMocks(page: Page) {
       onConductordLogs: () => {},
       offConductordLogs: () => {},
       conductordHealth: async () => true,
-      conductordGetSessions: async () => [],
-      conductordGetTmuxSessions: async () => mockTmuxSessions,
-      conductordKillTmuxSession: async () => ({ ok: true }),
-      conductordKillOrphanedTmux: async () => ({ ok: true, killed: 0 }),
+      conductordGetSessions: async () => mockSessions,
 
       // Service
       isConductordInstalled: async () => true,
@@ -159,29 +155,24 @@ export async function installTestMocks(page: Page) {
   })
 }
 
-/** Set the tmux sessions returned by the conductordGetTmuxSessions mock. */
-export async function setTmuxSessions(
+/** Set the sessions returned by the conductordGetSessions mock. */
+export async function setSessions(
   page: Page,
   sessions: Array<{
-    name: string
-    connected?: boolean
+    id: string
+    dead?: boolean
     command?: string
     cwd?: string
-    created?: number
-    activity?: number
   }>,
 ) {
-  const now = Math.floor(Date.now() / 1000)
   const filled = sessions.map(s => ({
-    connected: false,
+    dead: false,
     command: '/bin/zsh',
     cwd: '/tmp',
-    created: now,
-    activity: now,
     ...s,
   }))
   await page.evaluate(
-    (data) => (window as any).__testTerminal__.setTmuxSessions(data),
+    (data) => (window as any).__testTerminal__.setSessions(data),
     filled,
   )
 }

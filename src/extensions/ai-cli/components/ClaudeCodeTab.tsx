@@ -115,7 +115,7 @@ export default function ClaudeCodeTab({ tabId, groupId, isActive, tab }: TabProp
         ...tab,
         // Only transform if an initialCommand was explicitly set by the caller.
         // Restored tabs (from project file) have no initialCommand and should
-        // not auto-launch claude — the process is already running in tmux.
+        // not auto-launch claude — the process is already running.
         initialCommand: tab.initialCommand
           ? buildClaudeCommand(tab.initialCommand, settings, tab.apiKey)
           : undefined,
@@ -123,7 +123,7 @@ export default function ClaudeCodeTab({ tabId, groupId, isActive, tab }: TabProp
       onPtyData={onPtyData}
       onTerminalReady={handleTerminalReady}
       onSessionReady={(isNew: boolean, opts?: { autoPilot?: boolean }) => {
-        updateTab(groupId, tabId, { hasTmuxSession: true })
+        updateTab(groupId, tabId, { hasSession: true })
         handleSessionReady(isNew, opts)
       }}
       interceptKeys={interceptKeys}

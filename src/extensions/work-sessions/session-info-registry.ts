@@ -4,13 +4,13 @@ import type { WorkSession } from '@/types/work-session'
 
 /** Context passed to session info providers for rendering custom rows. */
 export interface SessionInfoContext {
-  /** Raw tmux session name */
-  tmuxName: string
+  /** Session name / identifier */
+  sessionName: string
   /** Current working directory */
   cwd: string
   /** Running process name (e.g. "claude", "zsh", "codex") */
   command: string
-  /** Whether tmux has attached clients */
+  /** Whether the session has an attached client */
   connected: boolean
   /** Whether a tab is open for this session in Conductor */
   hasOpenTab: boolean

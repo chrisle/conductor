@@ -108,7 +108,7 @@ useSessionInfoRegistry.getState().register({
 useSessionInfoRegistry.getState().unregister('my-extension-info')
 ```
 
-`SessionInfoContext` provides: `tmuxName`, `cwd`, `command`, `connected`, `hasOpenTab`, `isThinking`, `workSession`.
+`SessionInfoContext` provides: `sessionName`, `cwd`, `command`, `connected`, `hasOpenTab`, `isThinking`, `workSession`.
 
 ## E2E Testing
 
@@ -135,14 +135,12 @@ const page = context.pages()[0]
 
 ### Process cleanup
 
-Always kill stale processes before starting or iterating on tests. Leftover Electron, conductord, and tmux processes get stuck and cause flaky failures or port conflicts.
+Always kill stale processes before starting or iterating on tests. Leftover Electron and conductord processes get stuck and cause flaky failures or port conflicts.
 
 ```sh
 pkill -f conductord 2>/dev/null
 pkill -f "Electron" 2>/dev/null
 pkill -f "electron-vite" 2>/dev/null
-# Kill conductor's dedicated tmux server
-/Users/chrisle/Library/Caches/conductor/tmux/tmux -u -L conductor kill-server 2>/dev/null
 sleep 2
 ```
 

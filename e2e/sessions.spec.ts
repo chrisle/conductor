@@ -4,7 +4,7 @@ import {
   waitForApp,
   addTerminalTab,
   feedTerminalData,
-  setTmuxSessions,
+  setSessions,
 } from './helpers'
 
 // ── Helpers ──────────────────────────────────────────────
@@ -17,12 +17,13 @@ async function openSessionsSidebar(page: import('@playwright/test').Page) {
   await page.locator('text=Sessions').first().waitFor({ state: 'visible', timeout: 3000 })
 }
 
-/** Inject mock tmux sessions and re-mount the sidebar so it fetches them. */
+/** Inject mock sessions and re-mount the sidebar so it fetches them. */
 async function injectSessions(
   page: import('@playwright/test').Page,
   sessions: Array<{ name: string; [k: string]: any }>,
 ) {
-  await setTmuxSessions(page, sessions)
+  // Map name→id for the conductordGetSessions mock format
+  await setSessions(page, sessions.map(s => ({ id: s.name, ...s })))
   // Close sidebar, wait for unmount, then reopen so the hook's initial
   // refresh() call picks up the new mock data.
   await page.evaluate(() => {
@@ -32,7 +33,7 @@ async function injectSessions(
   await page.evaluate(() => {
     ;(window as any).__stores__.activityBar.getState().setActiveExtension('work-sessions')
   })
-  // Wait for the async refresh() inside useTmuxSessions to complete
+  // Wait for the async refresh() inside useConductorSessions to complete
   await page.waitForTimeout(300)
 }
 
@@ -98,12 +99,12 @@ test.describe('Sessions Sidebar', () => {
     await waitForApp(page)
   })
 
-  test('shows empty state when no tmux sessions exist', async ({ page }) => {
+  test('shows empty state when no sessions exist', async ({ page }) => {
     await openSessionsSidebar(page)
-    await expect(page.locator('text=No tmux sessions running')).toBeVisible()
+    await expect(page.locator('text=No active sessions')).toBeVisible()
   })
 
-  test('displays live tmux sessions', async ({ page }) => {
+  test('displays live sessions', async ({ page }) => {
     await openSessionsSidebar(page)
     await injectSessions(page, [
       { name: 'my-shell', cwd: '/Users/test/project' },
@@ -118,7 +119,7 @@ test.describe('Sessions Sidebar', () => {
     await injectSessions(page, [{ name: 'click-test', cwd: '/tmp' }])
     await page.locator('text=shell').first().click()
 
-    // Tab should be created with the tmux session name as its ID
+    // Tab should be created with the session name as its ID
     const tabIds = await getOpenTabIds(page)
     expect(tabIds).toContain('click-test')
   })

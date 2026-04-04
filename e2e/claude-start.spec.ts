@@ -2,7 +2,7 @@
  * E2E test: Clicking + → Claude → Default must start Claude Code.
  *
  * Connects Playwright to the real Electron app via CDP so we have full
- * access to window.electronAPI, conductord, and tmux — no mocks.
+ * access to window.electronAPI and conductord — no mocks.
  *
  * Catches the regression where clicking "+" drops into a bare shell
  * instead of launching Claude Code.
