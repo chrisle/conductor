@@ -16,6 +16,7 @@ import { useLayoutStore } from './store/layout'
 import { useSidebarStore } from './store/sidebar'
 import { useProjectStore } from './store/project'
 import { useActivityBarStore } from './store/activityBar'
+import { useUIStore } from './store/ui'
 import { initializeExtensions } from './extensions'
 import { mountConductorAPI } from './extensions/api'
 import { loadExternalExtensions } from './extensions/loader'
@@ -55,6 +56,7 @@ loadExternalExtensions().catch(err => console.error('Failed to load external ext
   sidebar: useSidebarStore,
   project: useProjectStore,
   activityBar: useActivityBarStore,
+  ui: useUIStore,
 }
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
