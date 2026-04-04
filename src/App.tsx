@@ -12,6 +12,7 @@ import { useUIStore } from './store/ui'
 import { useConfigStore } from './store/config'
 import { useWorkSessionsStore } from './store/work-sessions'
 import { initializeDefaultProject, saveProject, autosaveLayout } from './lib/project-io'
+import { startUsageScraper, stopUsageScraper } from './lib/claude-usage-scraper'
 
 function App(): React.ReactElement {
   const zoom = useUIStore(s => s.zoom)
@@ -22,6 +23,12 @@ function App(): React.ReactElement {
   useEffect(() => {
     useConfigStore.getState().initialize()
     useWorkSessionsStore.getState().initialize()
+  }, [])
+
+  // Start Claude usage scraper (runs every 5 minutes)
+  useEffect(() => {
+    startUsageScraper()
+    return () => stopUsageScraper()
   }, [])
 
   // Load persisted favorites from disk on startup

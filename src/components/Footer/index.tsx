@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react'
-import { Activity, GitBranch, Minus, Plus } from 'lucide-react'
+import { Activity, GitBranch, Minus, Plus, RefreshCw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useSidebarStore } from '@/store/sidebar'
 import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useUIStore } from '@/store/ui'
+import { useClaudeUsageStore } from '@/store/claude-usage'
+import { scrapeNow } from '@/lib/claude-usage-scraper'
 
 
 function Item({ children }: { children: React.ReactNode }) {
@@ -56,6 +59,71 @@ function ZoomControl() {
       </button>
     </span>
   )
+}
+
+function ClaudeUsageIndicator() {
+  const { usage, scraping, error } = useClaudeUsageStore()
+
+  if (!usage && !scraping && !error) return null
+
+  const label = scraping
+    ? 'Checking...'
+    : error
+      ? 'Usage: error'
+      : usage?.percentUsed != null
+        ? `Usage: ${usage.percentUsed}%`
+        : usage?.statusLine
+          ? `Usage: ${usage.statusLine.slice(0, 40)}`
+          : 'Usage: --'
+
+  const timeAgo = usage?.lastUpdated
+    ? formatTimeAgo(usage.lastUpdated)
+    : null
+
+  const tooltipText = [
+    usage?.statusLine,
+    timeAgo ? `Updated ${timeAgo}` : null,
+    error ? `Error: ${error}` : null,
+  ].filter(Boolean).join('\n')
+
+  const barColor = usage?.percentUsed != null
+    ? usage.percentUsed >= 90 ? 'text-red-400' : usage.percentUsed >= 70 ? 'text-amber-400' : 'text-emerald-400'
+    : 'text-zinc-500'
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={() => scrapeNow()}
+            className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer px-2"
+          >
+            {scraping ? (
+              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+            ) : (
+              <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                usage?.percentUsed != null
+                  ? usage.percentUsed >= 90 ? 'bg-red-400' : usage.percentUsed >= 70 ? 'bg-amber-400' : 'bg-emerald-400'
+                  : error ? 'bg-red-400' : 'bg-zinc-500'
+              }`} />
+            )}
+            <span className={barColor}>{label}</span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="bg-zinc-900 border-zinc-700 text-xs max-w-[300px] whitespace-pre-line">
+          {tooltipText || 'Claude API usage'}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
+}
+
+function formatTimeAgo(ts: number): string {
+  const diff = Math.floor((Date.now() - ts) / 1000)
+  if (diff < 60) return 'just now'
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  return `${Math.floor(diff / 86400)}d ago`
 }
 
 export default function Footer(): React.ReactElement {
@@ -154,6 +222,9 @@ export default function Footer(): React.ReactElement {
       )}
 
       <div className="flex-1" />
+
+      <ClaudeUsageIndicator />
+      <Separator orientation="vertical" className="h-3 bg-zinc-800" />
 
       <Item>
         <Activity className={`w-2.5 h-2.5 ${conductord.ok ? 'text-emerald-500' : 'text-red-500'}`} />
