@@ -96,6 +96,12 @@ export default function GoToDialog({ open, onOpenChange }: GoToDialogProps): Rea
             placeholder={rootPath ? `Change directory from ${friendly(rootPath)}...` : 'Change directory...'}
             value={inputValue}
             onValueChange={handleInputChange}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && inputValue.trim()) {
+                e.preventDefault()
+                navigateTo(inputValue.trim())
+              }
+            }}
           />
           <CommandList>
             <CommandEmpty>No results found.</CommandEmpty>
