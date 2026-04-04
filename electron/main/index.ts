@@ -185,6 +185,19 @@ app.whenReady().then(async () => {
   })
 })
 
+// Intercept Cmd+Q / app.quit() — ask each window to check for unsaved changes
+// before allowing the quit to proceed.
+app.on('before-quit', (e) => {
+  const windows = BrowserWindow.getAllWindows()
+  for (const win of windows) {
+    if (!win.isDestroyed()) {
+      e.preventDefault()
+      win.webContents.send('window:closeRequested')
+      return
+    }
+  }
+})
+
 app.on('window-all-closed', () => {
   // Always quit the Electron app when all windows close — conductord runs
   // as a detached process so its system tray keeps running independently.
