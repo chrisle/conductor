@@ -151,6 +151,9 @@ export function registerTerminalBridge(): void {
     const session = sessions.get(id)
     if (session) {
       session.intentionalClose = true
+      if (session.ws.readyState === WebSocket.OPEN) {
+        session.ws.send(JSON.stringify({ type: 'kill' }))
+      }
       session.ws.close()
       sessions.delete(id)
     }
