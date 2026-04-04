@@ -89,6 +89,7 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcut[] = [
   { id: 'goToFile', label: 'Go to File', keys: 'Meta+g' },
   { id: 'nextTab', label: 'Next Tab', keys: 'Meta+Shift+]' },
   { id: 'prevTab', label: 'Previous Tab', keys: 'Meta+Shift+[' },
+  { id: 'toggleSidebar', label: 'Toggle Sidebar', keys: 'Meta+b' },
   { id: 'zoomIn', label: 'Zoom In', keys: 'Meta+=' },
   { id: 'zoomOut', label: 'Zoom Out', keys: 'Meta+-' },
   { id: 'zoomReset', label: 'Reset Zoom', keys: 'Meta+0' },

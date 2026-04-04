@@ -8,6 +8,7 @@ import { useSidebarStore } from './store/sidebar'
 import { useTabsStore } from './store/tabs'
 import { useLayoutStore } from './store/layout'
 import { useProjectStore } from './store/project'
+import { useActivityBarStore } from './store/activityBar'
 import { useUIStore } from './store/ui'
 import { useConfigStore } from './store/config'
 import { useWorkSessionsStore } from './store/work-sessions'
@@ -116,6 +117,12 @@ function App(): React.ReactElement {
       const delta = matchesShortcut('prevTab') ? -1 : 1
       const next = (idx + delta + group.tabs.length) % group.tabs.length
       useTabsStore.getState().setActiveTab(groupId, group.tabs[next].id)
+      return
+    }
+
+    if (matchesShortcut('toggleSidebar')) {
+      e.preventDefault()
+      useActivityBarStore.getState().toggleSidebar()
       return
     }
 
