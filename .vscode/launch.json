@@ -5,8 +5,9 @@
       "name": "Dev",
       "type": "node",
       "request": "launch",
-      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron-vite",
+      "runtimeExecutable": "npm",
       "runtimeArgs": [
+        "run-script",
         "dev"
       ],
       "cwd": "${workspaceFolder}",

@@ -56,6 +56,8 @@ export interface ConductorProject {
   settings?: ProjectSettings
   /** Custom titles for tmux sessions, keyed by session name (tab ID) */
   sessionTitles?: Record<string, string>
+  /** Autopilot state per tmux session, keyed by session name (tab ID) */
+  sessionAutoPilot?: Record<string, boolean>
   /** User-defined session groups */
   sessionGroups?: SessionGroup[]
   sessionSort?: SessionSortOrder
@@ -73,6 +75,7 @@ export interface ProjectState {
   projectSettings: ProjectSettings | undefined
   workspaceSettings: ProjectSettings | undefined
   sessionTitles: Record<string, string>
+  sessionAutoPilot: Record<string, boolean>
   sessionGroups: SessionGroup[]
   sessionSort: SessionSortOrder
   ungroupedSessionOrder: string[]
@@ -94,6 +97,9 @@ export interface ProjectState {
   setSessionTitle: (sessionId: string, title: string) => void
   clearSessionTitle: (sessionId: string) => void
   setSessionTitles: (titles: Record<string, string>) => void
+  setSessionAutoPilot: (sessionId: string, enabled: boolean) => void
+  clearSessionAutoPilot: (sessionId: string) => void
+  setSessionAutoPilots: (states: Record<string, boolean>) => void
   setSessionGroups: (groups: SessionGroup[]) => void
   addSessionGroup: (name: string, sessionIds: string[]) => string
   removeSessionGroup: (groupId: string) => void
@@ -121,8 +127,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   projectSettings: undefined,
   workspaceSettings: undefined,
   sessionTitles: {},
+  sessionAutoPilot: {},
   sessionGroups: [],
-  sessionSort: 'created' as SessionSortOrder,
+  sessionSort: 'none' as SessionSortOrder,
   ungroupedSessionOrder: [] as string[],
 
   setProjectSettings: (settings) => set({ projectSettings: settings }),
@@ -148,7 +155,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     workspaceNames: [], dirtyWorkspaces: new Set(),
     jiraSpaceKeys: [], jiraConnectionId: null,
     projectSettings: undefined, workspaceSettings: undefined,
-    sessionTitles: {}, sessionGroups: [], sessionSort: 'created' as SessionSortOrder, ungroupedSessionOrder: [],
+    sessionTitles: {}, sessionAutoPilot: {}, sessionGroups: [], sessionSort: 'none' as SessionSortOrder, ungroupedSessionOrder: [],
   }),
 
   setActiveWorkspace: (name) => set({ activeWorkspace: name }),
@@ -224,6 +231,24 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   setSessionTitles: (titles) => set({ sessionTitles: titles }),
+
+  setSessionAutoPilot: (sessionId, enabled) => {
+    set(state => ({
+      sessionAutoPilot: { ...state.sessionAutoPilot, [sessionId]: enabled }
+    }))
+    get().markWorkspaceDirty()
+  },
+
+  clearSessionAutoPilot: (sessionId) => {
+    set(state => {
+      const next = { ...state.sessionAutoPilot }
+      delete next[sessionId]
+      return { sessionAutoPilot: next }
+    })
+    get().markWorkspaceDirty()
+  },
+
+  setSessionAutoPilots: (states) => set({ sessionAutoPilot: states }),
 
   setSessionGroups: (groups) => set({ sessionGroups: groups }),
 

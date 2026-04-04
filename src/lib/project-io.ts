@@ -101,6 +101,7 @@ export function serializeProject(): ConductorProject {
     } : undefined,
     settings: project.projectSettings,
     sessionTitles: Object.keys(project.sessionTitles).length > 0 ? project.sessionTitles : undefined,
+    sessionAutoPilot: Object.keys(project.sessionAutoPilot).length > 0 ? project.sessionAutoPilot : undefined,
     sessionGroups: project.sessionGroups.length > 0 ? project.sessionGroups : undefined,
     sessionSort: project.sessionSort !== 'created' ? project.sessionSort : undefined,
   }
@@ -198,8 +199,9 @@ export function restoreProject(project: ConductorProject, projectDir?: string): 
     projectStore.setWorkspaceSettings(activeWorkspace.settings)
   }
 
-  // Restore session titles
+  // Restore session titles and autopilot states
   projectStore.setSessionTitles(project.sessionTitles || {})
+  projectStore.setSessionAutoPilots(project.sessionAutoPilot || {})
 
   // Restore session groups and sort
   projectStore.setSessionGroups(project.sessionGroups || [])
@@ -246,6 +248,7 @@ export async function saveProject(filePath: string): Promise<void> {
     } : undefined,
     settings: project.projectSettings,
     sessionTitles: Object.keys(project.sessionTitles).length > 0 ? project.sessionTitles : undefined,
+    sessionAutoPilot: Object.keys(project.sessionAutoPilot).length > 0 ? project.sessionAutoPilot : undefined,
     sessionGroups: project.sessionGroups.length > 0 ? project.sessionGroups : undefined,
     sessionSort: project.sessionSort !== 'created' ? project.sessionSort : undefined,
   }
@@ -583,6 +586,7 @@ function restoreAutosavedLayout(): boolean {
       sidebar: data.sidebar || { rootPath: null, expandedPaths: [] },
       activeExtensionId: data.activeExtensionId ?? null,
       sessionTitles: data.sessionTitles,
+      sessionAutoPilot: data.sessionAutoPilot,
       sessionGroups: data.sessionGroups,
       sessionSort: data.sessionSort,
     }

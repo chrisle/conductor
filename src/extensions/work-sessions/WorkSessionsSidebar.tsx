@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowDownAZ, ArrowUpDown, Bot, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, Folder, FolderPlus, GitBranch, GripVertical, Hand, Hash, Key, LayoutGrid, Link, Pencil, Square, Terminal, Trash2, X } from 'lucide-react'
+import { ArrowDownAZ, ArrowUpDown, Bot, ChevronDown, ChevronRight, Clock, Copy, Folder, FolderOpen, FolderPlus, GitBranch, Hand, Hash, Info, Key, LayoutGrid, Link, Pencil, Square, Terminal, Trash2, X } from 'lucide-react'
 import {
   Tooltip,
   TooltipContent,
@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import SidebarLayout from '@/components/Sidebar/SidebarLayout'
 import { getSessionTitle, setSessionTitle, clearSessionTitle } from '@/lib/session-titles'
+import { clearSessionAutoPilot } from '@/lib/session-autopilot'
 import { useWorkSessionsStore } from '@/store/work-sessions'
 import { useTabsStore } from '@/store/tabs'
 import { useConfigStore } from '@/store/config'
@@ -242,18 +243,31 @@ function tileSessions(sessions: EnrichedSession[]) {
 
 // ── Row components ─────────────────────────────────────
 
+function getSessionTypeIcon(session: EnrichedSession): { Icon: React.ComponentType<{ className?: string }>; className: string } {
+  const cmd = session.tmux.command.toLowerCase()
+  if (cmd === 'claude' || session.tmux.name.startsWith('claude-code-'))
+    return { Icon: Bot, className: 'text-orange-400' }
+  if (cmd === 'codex' || session.tmux.name.startsWith('codex-'))
+    return { Icon: Bot, className: 'text-emerald-400' }
+  if (['zsh', 'bash', 'fish'].includes(cmd))
+    return { Icon: Terminal, className: 'text-zinc-400' }
+  return { Icon: Terminal, className: 'text-zinc-500' }
+}
+
 function TmuxRow({
   session,
   isSelected,
   selectedIds,
   onRowClick,
   onDragStateChange,
+  onKill,
 }: {
   session: EnrichedSession
   isSelected: boolean
   selectedIds: Set<string>
   onRowClick: (name: string, e: React.MouseEvent) => void
   onDragStateChange: (dragging: boolean) => void
+  onKill: () => void
 }) {
   const { addTab } = useTabsStore()
   const { focusedGroupId } = useLayoutStore()
@@ -355,9 +369,12 @@ function TmuxRow({
   }
 
   return (
-    <div>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div>
       <div
         draggable
+            onDoubleClick={openInTab}
             onClick={e => onRowClick(session.tmux.name, e)}
             onDragStart={e => {
               const names = isSelected && selectedIds.size > 1
@@ -380,33 +397,23 @@ function TmuxRow({
               setIsDragging(false)
               onDragStateChange(false)
             }}
-            className={`group flex items-center gap-1 rounded px-1 py-1.5 cursor-pointer transition-all ${
+            style={{ paddingLeft: '20px' }}
+            className={`flex items-center gap-1 px-2 py-[3px] cursor-pointer select-none transition-colors text-ui-base ${
               isDragging
                 ? 'opacity-30'
                 : isSelected
-                  ? 'bg-indigo-900/30 ring-1 ring-indigo-500/50'
-                  : 'hover:bg-zinc-800/50'
+                  ? 'bg-zinc-800 text-zinc-100'
+                  : 'text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100'
             }`}
           >
-            {/* Drag handle (visual affordance) */}
-            <div className="shrink-0 cursor-grab text-zinc-500 hover:text-zinc-300 transition-colors active:cursor-grabbing">
-              <GripVertical className="w-3 h-3" />
-            </div>
-
-            {/* Status dot */}
             {isThinking ? (
-              <span className="w-2.5 h-2.5 shrink-0 rounded-full border border-zinc-500 border-t-zinc-200 animate-spin" style={{ animationDuration: '1.5s' }} />
-            ) : (
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                session.hasOpenTab ? 'bg-green-400' : 'bg-amber-400'
-              }`} />
-            )}
+              <span className="w-3.5 h-3.5 shrink-0 rounded-full border border-zinc-500 border-t-zinc-200 animate-spin flex-shrink-0" style={{ animationDuration: '1.5s' }} />
+            ) : (() => { const { Icon, className } = getSessionTypeIcon(session); return <Icon className={`w-3.5 h-3.5 shrink-0 ${className}`} /> })()}
 
-            {/* Label + secondary info */}
             {isRenaming ? (
               <input
                 ref={renameInputRef}
-                className="text-ui-base flex-1 min-w-0 bg-transparent border border-zinc-600 rounded px-1 py-0.5 outline-none text-zinc-100"
+                className="flex-1 bg-zinc-700 text-zinc-100 px-1 text-ui-base outline-none border border-blue-500"
                 value={renameValue}
                 onChange={e => setRenameValue(e.target.value)}
                 onKeyDown={e => {
@@ -418,42 +425,14 @@ function TmuxRow({
                 onClick={e => e.stopPropagation()}
               />
             ) : (
-              <span
-                className={`flex items-center min-w-0 flex-1 ${isThinking ? 'text-shimmer' : ''}`}
-                onDoubleClick={e => { e.stopPropagation(); startRename() }}
-              >
-                <span className={`text-ui-base font-medium truncate min-w-0 flex-1 ${isThinking ? '' : 'text-zinc-200'}`}>
-                  {label}
-                </span>
-                <span className={`text-ui-xs shrink-0 ml-1.5 ${isThinking ? '' : 'text-zinc-500'}`}>
+              <>
+                <span className={`truncate flex-1 ${isThinking ? 'text-shimmer' : ''}`}>{label}</span>
+                <span className="text-ui-xs shrink-0 ml-1.5 text-zinc-600">
                   {isThinking ? (thinkingTime || 'thinking') : relativeTime(session.tmux.activity)}
                 </span>
-              </span>
+              </>
             )}
 
-            {/* Expand chevron */}
-            <button
-              onClick={e => { e.stopPropagation(); setIsExpanded(!isExpanded) }}
-              className="shrink-0 p-0.5 rounded text-zinc-500 hover:text-zinc-200 transition-colors"
-            >
-              {isExpanded
-                ? <ChevronDown className="w-3 h-3" />
-                : <ChevronRight className="w-3 h-3" />
-              }
-            </button>
-
-            {/* Open in tab */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={openInTab}
-                  className="shrink-0 p-0.5 rounded text-zinc-500 hover:text-zinc-200 transition-colors"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Open in tab</TooltipContent>
-            </Tooltip>
           </div>
 
           {/* Expanded details */}
@@ -554,7 +533,24 @@ function TmuxRow({
               </div>
             </div>
           )}
-    </div>
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
+        <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={startRename}>
+          <Pencil className="w-3.5 h-3.5" />
+          Rename
+        </ContextMenuItem>
+        <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={() => setIsExpanded(!isExpanded)}>
+          <Info className="w-3.5 h-3.5" />
+          {isExpanded ? 'Hide info' : 'Info'}
+        </ContextMenuItem>
+        <ContextMenuSeparator className="bg-zinc-700" />
+        <ContextMenuItem className="gap-2 text-xs cursor-pointer text-red-400 focus:text-red-300" onSelect={onKill}>
+          <Trash2 className="w-3.5 h-3.5" />
+          Delete
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
 
@@ -647,6 +643,7 @@ function SessionGroupSection({
   isManualSort,
   onRefresh,
   sessionToGroup,
+  onKillSession,
 }: {
   group: SessionGroup | null
   sessions: EnrichedSession[]
@@ -657,6 +654,7 @@ function SessionGroupSection({
   isManualSort: boolean
   onRefresh: () => void
   sessionToGroup: Map<string, string>
+  onKillSession: (name: string) => void
 }) {
   const [isOpen, setIsOpen] = useState(true)
   const [isRenaming, setIsRenaming] = useState(false)
@@ -783,7 +781,7 @@ function SessionGroupSection({
 
   return (
     <div
-      className={`mb-3 rounded transition-colors ${
+      className={`transition-colors ${
         isDragOver
           ? 'bg-indigo-900/20'
           : isDraggingActive
@@ -794,21 +792,26 @@ function SessionGroupSection({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className="px-2 mb-1 flex items-center gap-1">
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="text-zinc-600 hover:text-zinc-400 transition-colors"
-        >
+      <div
+        className="flex items-center gap-1 px-2 py-[3px] cursor-pointer select-none text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100 transition-colors group text-ui-base"
+        onClick={() => setIsOpen(!isOpen)}
+        onDoubleClick={group ? e => { e.stopPropagation(); startRename() } : undefined}
+      >
+        <span className="text-zinc-500 shrink-0">
           {isOpen
             ? <ChevronDown className="w-3 h-3" />
             : <ChevronRight className="w-3 h-3" />
           }
-        </button>
+        </span>
+        {isOpen
+          ? <FolderOpen className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+          : <Folder className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+        }
 
         {isRenaming ? (
           <input
             ref={renameInputRef}
-            className="text-ui-xs flex-1 min-w-0 bg-transparent border border-zinc-600 rounded px-1 py-0.5 outline-none text-zinc-100 font-medium uppercase tracking-wider"
+            className="flex-1 bg-zinc-700 text-zinc-100 px-1 text-ui-base outline-none border border-blue-500"
             value={renameValue}
             onChange={e => setRenameValue(e.target.value)}
             onKeyDown={e => {
@@ -820,23 +823,18 @@ function SessionGroupSection({
             onClick={e => e.stopPropagation()}
           />
         ) : (
-          <span
-            className="text-ui-xs font-medium uppercase tracking-wider text-zinc-300 flex-1 min-w-0 truncate"
-            onDoubleClick={group ? () => startRename() : undefined}
-          >
-            {label}
-          </span>
+          <span className="flex-1 min-w-0 truncate">{label}</span>
         )}
 
-        <span className="text-ui-xs text-zinc-700">{sessions.length}</span>
+        <span className="text-ui-xs text-zinc-600 shrink-0">{sessions.length}</span>
 
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           {canTile && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
-                  onClick={() => tileSessions(attachedInGroup)}
-                  className="p-0.5 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition-colors"
+                  onClick={e => { e.stopPropagation(); tileSessions(attachedInGroup) }}
+                  className="p-0.5 rounded hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors"
                 >
                   <LayoutGrid className="w-3 h-3" />
                 </button>
@@ -850,8 +848,8 @@ function SessionGroupSection({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    onClick={startRename}
-                    className="p-0.5 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition-colors"
+                    onClick={e => { e.stopPropagation(); startRename() }}
+                    className="p-0.5 rounded hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors"
                   >
                     <Pencil className="w-3 h-3" />
                   </button>
@@ -861,8 +859,8 @@ function SessionGroupSection({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    onClick={handleDelete}
-                    className="p-0.5 rounded hover:bg-zinc-700 text-zinc-600 hover:text-red-400 transition-colors"
+                    onClick={e => { e.stopPropagation(); handleDelete() }}
+                    className="p-0.5 rounded hover:bg-zinc-700 text-zinc-500 hover:text-red-400 transition-colors"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -889,6 +887,7 @@ function SessionGroupSection({
                     selectedIds={selectedIds}
                     onRowClick={onRowClick}
                     onDragStateChange={onDragStateChange}
+                    onKill={() => onKillSession(s.tmux.name)}
                   />
                 </div>
               </React.Fragment>
@@ -999,6 +998,34 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
     }
   }, [flatSessionOrder])
 
+  async function handleKillSession(name: string) {
+    const sessionsStore = useWorkSessionsStore.getState()
+    const tabsState = useTabsStore.getState()
+    const projectState = useProjectStore.getState()
+
+    await window.electronAPI.conductordKillTmuxSession(name)
+    clearSessionTitle(name)
+    clearSessionAutoPilot(name)
+
+    const match = enriched.find(s => s.tmux.name === name)
+    if (match?.workSession?.status === 'active') {
+      await sessionsStore.completeSession(match.workSession.id)
+    }
+
+    const gid = sessionToGroup.get(name)
+    if (gid) projectState.removeSessionFromGroup(gid, name)
+
+    for (const [tabGroupId, group] of Object.entries(tabsState.groups)) {
+      if (group.tabs.some(t => t.id === name)) {
+        tabsState.removeTab(tabGroupId, name)
+        break
+      }
+    }
+
+    setSelectedIds(prev => { const next = new Set(prev); next.delete(name); return next })
+    refresh()
+  }
+
   async function killSelected() {
     const sessionsStore = useWorkSessionsStore.getState()
     const tabsState = useTabsStore.getState()
@@ -1007,6 +1034,7 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
     for (const name of selectedIds) {
       await window.electronAPI.conductordKillTmuxSession(name)
       clearSessionTitle(name)
+      clearSessionAutoPilot(name)
 
       // Complete associated work session
       const match = enriched.find(s => s.tmux.name === name)
@@ -1047,9 +1075,11 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
         },
       ]}
     >
-      <div className="p-1">
+      <ContextMenu>
+      <ContextMenuTrigger asChild>
+      <div className="min-h-full">
         {/* Sort toolbar */}
-        <div className="px-2 py-1 mb-2 border-b border-zinc-700/50 pb-2">
+        <div className="px-2 py-1 mb-1 border-b border-zinc-700/50 pb-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-1 text-ui-xs text-zinc-500 hover:text-zinc-300 transition-colors">
@@ -1092,6 +1122,7 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
               isManualSort={sessionSort === 'none'}
               onRefresh={refresh}
               sessionToGroup={sessionToGroup}
+              onKillSession={handleKillSession}
             />
           )
         })}
@@ -1107,6 +1138,7 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
           isManualSort={sessionSort === 'none'}
           onRefresh={refresh}
           sessionToGroup={sessionToGroup}
+          onKillSession={handleKillSession}
         />
 
         {/* Stale work sessions */}
@@ -1121,32 +1153,18 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
           </div>
         )}
 
-        {/* Selection action bar */}
-        {selectedIds.size > 0 && (
-          <div className="sticky bottom-0 bg-zinc-900 border-t border-zinc-700/50 p-2 mt-2 rounded">
-            <div className="flex items-center gap-2 text-ui-xs">
-              <span className="text-zinc-400 font-medium">{selectedIds.size} selected</span>
-              <div className="flex-1" />
-              <button
-                onClick={() => setSelectedIds(new Set())}
-                className="text-zinc-500 hover:text-zinc-300 transition-colors"
-              >
-                Clear
-              </button>
-            </div>
-
-            <div className="mt-1.5">
-              <button
-                onClick={killSelected}
-                className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-900/30 text-red-400 hover:bg-red-900/50 text-ui-xs transition-colors"
-              >
-                <Square className="w-3 h-3" />
-                Kill all
-              </button>
-            </div>
-          </div>
-        )}
       </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
+        <ContextMenuItem
+          className="gap-2 text-xs cursor-pointer"
+          onSelect={() => useProjectStore.getState().addSessionGroup('New Group', [])}
+        >
+          <FolderPlus className="w-3.5 h-3.5" />
+          New folder
+        </ContextMenuItem>
+      </ContextMenuContent>
+      </ContextMenu>
     </SidebarLayout>
   )
 }

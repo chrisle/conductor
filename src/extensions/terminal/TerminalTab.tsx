@@ -24,7 +24,7 @@ export default function TerminalTab({
   onSessionReady,
   interceptKeys,
   footer,
-  footerPosition = 'top',
+  footerPosition = 'bottom',
 }: TabProps & TerminalTabExtraProps): React.ReactElement {
   const cwd = tab.filePath;
   const initialCommand = tab.initialCommand;
@@ -372,7 +372,7 @@ export default function TerminalTab({
           });
         }
       };
-      el?.addEventListener("wheel", onWheel, { capture: true });
+      el?.addEventListener("wheel", onWheel, { capture: true, passive: false });
 
       let resizeTimer: ReturnType<typeof setTimeout> | null = null;
       const scheduleRefit = () => {
