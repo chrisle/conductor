@@ -3,10 +3,19 @@ import { nanoid } from '@/lib/nanoid'
 import type { LayoutNode } from './layout'
 import type { ProjectSettings } from '@/types/project-settings'
 
+/** @deprecated Use SessionFolder instead — kept for migration */
 export interface SessionGroup {
   id: string
   name: string
   sessionIds: string[]
+}
+
+export interface SessionFolder {
+  id: string
+  name: string
+  parentId: string | null  // null = root level
+  sessionIds: string[]     // sessions directly in this folder
+  collapsed: boolean
 }
 
 export type SessionSortOrder = 'none' | 'created' | 'alpha' | 'activity' | 'attached'
@@ -20,6 +29,7 @@ export interface SerializedTab {
   content?: string
   initialCommand?: string
   terminalHistory?: string
+  autoPilot?: boolean
 }
 
 export interface SerializedTabGroup {
@@ -56,11 +66,11 @@ export interface ConductorProject {
   settings?: ProjectSettings
   /** Custom titles for sessions, keyed by session name (tab ID) */
   sessionTitles?: Record<string, string>
-  /** Autopilot state per tmux session, keyed by session name (tab ID) */
-  sessionAutoPilot?: Record<string, boolean>
-  /** User-defined session groups */
+  /** @deprecated Use sessionFolders instead */
   sessionGroups?: SessionGroup[]
   sessionSort?: SessionSortOrder
+  /** Nested folder tree for sessions */
+  sessionFolders?: SessionFolder[]
 }
 
 export interface ProjectState {
@@ -75,10 +85,7 @@ export interface ProjectState {
   projectSettings: ProjectSettings | undefined
   workspaceSettings: ProjectSettings | undefined
   sessionTitles: Record<string, string>
-  sessionAutoPilot: Record<string, boolean>
-  sessionGroups: SessionGroup[]
-  sessionSort: SessionSortOrder
-  ungroupedSessionOrder: string[]
+  sessionFolders: SessionFolder[]
 
   setProject: (filePath: string, name: string) => void
   setJiraConfig: (spaceKeys: string[], connectionId?: string) => void
@@ -97,19 +104,18 @@ export interface ProjectState {
   setSessionTitle: (sessionId: string, title: string) => void
   clearSessionTitle: (sessionId: string) => void
   setSessionTitles: (titles: Record<string, string>) => void
-  setSessionAutoPilot: (sessionId: string, enabled: boolean) => void
-  clearSessionAutoPilot: (sessionId: string) => void
-  setSessionAutoPilots: (states: Record<string, boolean>) => void
-  setSessionGroups: (groups: SessionGroup[]) => void
-  addSessionGroup: (name: string, sessionIds: string[]) => string
-  removeSessionGroup: (groupId: string) => void
-  renameSessionGroup: (groupId: string, name: string) => void
-  addSessionsToGroup: (groupId: string, sessionIds: string[]) => void
-  removeSessionFromGroup: (groupId: string, sessionId: string) => void
-  reorderSessionInGroup: (groupId: string, sessionId: string, beforeSessionId: string | null) => void
-  setUngroupedSessionOrder: (order: string[]) => void
-  reorderUngroupedSession: (sessionId: string, beforeSessionId: string | null) => void
-  setSessionSort: (sort: SessionSortOrder) => void
+
+  // Folder operations
+  setSessionFolders: (folders: SessionFolder[]) => void
+  addSessionFolder: (name: string, parentId: string | null) => string
+  removeSessionFolder: (folderId: string) => void
+  renameSessionFolder: (folderId: string, name: string) => void
+  toggleFolderCollapsed: (folderId: string) => void
+  moveSessionToFolder: (sessionId: string, folderId: string | null) => void
+  moveSessionsToFolder: (sessionIds: string[], folderId: string | null) => void
+  moveFolderToFolder: (folderId: string, targetParentId: string | null) => void
+  removeSessionFromAllFolders: (sessionId: string) => void
+
   addRecentProject: (name: string, path: string) => void
   loadRecentProjects: () => Promise<void>
   saveRecentProjects: () => Promise<void>
@@ -127,10 +133,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   projectSettings: undefined,
   workspaceSettings: undefined,
   sessionTitles: {},
-  sessionAutoPilot: {},
-  sessionGroups: [],
-  sessionSort: 'none' as SessionSortOrder,
-  ungroupedSessionOrder: [] as string[],
+  sessionFolders: [],
 
   setProjectSettings: (settings) => set({ projectSettings: settings }),
   setWorkspaceSettings: (settings) => set({ workspaceSettings: settings }),
@@ -155,7 +158,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     workspaceNames: [], dirtyWorkspaces: new Set(),
     jiraSpaceKeys: [], jiraConnectionId: null,
     projectSettings: undefined, workspaceSettings: undefined,
-    sessionTitles: {}, sessionAutoPilot: {}, sessionGroups: [], sessionSort: 'none' as SessionSortOrder, ungroupedSessionOrder: [],
+    sessionTitles: {}, sessionFolders: [],
   }),
 
   setActiveWorkspace: (name) => set({ activeWorkspace: name }),
@@ -232,124 +235,124 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   setSessionTitles: (titles) => set({ sessionTitles: titles }),
 
-  setSessionAutoPilot: (sessionId, enabled) => {
-    set(state => ({
-      sessionAutoPilot: { ...state.sessionAutoPilot, [sessionId]: enabled }
-    }))
-    get().markWorkspaceDirty()
-  },
+  // ── Folder operations ──────────────────────────────────
 
-  clearSessionAutoPilot: (sessionId) => {
-    set(state => {
-      const next = { ...state.sessionAutoPilot }
-      delete next[sessionId]
-      return { sessionAutoPilot: next }
-    })
-    get().markWorkspaceDirty()
-  },
+  setSessionFolders: (folders) => set({ sessionFolders: folders }),
 
-  setSessionAutoPilots: (states) => set({ sessionAutoPilot: states }),
-
-  setSessionGroups: (groups) => set({ sessionGroups: groups }),
-
-  addSessionGroup: (name, sessionIds) => {
+  addSessionFolder: (name, parentId) => {
     const id = nanoid()
-    set(state => {
-      // Remove sessionIds from any existing groups first
-      const idSet = new Set(sessionIds)
-      const cleaned = state.sessionGroups.map(g => ({
-        ...g,
-        sessionIds: g.sessionIds.filter(sid => !idSet.has(sid)),
-      }))
-      return { sessionGroups: [...cleaned, { id, name, sessionIds }] }
-    })
+    set(state => ({
+      sessionFolders: [...state.sessionFolders, { id, name, parentId, sessionIds: [], collapsed: false }]
+    }))
     get().markWorkspaceDirty()
     return id
   },
 
-  removeSessionGroup: (groupId) => {
-    set(state => ({
-      sessionGroups: state.sessionGroups.filter(g => g.id !== groupId),
-    }))
+  removeSessionFolder: (folderId) => {
+    set(state => {
+      // Collect all descendant folder IDs recursively
+      const toRemove = new Set<string>()
+      function collectDescendants(id: string) {
+        toRemove.add(id)
+        for (const f of state.sessionFolders) {
+          if (f.parentId === id) collectDescendants(f.id)
+        }
+      }
+      collectDescendants(folderId)
+
+      // Keep folders not being removed; reparent children of removed folders' direct children go to root
+      return {
+        sessionFolders: state.sessionFolders.filter(f => !toRemove.has(f.id)),
+      }
+    })
     get().markWorkspaceDirty()
   },
 
-  renameSessionGroup: (groupId, name) => {
+  renameSessionFolder: (folderId, name) => {
     set(state => ({
-      sessionGroups: state.sessionGroups.map(g =>
-        g.id === groupId ? { ...g, name } : g
+      sessionFolders: state.sessionFolders.map(f =>
+        f.id === folderId ? { ...f, name } : f
       ),
     }))
     get().markWorkspaceDirty()
   },
 
-  addSessionsToGroup: (groupId, sessionIds) => {
+  toggleFolderCollapsed: (folderId) => {
+    set(state => ({
+      sessionFolders: state.sessionFolders.map(f =>
+        f.id === folderId ? { ...f, collapsed: !f.collapsed } : f
+      ),
+    }))
+  },
+
+  moveSessionToFolder: (sessionId, folderId) => {
+    set(state => {
+      // Remove from all folders first
+      let folders = state.sessionFolders.map(f => ({
+        ...f,
+        sessionIds: f.sessionIds.filter(sid => sid !== sessionId),
+      }))
+      // Add to target folder if specified
+      if (folderId) {
+        folders = folders.map(f =>
+          f.id === folderId
+            ? { ...f, sessionIds: [...f.sessionIds, sessionId] }
+            : f
+        )
+      }
+      return { sessionFolders: folders }
+    })
+    get().markWorkspaceDirty()
+  },
+
+  moveSessionsToFolder: (sessionIds, folderId) => {
     set(state => {
       const idSet = new Set(sessionIds)
-      // Remove from other groups first
-      const updated = state.sessionGroups.map(g => {
-        if (g.id === groupId) {
-          const merged = new Set([...g.sessionIds, ...sessionIds])
-          return { ...g, sessionIds: [...merged] }
-        }
-        return { ...g, sessionIds: g.sessionIds.filter(sid => !idSet.has(sid)) }
-      })
-      return { sessionGroups: updated }
+      // Remove from all folders first
+      let folders = state.sessionFolders.map(f => ({
+        ...f,
+        sessionIds: f.sessionIds.filter(sid => !idSet.has(sid)),
+      }))
+      // Add to target folder if specified
+      if (folderId) {
+        folders = folders.map(f =>
+          f.id === folderId
+            ? { ...f, sessionIds: [...f.sessionIds, ...sessionIds] }
+            : f
+        )
+      }
+      return { sessionFolders: folders }
     })
     get().markWorkspaceDirty()
   },
 
-  removeSessionFromGroup: (groupId, sessionId) => {
+  moveFolderToFolder: (folderId, targetParentId) => {
+    // Prevent moving a folder into itself or a descendant
+    const state = get()
+    function isDescendant(parentId: string, childId: string): boolean {
+      for (const f of state.sessionFolders) {
+        if (f.parentId === parentId && f.id === childId) return true
+        if (f.parentId === parentId && isDescendant(f.id, childId)) return true
+      }
+      return false
+    }
+    if (targetParentId && (folderId === targetParentId || isDescendant(folderId, targetParentId))) return
+
     set(state => ({
-      sessionGroups: state.sessionGroups.map(g =>
-        g.id === groupId
-          ? { ...g, sessionIds: g.sessionIds.filter(sid => sid !== sessionId) }
-          : g
+      sessionFolders: state.sessionFolders.map(f =>
+        f.id === folderId ? { ...f, parentId: targetParentId } : f
       ),
     }))
     get().markWorkspaceDirty()
   },
 
-  reorderSessionInGroup: (groupId, sessionId, beforeSessionId) => {
+  removeSessionFromAllFolders: (sessionId) => {
     set(state => ({
-      sessionGroups: state.sessionGroups.map(g => {
-        if (g.id !== groupId) return g
-        const ids = g.sessionIds.filter(sid => sid !== sessionId)
-        if (beforeSessionId === null) {
-          ids.push(sessionId)
-        } else {
-          const idx = ids.indexOf(beforeSessionId)
-          if (idx !== -1) ids.splice(idx, 0, sessionId)
-          else ids.push(sessionId)
-        }
-        return { ...g, sessionIds: ids }
-      }),
+      sessionFolders: state.sessionFolders.map(f => ({
+        ...f,
+        sessionIds: f.sessionIds.filter(sid => sid !== sessionId),
+      })),
     }))
-    get().markWorkspaceDirty()
-  },
-
-  setUngroupedSessionOrder: (order) => {
-    set({ ungroupedSessionOrder: order })
-    get().markWorkspaceDirty()
-  },
-
-  reorderUngroupedSession: (sessionId, beforeSessionId) => {
-    set(state => {
-      const ids = state.ungroupedSessionOrder.filter(sid => sid !== sessionId)
-      if (beforeSessionId === null) {
-        ids.push(sessionId)
-      } else {
-        const idx = ids.indexOf(beforeSessionId)
-        if (idx !== -1) ids.splice(idx, 0, sessionId)
-        else ids.push(sessionId)
-      }
-      return { ungroupedSessionOrder: ids }
-    })
-    get().markWorkspaceDirty()
-  },
-
-  setSessionSort: (sort) => {
-    set({ sessionSort: sort })
     get().markWorkspaceDirty()
   },
 

@@ -15,8 +15,7 @@ function resetStore() {
     projectSettings: undefined,
     workspaceSettings: undefined,
     sessionTitles: {},
-    sessionGroups: [],
-    sessionSort: 'created',
+    sessionFolders: [],
   })
 }
 

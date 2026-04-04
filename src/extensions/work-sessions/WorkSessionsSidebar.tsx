@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowDownAZ, ArrowUpDown, Bot, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, Folder, FolderPlus, GitBranch, GripVertical, Hand, Hash, Key, LayoutGrid, Link, Pencil, Square, Terminal, Trash2, X } from 'lucide-react'
+import { Bot, ChevronDown, ChevronRight, Copy, Folder, FolderOpen, FolderPlus, GitBranch, Hash, Info, Key, LayoutGrid, Pencil, Search, Square, Terminal, Trash2 } from 'lucide-react'
 import {
   Tooltip,
   TooltipContent,
@@ -15,19 +15,15 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { cn } from '@/lib/utils'
 import SidebarLayout from '@/components/Sidebar/SidebarLayout'
 import { getSessionTitle, setSessionTitle, clearSessionTitle } from '@/lib/session-titles'
 import { useWorkSessionsStore } from '@/store/work-sessions'
 import { useTabsStore } from '@/store/tabs'
 import { useConfigStore } from '@/store/config'
 import { useLayoutStore, type LayoutNode } from '@/store/layout'
-import { useProjectStore, type SessionGroup, type SessionSortOrder } from '@/store/project'
+import { useProjectStore, type SessionFolder } from '@/store/project'
 import type { WorkSession } from '@/types/work-session'
 import { useSessionInfoRegistry, type SessionInfoContext } from './session-info-registry'
 
@@ -40,13 +36,10 @@ interface ConductorSession {
   cwd: string
 }
 
-/** A live session enriched with work-session + tab context */
 interface EnrichedSession {
   session: ConductorSession
   workSession: WorkSession | null
-  /** Ticket key derived from session name (t-NP3-14 → NP3-14) */
   ticketKey: string | null
-  /** Whether an open tab is attached to this session */
   hasOpenTab: boolean
 }
 
@@ -57,50 +50,24 @@ function ticketKeyFromSessionName(name: string): string | null {
   return null
 }
 
-/** Human-readable label for a session */
 function sessionLabel(s: ConductorSession): string {
   const custom = getSessionTitle(s.name)
   if (custom) return custom
-  const ticket = ticketKeyFromSessionName(s.name)
-  if (ticket) return ticket
-  if (s.name.startsWith('claude-code-') || s.name.startsWith('codex-')) return s.name
-  const base = s.cwd.split('/').filter(Boolean).pop()
-  return base ? `shell · ${base}` : s.name
+  return s.name
 }
 
-const SORT_CYCLE: SessionSortOrder[] = ['none', 'created', 'alpha', 'attached']
-const SORT_LABELS: Record<SessionSortOrder, string> = {
-  none: 'Manual',
-  created: 'Created',
-  alpha: 'A–Z',
-  activity: 'Last active',
-  attached: 'Attached',
-}
-const SORT_ICONS: Record<SessionSortOrder, typeof ArrowUpDown> = {
-  none: Hand,
-  created: ArrowUpDown,
-  alpha: ArrowDownAZ,
-  activity: Clock,
-  attached: Link,
+function sessionIcon(s: ConductorSession): typeof Bot {
+  const cmd = s.command.toLowerCase()
+  if (cmd === 'claude' || s.name.startsWith('claude-code-')) return Bot
+  if (cmd === 'codex' || s.name.startsWith('codex-')) return Bot
+  return Terminal
 }
 
-function sortSessions(
-  sessions: EnrichedSession[],
-  order: SessionSortOrder,
-  groupSessionIds?: string[],
-): EnrichedSession[] {
-  if (order === 'none' && groupSessionIds) {
-    const posMap = new Map(groupSessionIds.map((id, i) => [id, i]))
-    return [...sessions].sort((a, b) => (posMap.get(a.session.name) ?? 999) - (posMap.get(b.session.name) ?? 999))
-  }
-  if (order === 'none' || order === 'created') return sessions
-  const sorted = [...sessions]
-  if (order === 'alpha') {
-    sorted.sort((a, b) => sessionLabel(a.session).localeCompare(sessionLabel(b.session)))
-  } else if (order === 'attached') {
-    sorted.sort((a, b) => (b.hasOpenTab ? 1 : 0) - (a.hasOpenTab ? 1 : 0))
-  }
-  return sorted
+function sessionIconColor(s: ConductorSession): string {
+  const cmd = s.command.toLowerCase()
+  if (cmd === 'claude' || s.name.startsWith('claude-code-')) return 'text-orange-400'
+  if (cmd === 'codex' || s.name.startsWith('codex-')) return 'text-emerald-400'
+  return 'text-zinc-400'
 }
 
 function buildTileTree(ids: string[], depth: number): LayoutNode {
@@ -133,16 +100,17 @@ function useConductorSessions(intervalMs = 5_000) {
           command: s.command,
           cwd: s.cwd,
         }))
+      mapped.sort((a, b) => a.name.localeCompare(b.name))
       setSessions(mapped)
 
-      // Reconcile: prune references to sessions that no longer exist
       const liveNames = new Set(mapped.map(s => s.name))
 
+      // Prune folder references to dead sessions
       const projectState = useProjectStore.getState()
-      for (const sg of projectState.sessionGroups) {
-        for (const sid of sg.sessionIds) {
+      for (const folder of projectState.sessionFolders) {
+        for (const sid of folder.sessionIds) {
           if (!liveNames.has(sid)) {
-            projectState.removeSessionFromGroup(sg.id, sid)
+            projectState.removeSessionFromAllFolders(sid)
           }
         }
       }
@@ -177,20 +145,14 @@ function useConductorSessions(intervalMs = 5_000) {
     if (ws.sessionId) wsMap.set(ws.sessionId, ws)
   }
 
-  const enriched: EnrichedSession[] = sessions
-    .map(s => ({
-      session: s,
-      workSession: wsMap.get(s.name) ?? null,
-      ticketKey: ticketKeyFromSessionName(s.name),
-      hasOpenTab: openTabIds.has(s.name),
-    }))
+  const enriched: EnrichedSession[] = sessions.map(s => ({
+    session: s,
+    workSession: wsMap.get(s.name) ?? null,
+    ticketKey: ticketKeyFromSessionName(s.name),
+    hasOpenTab: openTabIds.has(s.name),
+  }))
 
-  const liveSessionNames = new Set(sessions.map(s => s.name))
-  const orphanedWorkSessions = workSessions.filter(
-    ws => ws.status === 'active' && ws.sessionId && !liveSessionNames.has(ws.sessionId)
-  )
-
-  return { enriched, orphanedWorkSessions, refresh, liveSessionNames }
+  return { enriched, refresh }
 }
 
 // ── Tile helper ───────────────────────────────────────
@@ -203,7 +165,6 @@ function tileSessions(sessions: EnrichedSession[]) {
   const currentRoot = layoutStore.root
   if (!currentRoot) return
 
-  // Find each session's tab and move it into its own new group
   const newGroupIds: string[] = []
   for (const s of sessions) {
     for (const [gid, group] of Object.entries(tabsStore.groups)) {
@@ -217,10 +178,7 @@ function tileSessions(sessions: EnrichedSession[]) {
   }
   if (newGroupIds.length === 0) return
 
-  // Build a vertical stack for the tiled sessions
   const tileTree = buildTileTree(newGroupIds, 0)
-
-  // Insert as a horizontal row: tiled group on the left, existing layout on the right
   layoutStore.setRoot({
     type: 'row',
     children: [
@@ -231,29 +189,43 @@ function tileSessions(sessions: EnrichedSession[]) {
   layoutStore.setFocusedGroup(newGroupIds[0])
 }
 
-// ── Row components ─────────────────────────────────────
+// ── Session row (file-tree style) ─────────────────────
 
-function SessionRow({
+function SessionTreeNode({
   session,
+  depth,
   isSelected,
   selectedIds,
   onRowClick,
   onDragStateChange,
+  onKillSelected,
+  onRefresh,
+  filter,
+  allFolders,
 }: {
   session: EnrichedSession
+  depth: number
   isSelected: boolean
   selectedIds: Set<string>
   onRowClick: (name: string, e: React.MouseEvent) => void
   onDragStateChange: (dragging: boolean) => void
+  onKillSelected: () => void
+  onRefresh: () => void
+  filter: string
+  allFolders: SessionFolder[]
 }) {
   const { addTab } = useTabsStore()
   const { focusedGroupId } = useLayoutStore()
   const groups = useTabsStore(s => s.groups)
   const claudeAccounts = useConfigStore(s => s.config.claudeAccounts)
-
   const [isExpanded, setIsExpanded] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [isRenaming, setIsRenaming] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
+  const renameInputRef = useRef<HTMLInputElement>(null)
   const infoProviders = useSessionInfoRegistry(s => s.providers)
+
+  const indent = depth * 12
 
   const openTab = (() => {
     for (const [gid, group] of Object.entries(groups)) {
@@ -266,11 +238,13 @@ function SessionRow({
   const label = (openTab?.tab.title) || sessionLabel(session.session)
   const isThinking = openTab?.tab.isThinking ?? false
   const thinkingTime = openTab?.tab.thinkingTime
+  const Icon = sessionIcon(session.session)
+  const iconColor = sessionIconColor(session.session)
 
-  // Inline rename
-  const [isRenaming, setIsRenaming] = useState(false)
-  const [renameValue, setRenameValue] = useState('')
-  const renameInputRef = useRef<HTMLInputElement>(null)
+  // Filter check
+  if (filter && !label.toLowerCase().includes(filter.toLowerCase()) && !session.session.name.toLowerCase().includes(filter.toLowerCase())) {
+    return null
+  }
 
   function startRename() {
     setRenameValue(label)
@@ -289,19 +263,16 @@ function SessionRow({
     setIsRenaming(false)
   }
 
-  const openInTab = (e: React.MouseEvent) => {
-    e.stopPropagation()
-
+  const openInTab = (e?: React.MouseEvent) => {
+    e?.stopPropagation()
     const layoutGroupIds = new Set(useLayoutStore.getState().getAllGroupIds())
 
-    // Focus existing tab if already open in a visible group
     if (openTab) {
       if (layoutGroupIds.has(openTab.groupId)) {
         useTabsStore.getState().setActiveTab(openTab.groupId, openTab.tab.id)
         useLayoutStore.getState().setFocusedGroup(openTab.groupId)
         return
       }
-      // Tab exists in a group not in the layout — remove the stale tab
       useTabsStore.getState().removeTab(openTab.groupId, openTab.tab.id)
     }
 
@@ -321,35 +292,38 @@ function SessionRow({
     })
   }
 
-  const status: { label: string; color: string } = isThinking
-    ? { label: 'Thinking', color: 'text-blue-400' }
-    : session.hasOpenTab
-      ? { label: 'Idle', color: 'text-green-400' }
-      : { label: 'Detached', color: 'text-amber-400' }
-
-  const sessionType: { label: string; color: string } = (() => {
-    const cmd = session.session.command.toLowerCase()
-    if (cmd === 'claude' || session.session.name.startsWith('claude-code-'))
-      return { label: 'Claude Code', color: 'text-orange-300' }
-    if (cmd === 'codex' || session.session.name.startsWith('codex-'))
-      return { label: 'Codex', color: 'text-emerald-300' }
-    if (cmd === 'zsh') return { label: 'Shell (zsh)', color: 'text-zinc-300' }
-    if (cmd === 'bash') return { label: 'Shell (bash)', color: 'text-zinc-300' }
-    if (cmd === 'fish') return { label: 'Shell (fish)', color: 'text-zinc-300' }
-    if (cmd) return { label: cmd, color: 'text-zinc-300' }
-    return { label: 'Unknown', color: 'text-zinc-500' }
-  })()
+  async function killSession() {
+    await window.electronAPI.killTerminal(session.session.name)
+    clearSessionTitle(session.session.name)
+    if (session.workSession?.status === 'active') {
+      await useWorkSessionsStore.getState().completeSession(session.workSession.id)
+    }
+    useProjectStore.getState().removeSessionFromAllFolders(session.session.name)
+    if (openTab) {
+      useTabsStore.getState().removeTab(openTab.groupId, openTab.tab.id)
+    }
+    setTimeout(onRefresh, 500)
+  }
 
   const copyToClipboard = (text: string, e: React.MouseEvent) => {
     e.stopPropagation()
     navigator.clipboard.writeText(text)
   }
 
+  // Build "Move to folder" submenu items
+  const moveToFolderItems = [
+    { id: null as string | null, label: 'Root' },
+    ...allFolders.map(f => ({ id: f.id as string | null, label: f.name })),
+  ]
+
   return (
-    <div>
-      <div
-        draggable
+    <div className="min-w-0">
+      <ContextMenu>
+        <ContextMenuTrigger>
+          <div
+            draggable
             onClick={e => onRowClick(session.session.name, e)}
+            onDoubleClick={() => openInTab()}
             onDragStart={e => {
               const names = isSelected && selectedIds.size > 1
                 ? [...selectedIds]
@@ -357,7 +331,6 @@ function SessionRow({
               e.dataTransfer.setData('__dragging_session__', session.session.name)
               e.dataTransfer.setData('__dragging_sessions__', JSON.stringify(names))
               e.dataTransfer.effectAllowed = 'move'
-              // Custom drag image
               const ghost = document.createElement('div')
               ghost.textContent = names.length > 1 ? `${names.length} sessions` : label
               ghost.style.cssText = 'position:fixed;top:-1000px;padding:4px 10px;border-radius:6px;background:#27272a;color:#e4e4e7;font-size:var(--ui-text-xs);font-weight:500;white-space:nowrap;border:1px solid #3f3f46;box-shadow:0 4px 12px rgba(0,0,0,0.4);'
@@ -371,33 +344,28 @@ function SessionRow({
               setIsDragging(false)
               onDragStateChange(false)
             }}
-            className={`group flex items-center gap-1 rounded px-1 py-1.5 cursor-pointer transition-all ${
+            className={cn(
+              'flex items-center gap-1 px-2 py-[3px] cursor-pointer select-none transition-colors group',
+              'text-ui-base',
               isDragging
                 ? 'opacity-30'
                 : isSelected
-                  ? 'bg-indigo-900/30 ring-1 ring-indigo-500/50'
-                  : 'hover:bg-zinc-800/50'
-            }`}
-          >
-            {/* Drag handle (visual affordance) */}
-            <div className="shrink-0 cursor-grab text-zinc-500 hover:text-zinc-300 transition-colors active:cursor-grabbing">
-              <GripVertical className="w-3 h-3" />
-            </div>
-
-            {/* Status dot */}
-            {isThinking ? (
-              <span className="w-2.5 h-2.5 shrink-0 rounded-full border border-zinc-500 border-t-zinc-200 animate-spin" style={{ animationDuration: '1.5s' }} />
-            ) : (
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                session.hasOpenTab ? 'bg-green-400' : 'bg-amber-400'
-              }`} />
+                  ? 'bg-indigo-900/30 text-zinc-100'
+                  : 'text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100'
             )}
+            style={{ paddingLeft: `${8 + indent}px` }}
+          >
+            {/* Spacer to align with folder chevrons */}
+            <span className="w-3 h-3 shrink-0" />
 
-            {/* Label + secondary info */}
+            {/* Session type icon */}
+            <Icon className={cn('w-3.5 h-3.5 shrink-0', iconColor)} />
+
+            {/* Label */}
             {isRenaming ? (
               <input
                 ref={renameInputRef}
-                className="text-ui-base flex-1 min-w-0 bg-transparent border border-zinc-600 rounded px-1 py-0.5 outline-none text-zinc-100"
+                className="flex-1 bg-zinc-700 text-zinc-100 px-1 text-ui-base outline-none border border-blue-500"
                 value={renameValue}
                 onChange={e => setRenameValue(e.target.value)}
                 onKeyDown={e => {
@@ -409,488 +377,525 @@ function SessionRow({
                 onClick={e => e.stopPropagation()}
               />
             ) : (
-              <span
-                className={`flex items-center min-w-0 flex-1 ${isThinking ? 'text-shimmer' : ''}`}
-                onDoubleClick={e => { e.stopPropagation(); startRename() }}
-              >
-                <span className={`text-ui-base font-medium truncate min-w-0 flex-1 ${isThinking ? '' : 'text-zinc-200'}`}>
-                  {label}
-                </span>
-                <span className={`text-ui-xs shrink-0 ml-1.5 ${isThinking ? '' : 'text-zinc-500'}`}>
-                  {isThinking ? (thinkingTime || 'thinking') : ''}
-                </span>
+              <span className={cn('truncate flex-1', isThinking && 'text-shimmer')}>
+                {label}
+                {isThinking && (
+                  <span className="text-ui-xs ml-1.5 text-zinc-500">{thinkingTime || 'thinking'}</span>
+                )}
               </span>
             )}
 
-            {/* Expand chevron */}
+            {/* Info toggle (hover only) */}
             <button
               onClick={e => { e.stopPropagation(); setIsExpanded(!isExpanded) }}
-              className="shrink-0 p-0.5 rounded text-zinc-500 hover:text-zinc-200 transition-colors"
+              className={cn(
+                'shrink-0 text-zinc-500 hover:text-zinc-200 transition-colors',
+                isExpanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+              )}
             >
-              {isExpanded
-                ? <ChevronDown className="w-3 h-3" />
-                : <ChevronRight className="w-3 h-3" />
-              }
+              <Info className="w-3 h-3" />
             </button>
-
-            {/* Open in tab */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={openInTab}
-                  className="shrink-0 p-0.5 rounded text-zinc-500 hover:text-zinc-200 transition-colors"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Open in tab</TooltipContent>
-            </Tooltip>
           </div>
-
-          {/* Expanded details */}
-          {isExpanded && (
-            <div className="ml-5 mr-1 mb-1.5 mt-0.5 py-1.5 px-2.5 rounded-md bg-zinc-800/60 border border-zinc-700/40 text-ui-xs">
-              {/* Type + status row */}
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className={`font-medium ${sessionType.color}`}>{sessionType.label}</span>
-                <span className="text-zinc-600">·</span>
-                <span className={`font-medium ${status.color}`}>{status.label}</span>
-                <div className="flex-1" />
-                <span className={`font-medium ${session.session.connected ? 'text-green-500' : 'text-zinc-500'}`}>
-                  {session.session.connected ? 'active' : 'disconnected'}
-                </span>
-              </div>
-
-              <div className="border-t border-zinc-700/30 pt-1.5 space-y-1">
-                {/* Directory */}
-                <div className="group/row flex items-center gap-1.5">
-                  <Folder className="w-3 h-3 text-zinc-500 shrink-0" />
-                  <span className="text-zinc-300 truncate flex-1">{session.session.cwd}</span>
-                  <button onClick={e => copyToClipboard(session.session.cwd, e)} className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover/row:opacity-100">
-                    <Copy className="w-2.5 h-2.5" />
-                  </button>
-                </div>
-
-                {/* Branch */}
-                {session.workSession?.worktree?.branch && (
-                  <div className="group/row flex items-center gap-1.5">
-                    <GitBranch className="w-3 h-3 text-zinc-500 shrink-0" />
-                    <span className="text-zinc-300 truncate flex-1">{session.workSession.worktree.branch}</span>
-                    <span className="text-zinc-600 shrink-0">from {session.workSession.worktree.baseBranch}</span>
-                  </div>
-                )}
-
-                {/* Session name */}
-                <div className="group/row flex items-center gap-1.5">
-                  <Terminal className="w-3 h-3 text-zinc-500 shrink-0" />
-                  <span className="text-zinc-400 truncate flex-1 font-mono">{session.session.name}</span>
-                  <button onClick={e => copyToClipboard(session.session.name, e)} className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover/row:opacity-100">
-                    <Copy className="w-2.5 h-2.5" />
-                  </button>
-                </div>
-
-                {/* Claude session ID */}
-                {session.workSession?.claudeSessionId && (
-                  <div className="group/row flex items-center gap-1.5">
-                    <Bot className="w-3 h-3 text-zinc-500 shrink-0" />
-                    <span className="text-zinc-400 truncate flex-1 font-mono">{session.workSession.claudeSessionId}</span>
-                    <button onClick={e => copyToClipboard(session.workSession!.claudeSessionId!, e)} className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover/row:opacity-100">
-                      <Copy className="w-2.5 h-2.5" />
-                    </button>
-                  </div>
-                )}
-
-                {/* Ticket key */}
-                {session.workSession?.ticketKey && (
-                  <div className="flex items-center gap-1.5">
-                    <Hash className="w-3 h-3 text-zinc-500 shrink-0" />
-                    <span className="text-zinc-300">{session.workSession.ticketKey}</span>
-                  </div>
-                )}
-
-                {/* Autopilot indicator */}
-                {openTab?.tab.autoPilot && (
-                  <div className="flex items-center gap-1.5">
-                    <Bot className="w-3 h-3 text-red-400 shrink-0" />
-                    <span className="text-red-400 font-medium">Autopilot</span>
-                  </div>
-                )}
-
-                {/* API Key indicator */}
-                {openTab?.tab.apiKey && (() => {
-                  const account = claudeAccounts.find(a => a.apiKey === openTab.tab.apiKey)
-                  if (!account) return null
-                  return (
-                    <div className="flex items-center gap-1.5">
-                      <Key className="w-3 h-3 text-zinc-500 shrink-0" />
-                      <span className="text-zinc-400">API Key: <span className="text-zinc-300">{account.name}</span></span>
-                    </div>
-                  )
-                })()}
-
-                {/* Extension-provided rows */}
-                {infoProviders.map(p => {
-                  const ctx: SessionInfoContext = {
-                    sessionName: session.session.name,
-                    cwd: session.session.cwd,
-                    command: session.session.command,
-                    connected: session.session.connected,
-                    hasOpenTab: session.hasOpenTab,
-                    isThinking,
-                    workSession: session.workSession,
-                  }
-                  const node = p.render(ctx)
-                  return node ? <React.Fragment key={p.id}>{node}</React.Fragment> : null
-                })}
-              </div>
-            </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
+          <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={startRename}>
+            <Pencil className="w-3.5 h-3.5" />
+            Rename
+          </ContextMenuItem>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger className="gap-2 text-xs cursor-pointer">
+              <Folder className="w-3.5 h-3.5" />
+              Move to…
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="bg-zinc-900 border-zinc-700">
+              {moveToFolderItems.map(item => (
+                <ContextMenuItem
+                  key={item.id ?? '__root__'}
+                  className="gap-2 text-xs cursor-pointer"
+                  onSelect={() => {
+                    const ids = isSelected && selectedIds.size > 1 ? [...selectedIds] : [session.session.name]
+                    useProjectStore.getState().moveSessionsToFolder(ids, item.id)
+                  }}
+                >
+                  {item.id ? <Folder className="w-3.5 h-3.5 text-yellow-500" /> : <FolderOpen className="w-3.5 h-3.5 text-zinc-400" />}
+                  {item.label}
+                </ContextMenuItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+          <ContextMenuSeparator className="bg-zinc-700" />
+          {isSelected && selectedIds.size > 1 ? (
+            <ContextMenuItem className="gap-2 text-xs cursor-pointer text-red-400 focus:text-red-300" onSelect={onKillSelected}>
+              <Square className="w-3.5 h-3.5" />
+              Kill {selectedIds.size} sessions
+            </ContextMenuItem>
+          ) : (
+            <ContextMenuItem className="gap-2 text-xs cursor-pointer text-red-400 focus:text-red-300" onSelect={killSession}>
+              <Square className="w-3.5 h-3.5" />
+              Kill session
+            </ContextMenuItem>
           )}
+        </ContextMenuContent>
+      </ContextMenu>
+
+      {/* Expanded details panel */}
+      {isExpanded && (
+        <div className="pr-2 overflow-hidden" style={{ paddingLeft: `${8 + indent + 16}px` }}>
+        <div
+          className="py-1.5 px-2.5 rounded-md bg-zinc-800/60 border border-zinc-700/40 text-ui-xs mb-0.5 min-w-0"
+        >
+          <div className="space-y-1">
+            {/* Directory */}
+            <div className="group/row flex items-center gap-1.5">
+              <Folder className="w-3 h-3 text-zinc-500 shrink-0" />
+              <span className="text-zinc-300 truncate flex-1">{session.session.cwd}</span>
+              <button onClick={e => copyToClipboard(session.session.cwd, e)} className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover/row:opacity-100">
+                <Copy className="w-2.5 h-2.5" />
+              </button>
+            </div>
+
+            {/* Branch */}
+            {session.workSession?.worktree?.branch && (
+              <div className="group/row flex items-center gap-1.5">
+                <GitBranch className="w-3 h-3 text-zinc-500 shrink-0" />
+                <span className="text-zinc-300 truncate flex-1">{session.workSession.worktree.branch}</span>
+                <span className="text-zinc-600 shrink-0">from {session.workSession.worktree.baseBranch}</span>
+              </div>
+            )}
+
+            {/* Session name */}
+            <div className="group/row flex items-center gap-1.5">
+              <Terminal className="w-3 h-3 text-zinc-500 shrink-0" />
+              <span className="text-zinc-400 truncate flex-1 font-mono">{session.session.name}</span>
+              <button onClick={e => copyToClipboard(session.session.name, e)} className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover/row:opacity-100">
+                <Copy className="w-2.5 h-2.5" />
+              </button>
+            </div>
+
+            {/* Claude session ID */}
+            {session.workSession?.claudeSessionId && (
+              <div className="group/row flex items-center gap-1.5">
+                <Bot className="w-3 h-3 text-zinc-500 shrink-0" />
+                <span className="text-zinc-400 truncate flex-1 font-mono">{session.workSession.claudeSessionId}</span>
+                <button onClick={e => copyToClipboard(session.workSession!.claudeSessionId!, e)} className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover/row:opacity-100">
+                  <Copy className="w-2.5 h-2.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Ticket key */}
+            {session.workSession?.ticketKey && (
+              <div className="flex items-center gap-1.5">
+                <Hash className="w-3 h-3 text-zinc-500 shrink-0" />
+                <span className="text-zinc-300">{session.workSession.ticketKey}</span>
+              </div>
+            )}
+
+            {/* Autopilot */}
+            {openTab?.tab.autoPilot && (
+              <div className="flex items-center gap-1.5">
+                <Bot className="w-3 h-3 text-red-400 shrink-0" />
+                <span className="text-red-400 font-medium">Autopilot</span>
+              </div>
+            )}
+
+            {/* API Key */}
+            {openTab?.tab.apiKey && (() => {
+              const account = claudeAccounts.find(a => a.apiKey === openTab.tab.apiKey)
+              if (!account) return null
+              return (
+                <div className="flex items-center gap-1.5">
+                  <Key className="w-3 h-3 text-zinc-500 shrink-0" />
+                  <span className="text-zinc-400">API Key: <span className="text-zinc-300">{account.name}</span></span>
+                </div>
+              )
+            })()}
+
+            {/* Extension-provided rows */}
+            {infoProviders.map(p => {
+              const ctx: SessionInfoContext = {
+                sessionName: session.session.name,
+                cwd: session.session.cwd,
+                command: session.session.command,
+                connected: session.session.connected,
+                hasOpenTab: session.hasOpenTab,
+                isThinking,
+                workSession: session.workSession,
+              }
+              const node = p.render(ctx)
+              return node ? <React.Fragment key={p.id}>{node}</React.Fragment> : null
+            })}
+          </div>
+        </div>
+        </div>
+      )}
     </div>
   )
 }
 
-function OrphanedWorkSessionRow({
-  session,
-  onAction,
-}: {
-  session: WorkSession
-  onAction: () => void
-}) {
-  const store = useWorkSessionsStore.getState()
+// ── Folder node (file-tree style) ─────────────────────
 
-  const handleDelete = async () => {
-    await store.deleteSession(session.id)
-    onAction()
-  }
-
-  const handleComplete = async () => {
-    await store.completeSession(session.id)
-    onAction()
-  }
-
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger>
-        <div className="group w-full flex items-center gap-2 rounded px-2 py-1.5 hover:bg-zinc-800/50 transition-colors">
-          <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-red-400/60" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
-              <span className="text-ui-base font-medium text-zinc-400">{session.ticketKey}</span>
-              <span className="text-ui-xs text-red-400/70">dead</span>
-            </div>
-            {session.worktree?.branch && (
-              <div className="flex items-center gap-1 mt-0.5">
-                <GitBranch className="w-2.5 h-2.5 text-zinc-600" />
-                <span className="text-ui-xs text-zinc-500 truncate">{session.worktree.branch}</span>
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleComplete() }}
-                  className="p-1 rounded hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
-                >
-                  <Square className="w-3 h-3" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Mark completed</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleDelete() }}
-                  className="p-1 rounded hover:bg-zinc-700 text-zinc-400 hover:text-red-400 transition-colors"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Delete record</TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
-      </ContextMenuTrigger>
-      <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
-        <ContextMenuItem className="gap-2 text-ui-base cursor-pointer" onSelect={handleComplete}>
-          <Square className="w-3.5 h-3.5" />
-          Mark completed
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={handleDelete} className="gap-2 text-ui-base cursor-pointer text-red-400 focus:text-red-300">
-          <Trash2 className="w-3.5 h-3.5" />
-          Delete record
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
-  )
-}
-
-// ── Group section ─────────────────────────────────────
-
-function SessionGroupSection({
-  group,
-  sessions,
+function FolderTreeNode({
+  folder,
+  depth,
+  allFolders,
+  sessionMap,
   selectedIds,
   onRowClick,
   onDragStateChange,
+  onKillSelected,
   isDraggingActive,
-  isManualSort,
+  filter,
   onRefresh,
-  sessionToGroup,
 }: {
-  group: SessionGroup | null
-  sessions: EnrichedSession[]
+  folder: SessionFolder
+  depth: number
+  allFolders: SessionFolder[]
+  sessionMap: Map<string, EnrichedSession>
   selectedIds: Set<string>
   onRowClick: (name: string, e: React.MouseEvent) => void
   onDragStateChange: (dragging: boolean) => void
+  onKillSelected: () => void
   isDraggingActive: boolean
-  isManualSort: boolean
+  filter: string
   onRefresh: () => void
-  sessionToGroup: Map<string, string>
 }) {
-  const [isOpen, setIsOpen] = useState(true)
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState('')
+  const [isDragOver, setIsDragOver] = useState(false)
   const renameInputRef = useRef<HTMLInputElement>(null)
 
-  const label = group?.name ?? 'Ungrouped'
-  const attachedInGroup = sessions.filter(s => s.hasOpenTab)
-  const canTile = attachedInGroup.length > 1
+  const expanded = !folder.collapsed
+  const indent = depth * 12
+
+  const childFolders = allFolders.filter(f => f.parentId === folder.id)
+  const childSessions = folder.sessionIds
+    .map(sid => sessionMap.get(sid))
+    .filter((s): s is EnrichedSession => s != null)
+
+  // For filter: check if any child matches
+  const hasMatchingChildren = filter
+    ? childSessions.some(s => {
+        const lbl = sessionLabel(s.session)
+        return lbl.toLowerCase().includes(filter.toLowerCase()) || s.session.name.toLowerCase().includes(filter.toLowerCase())
+      }) || childFolders.some(f => f.name.toLowerCase().includes(filter.toLowerCase()))
+    : true
+
+  const folderNameMatches = filter ? folder.name.toLowerCase().includes(filter.toLowerCase()) : true
+
+  if (filter && !folderNameMatches && !hasMatchingChildren) return null
+
+  const attachedInFolder = childSessions.filter(s => s.hasOpenTab)
+  const canTile = attachedInFolder.length > 1
 
   function startRename() {
-    if (!group) return
-    setRenameValue(group.name)
+    setRenameValue(folder.name)
     setIsRenaming(true)
     setTimeout(() => renameInputRef.current?.select(), 0)
   }
 
   function commitRename() {
-    if (group && renameValue.trim()) {
-      useProjectStore.getState().renameSessionGroup(group.id, renameValue.trim())
+    if (renameValue.trim()) {
+      useProjectStore.getState().renameSessionFolder(folder.id, renameValue.trim())
     }
     setIsRenaming(false)
   }
 
-  function handleDelete() {
-    if (group) useProjectStore.getState().removeSessionGroup(group.id)
+  function handleToggle() {
+    useProjectStore.getState().toggleFolderCollapsed(folder.id)
   }
 
-  const [isDragOver, setIsDragOver] = useState(false)
-  const [dropInsertIdx, setDropInsertIdx] = useState<number | null>(null)
-  const rowsRef = useRef<HTMLDivElement>(null)
-
-  // Clear drop indicator when drag ends globally
-  useEffect(() => {
-    if (!isDraggingActive) {
-      setDropInsertIdx(null)
-      setIsDragOver(false)
-    }
-  }, [isDraggingActive])
-
-  function getDraggedNames(e: React.DragEvent): string[] {
-    const multi = e.dataTransfer.getData('__dragging_sessions__')
-    if (multi) {
-      try {
-        const names: string[] = JSON.parse(multi)
-        if (names.length > 0) return names
-      } catch {}
-    }
-    const single = e.dataTransfer.getData('__dragging_session__')
-    return single ? [single] : []
+  function handleDelete() {
+    useProjectStore.getState().removeSessionFolder(folder.id)
   }
 
   function handleDragOver(e: React.DragEvent) {
-    if (!e.dataTransfer.types.includes('__dragging_session__')) return
+    if (!e.dataTransfer.types.includes('__dragging_session__') && !e.dataTransfer.types.includes('__dragging_folder__')) return
     e.preventDefault()
+    e.stopPropagation()
     e.dataTransfer.dropEffect = 'move'
     setIsDragOver(true)
-
-    // Calculate insertion index from mouse position for manual reordering
-    if (isManualSort && rowsRef.current) {
-      const children = Array.from(rowsRef.current.children) as HTMLElement[]
-      // Skip indicator elements (they have h-0.5 class) — only measure session rows
-      const rows = children.filter(c => c.dataset.sessionRow)
-      let idx = rows.length
-      const DEAD_ZONE = 6 // px hysteresis to prevent jitter near midpoints
-      for (let i = 0; i < rows.length; i++) {
-        const rect = rows[i].getBoundingClientRect()
-        const mid = rect.top + rect.height / 2
-        if (e.clientY < mid - DEAD_ZONE) {
-          idx = i
-          break
-        } else if (e.clientY < mid + DEAD_ZONE) {
-          // Inside dead zone — keep current index to avoid jitter
-          return
-        }
-      }
-      if (idx !== dropInsertIdx) setDropInsertIdx(idx)
-    }
   }
 
   function handleDragLeave(e: React.DragEvent) {
     if (e.currentTarget.contains(e.relatedTarget as Node)) return
     setIsDragOver(false)
-    setDropInsertIdx(null)
   }
 
   function handleDrop(e: React.DragEvent) {
-    const insertIdx = dropInsertIdx
-    setIsDragOver(false)
-    setDropInsertIdx(null)
     e.preventDefault()
-    const names = getDraggedNames(e)
-    if (names.length === 0) return
+    e.stopPropagation()
+    setIsDragOver(false)
 
-    if (isManualSort && insertIdx !== null) {
-      // Manual reorder — insert at specific position
-      const store = useProjectStore.getState()
-      const beforeSession = sessions[insertIdx]?.session.name ?? null
-      for (const name of names) {
-        if (group) {
-          const srcGroup = sessionToGroup.get(name)
-          if (srcGroup !== group.id) {
-            store.addSessionsToGroup(group.id, [name])
-          }
-          store.reorderSessionInGroup(group.id, name, beforeSession)
-        } else {
-          // Ungrouped reorder — remove from any group first
-          const srcGroup = sessionToGroup.get(name)
-          if (srcGroup) store.removeSessionFromGroup(srcGroup, name)
-          store.reorderUngroupedSession(name, beforeSession)
-        }
-      }
-    } else if (group) {
-      useProjectStore.getState().addSessionsToGroup(group.id, names)
-    } else {
-      // Ungrouped — remove from groups
-      const store = useProjectStore.getState()
-      for (const name of names) {
-        const gid = sessionToGroup.get(name)
-        if (gid) store.removeSessionFromGroup(gid, name)
-      }
+    // Handle folder drop
+    const folderId = e.dataTransfer.getData('__dragging_folder__')
+    if (folderId) {
+      useProjectStore.getState().moveFolderToFolder(folderId, folder.id)
+      return
+    }
+
+    // Handle session drop
+    const multi = e.dataTransfer.getData('__dragging_sessions__')
+    let names: string[] = []
+    if (multi) {
+      try { names = JSON.parse(multi) } catch {}
+    }
+    if (names.length === 0) {
+      const single = e.dataTransfer.getData('__dragging_session__')
+      if (single) names = [single]
+    }
+    if (names.length > 0) {
+      useProjectStore.getState().moveSessionsToFolder(names, folder.id)
     }
   }
 
   return (
     <div
-      className={`mb-3 rounded transition-colors ${
-        isDragOver
-          ? 'bg-indigo-900/20'
-          : isDraggingActive
-            ? 'bg-zinc-800/20'
-            : ''
-      }`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className="px-2 mb-1 flex items-center gap-1">
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="text-zinc-600 hover:text-zinc-400 transition-colors"
-        >
-          {isOpen
-            ? <ChevronDown className="w-3 h-3" />
-            : <ChevronRight className="w-3 h-3" />
-          }
-        </button>
-
-        {isRenaming ? (
-          <input
-            ref={renameInputRef}
-            className="text-ui-xs flex-1 min-w-0 bg-transparent border border-zinc-600 rounded px-1 py-0.5 outline-none text-zinc-100 font-medium uppercase tracking-wider"
-            value={renameValue}
-            onChange={e => setRenameValue(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') commitRename()
-              if (e.key === 'Escape') setIsRenaming(false)
-              e.stopPropagation()
+      <ContextMenu>
+        <ContextMenuTrigger>
+          <div
+            draggable
+            onDragStart={e => {
+              e.dataTransfer.setData('__dragging_folder__', folder.id)
+              e.dataTransfer.effectAllowed = 'move'
+              const ghost = document.createElement('div')
+              ghost.textContent = folder.name
+              ghost.style.cssText = 'position:fixed;top:-1000px;padding:4px 10px;border-radius:6px;background:#27272a;color:#e4e4e7;font-size:var(--ui-text-xs);font-weight:500;white-space:nowrap;border:1px solid #3f3f46;box-shadow:0 4px 12px rgba(0,0,0,0.4);'
+              document.body.appendChild(ghost)
+              e.dataTransfer.setDragImage(ghost, 0, 0)
+              setTimeout(() => document.body.removeChild(ghost), 0)
             }}
-            onBlur={commitRename}
-            onClick={e => e.stopPropagation()}
-          />
-        ) : (
-          <span
-            className="text-ui-xs font-medium uppercase tracking-wider text-zinc-300 flex-1 min-w-0 truncate"
-            onDoubleClick={group ? () => startRename() : undefined}
+            className={cn(
+              'flex items-center gap-1 px-2 py-[3px] cursor-pointer select-none transition-colors',
+              'text-ui-base',
+              isDragOver
+                ? 'bg-indigo-900/30 text-zinc-100'
+                : 'text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100'
+            )}
+            style={{ paddingLeft: `${8 + indent}px` }}
+            onClick={handleToggle}
+            onDoubleClick={e => { e.stopPropagation(); startRename() }}
           >
-            {label}
-          </span>
-        )}
+            {/* Chevron */}
+            <span className="text-zinc-500 shrink-0">
+              {expanded
+                ? <ChevronDown className="w-3 h-3" />
+                : <ChevronRight className="w-3 h-3" />
+              }
+            </span>
 
-        <span className="text-ui-xs text-zinc-700">{sessions.length}</span>
+            {/* Folder icon */}
+            {expanded
+              ? <FolderOpen className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+              : <Folder className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+            }
 
-        <div className="flex items-center gap-0.5">
-          {canTile && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={() => tileSessions(attachedInGroup)}
-                  className="p-0.5 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition-colors"
-                >
-                  <LayoutGrid className="w-3 h-3" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Tile group</TooltipContent>
-            </Tooltip>
-          )}
-
-          {group && (
-            <>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={startRename}
-                    className="p-0.5 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition-colors"
-                  >
-                    <Pencil className="w-3 h-3" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top">Rename group</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={handleDelete}
-                    className="p-0.5 rounded hover:bg-zinc-700 text-zinc-600 hover:text-red-400 transition-colors"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top">Delete group</TooltipContent>
-              </Tooltip>
-            </>
-          )}
-        </div>
-      </div>
-
-      {isOpen && (
-        sessions.length > 0 ? (
-          <div ref={rowsRef}>
-            {sessions.map((s, i) => (
-              <React.Fragment key={s.session.name}>
-                {dropInsertIdx === i && (
-                  <div className="mx-1 h-0.5 bg-indigo-400 rounded-full my-0.5" />
-                )}
-                <div data-session-row>
-                  <SessionRow
-                    session={s}
-                    isSelected={selectedIds.has(s.session.name)}
-                    selectedIds={selectedIds}
-                    onRowClick={onRowClick}
-                    onDragStateChange={onDragStateChange}
-                  />
-                </div>
-              </React.Fragment>
-            ))}
-            {dropInsertIdx !== null && dropInsertIdx >= sessions.length && (
-              <div className="mx-1 h-0.5 bg-indigo-400 rounded-full my-0.5" />
+            {/* Name */}
+            {isRenaming ? (
+              <input
+                ref={renameInputRef}
+                className="flex-1 bg-zinc-700 text-zinc-100 px-1 text-ui-base outline-none border border-blue-500"
+                value={renameValue}
+                onChange={e => setRenameValue(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') commitRename()
+                  if (e.key === 'Escape') setIsRenaming(false)
+                  e.stopPropagation()
+                }}
+                onBlur={commitRename}
+                onClick={e => e.stopPropagation()}
+              />
+            ) : (
+              <span className="truncate flex-1">{folder.name}</span>
             )}
           </div>
-        ) : (
-          <div className="px-2 py-1 text-ui-xs text-zinc-700 italic">No active sessions</div>
-        )
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
+          <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={() => {
+            useProjectStore.getState().addSessionFolder('New Folder', folder.id)
+          }}>
+            <FolderPlus className="w-3.5 h-3.5" />
+            New subfolder
+          </ContextMenuItem>
+          <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={startRename}>
+            <Pencil className="w-3.5 h-3.5" />
+            Rename
+          </ContextMenuItem>
+          {canTile && (
+            <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={() => tileSessions(attachedInFolder)}>
+              <LayoutGrid className="w-3.5 h-3.5" />
+              Tile sessions
+            </ContextMenuItem>
+          )}
+          <ContextMenuSeparator className="bg-zinc-700" />
+          <ContextMenuItem className="gap-2 text-xs cursor-pointer text-red-400 focus:text-red-300" onSelect={handleDelete}>
+            <Trash2 className="w-3.5 h-3.5" />
+            Delete folder
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+
+      {/* Children */}
+      {expanded && (
+        <div>
+          {childFolders.map(f => (
+            <FolderTreeNode
+              key={f.id}
+              folder={f}
+              depth={depth + 1}
+              allFolders={allFolders}
+              sessionMap={sessionMap}
+              selectedIds={selectedIds}
+              onRowClick={onRowClick}
+              onDragStateChange={onDragStateChange}
+              onKillSelected={onKillSelected}
+              isDraggingActive={isDraggingActive}
+              filter={filter}
+              onRefresh={onRefresh}
+            />
+          ))}
+          {childSessions.map(s => (
+            <SessionTreeNode
+              key={s.session.name}
+              session={s}
+              depth={depth + 1}
+              isSelected={selectedIds.has(s.session.name)}
+              selectedIds={selectedIds}
+              onRowClick={onRowClick}
+              onDragStateChange={onDragStateChange}
+              onKillSelected={onKillSelected}
+              onRefresh={onRefresh}
+              filter={filter}
+              allFolders={allFolders}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Default folder for unfoldered sessions ──────────────
+
+function DefaultFolderNode({
+  sessions,
+  sessionMap: _sessionMap,
+  selectedIds,
+  onRowClick,
+  onDragStateChange,
+  onKillSelected,
+  isDraggingActive,
+  filter,
+  allFolders,
+  onRefresh,
+}: {
+  sessions: EnrichedSession[]
+  sessionMap: Map<string, EnrichedSession>
+  selectedIds: Set<string>
+  onRowClick: (name: string, e: React.MouseEvent) => void
+  onDragStateChange: (dragging: boolean) => void
+  onKillSelected: () => void
+  isDraggingActive: boolean
+  filter: string
+  allFolders: SessionFolder[]
+  onRefresh: () => void
+}) {
+  const [collapsed, setCollapsed] = useState(false)
+  const [isDragOver, setIsDragOver] = useState(false)
+
+  const hasMatchingChildren = filter
+    ? sessions.some(s => {
+        const lbl = sessionLabel(s.session)
+        return lbl.toLowerCase().includes(filter.toLowerCase()) || s.session.name.toLowerCase().includes(filter.toLowerCase())
+      })
+    : true
+
+  if (filter && sessions.length > 0 && !hasMatchingChildren) return null
+
+  function handleDragOver(e: React.DragEvent) {
+    if (!e.dataTransfer.types.includes('__dragging_session__')) return
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'move'
+    setIsDragOver(true)
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return
+    setIsDragOver(false)
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+
+    const multi = e.dataTransfer.getData('__dragging_sessions__')
+    let names: string[] = []
+    if (multi) {
+      try { names = JSON.parse(multi) } catch {}
+    }
+    if (names.length === 0) {
+      const single = e.dataTransfer.getData('__dragging_session__')
+      if (single) names = [single]
+    }
+    if (names.length > 0) {
+      useProjectStore.getState().moveSessionsToFolder(names, null)
+    }
+  }
+
+  return (
+    <div
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <div
+        className={cn(
+          'flex items-center gap-1 px-2 py-[3px] cursor-pointer select-none transition-colors',
+          'text-ui-base',
+          isDragOver
+            ? 'bg-indigo-900/30 text-zinc-100'
+            : 'text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100'
+        )}
+        style={{ paddingLeft: '8px' }}
+        onClick={() => setCollapsed(!collapsed)}
+      >
+        <span className="text-zinc-500 shrink-0">
+          {collapsed
+            ? <ChevronRight className="w-3 h-3" />
+            : <ChevronDown className="w-3 h-3" />
+          }
+        </span>
+        {collapsed
+          ? <Folder className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+          : <FolderOpen className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+        }
+        <span className="truncate flex-1 text-zinc-500">Default</span>
+      </div>
+
+      {!collapsed && (
+        <div>
+          {sessions.map(s => (
+            <SessionTreeNode
+              key={s.session.name}
+              session={s}
+              depth={1}
+              isSelected={selectedIds.has(s.session.name)}
+              selectedIds={selectedIds}
+              onRowClick={onRowClick}
+              onDragStateChange={onDragStateChange}
+              onKillSelected={onKillSelected}
+              onRefresh={onRefresh}
+              filter={filter}
+              allFolders={allFolders}
+            />
+          ))}
+        </div>
       )}
     </div>
   )
@@ -899,64 +904,68 @@ function SessionGroupSection({
 // ── Main component ─────────────────────────────────────
 
 export default function WorkSessionsSidebar({ groupId }: { groupId: string }): React.ReactElement {
-  const { enriched, orphanedWorkSessions, refresh } = useConductorSessions()
-  const sessionGroups = useProjectStore(s => s.sessionGroups)
-  const sessionSort = useProjectStore(s => s.sessionSort)
-  const ungroupedOrder = useProjectStore(s => s.ungroupedSessionOrder)
+  const { enriched, refresh } = useConductorSessions()
+  const sessionFolders = useProjectStore(s => s.sessionFolders)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const lastClickedRef = useRef<string | null>(null)
   const [isDraggingActive, setIsDraggingActive] = useState(false)
+  const [filter, setFilter] = useState('')
+  const [showSearch, setShowSearch] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
-  // Build sessionId → groupId lookup
-  const sessionToGroup = new Map<string, string>()
-  for (const g of sessionGroups) {
-    for (const sid of g.sessionIds) {
-      sessionToGroup.set(sid, g.id)
-    }
-  }
-
-  // Partition enriched sessions by group, then sort each bucket
-  const groupedSessions = new Map<string, EnrichedSession[]>()
-  const ungroupedRaw: EnrichedSession[] = []
-
+  // Build session lookup
+  const sessionMap = new Map<string, EnrichedSession>()
   for (const s of enriched) {
-    const gid = sessionToGroup.get(s.session.name)
-    if (gid) {
-      if (!groupedSessions.has(gid)) groupedSessions.set(gid, [])
-      groupedSessions.get(gid)!.push(s)
-    } else {
-      ungroupedRaw.push(s)
+    sessionMap.set(s.session.name, s)
+  }
+
+  // Determine which sessions are in folders
+  const sessionInFolder = new Set<string>()
+  for (const f of sessionFolders) {
+    for (const sid of f.sessionIds) {
+      sessionInFolder.add(sid)
     }
   }
 
-  // Apply sort to each bucket
-  for (const [gid, sessions] of groupedSessions) {
-    const group = sessionGroups.find(g => g.id === gid)
-    groupedSessions.set(gid, sortSessions(sessions, sessionSort, group?.sessionIds))
-  }
-  const ungrouped = sortSessions(ungroupedRaw, sessionSort, ungroupedOrder)
+  // Root-level sessions = not in any folder
+  const rootSessions = enriched.filter(s => !sessionInFolder.has(s.session.name))
 
-  // Flat ordered list of all session names matching render order (for shift-click range)
+  // Root-level folders
+  const rootFolders = sessionFolders.filter(f => f.parentId === null)
+
+  // All session names for shift-click range
   const flatSessionOrder: string[] = []
-  for (const group of sessionGroups) {
-    for (const s of (groupedSessions.get(group.id) || [])) flatSessionOrder.push(s.session.name)
+  function collectOrder(folders: SessionFolder[], parentId: string | null) {
+    for (const f of folders.filter(f => f.parentId === parentId)) {
+      for (const sid of f.sessionIds) flatSessionOrder.push(sid)
+      collectOrder(folders, f.id)
+    }
   }
-  for (const s of ungrouped) flatSessionOrder.push(s.session.name)
+  collectOrder(sessionFolders, null)
+  for (const s of rootSessions) flatSessionOrder.push(s.session.name)
 
-  // Escape clears selection
+  // Escape clears selection, Cmd+F opens search
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && selectedIds.size > 0) {
-        setSelectedIds(new Set())
+      if (e.key === 'Escape') {
+        if (showSearch) {
+          setShowSearch(false)
+          setFilter('')
+        } else if (selectedIds.size > 0) {
+          setSelectedIds(new Set())
+        }
       }
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [selectedIds.size])
+  }, [selectedIds.size, showSearch])
+
+  useEffect(() => {
+    if (showSearch) setTimeout(() => searchInputRef.current?.focus(), 0)
+  }, [showSearch])
 
   const handleRowClick = useCallback((name: string, e: React.MouseEvent) => {
     if (e.metaKey || e.ctrlKey) {
-      // Cmd/Ctrl+click: toggle individual item
       setSelectedIds(prev => {
         const next = new Set(prev)
         if (next.has(name)) next.delete(name)
@@ -965,7 +974,6 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
       })
       lastClickedRef.current = name
     } else if (e.shiftKey && lastClickedRef.current) {
-      // Shift+click: add/remove range from last clicked to here
       const lastIdx = flatSessionOrder.indexOf(lastClickedRef.current)
       const curIdx = flatSessionOrder.indexOf(name)
       if (lastIdx !== -1 && curIdx !== -1) {
@@ -974,7 +982,6 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
         const rangeNames = flatSessionOrder.slice(start, end + 1)
         setSelectedIds(prev => {
           const next = new Set(prev)
-          // If the clicked item is already selected, remove the range; otherwise add it
           const removing = prev.has(name)
           for (const n of rangeNames) {
             if (removing) next.delete(n)
@@ -984,7 +991,6 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
         })
       }
     } else {
-      // Plain click: select or deselect
       setSelectedIds(prev => prev.size === 1 && prev.has(name) ? new Set() : new Set([name]))
       lastClickedRef.current = name
     }
@@ -993,151 +999,144 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
   async function killSelected() {
     const sessionsStore = useWorkSessionsStore.getState()
     const tabsState = useTabsStore.getState()
-    const projectState = useProjectStore.getState()
 
     for (const name of selectedIds) {
       await window.electronAPI.killTerminal(name)
       clearSessionTitle(name)
 
-      // Complete associated work session
       const match = enriched.find(s => s.session.name === name)
       if (match?.workSession?.status === 'active') {
         await sessionsStore.completeSession(match.workSession.id)
       }
 
-      // Remove from session group
-      const gid = sessionToGroup.get(name)
-      if (gid) projectState.removeSessionFromGroup(gid, name)
+      useProjectStore.getState().removeSessionFromAllFolders(name)
 
-      // Close open tab
-      for (const [groupId, group] of Object.entries(tabsState.groups)) {
+      for (const [gid, group] of Object.entries(tabsState.groups)) {
         if (group.tabs.some(t => t.id === name)) {
-          tabsState.removeTab(groupId, name)
+          tabsState.removeTab(gid, name)
           break
         }
       }
     }
 
     setSelectedIds(new Set())
-    refresh()
+    setTimeout(refresh, 500)
   }
 
-  const subtitle = undefined
+  // Handle drop on root area (move to root)
+  function handleRootDragOver(e: React.DragEvent) {
+    if (!e.dataTransfer.types.includes('__dragging_session__') && !e.dataTransfer.types.includes('__dragging_folder__')) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
 
-  const SortIcon = SORT_ICONS[sessionSort]
+  function handleRootDrop(e: React.DragEvent) {
+    e.preventDefault()
+
+    const folderId = e.dataTransfer.getData('__dragging_folder__')
+    if (folderId) {
+      useProjectStore.getState().moveFolderToFolder(folderId, null)
+      return
+    }
+
+    const multi = e.dataTransfer.getData('__dragging_sessions__')
+    let names: string[] = []
+    if (multi) {
+      try { names = JSON.parse(multi) } catch {}
+    }
+    if (names.length === 0) {
+      const single = e.dataTransfer.getData('__dragging_session__')
+      if (single) names = [single]
+    }
+    if (names.length > 0) {
+      useProjectStore.getState().moveSessionsToFolder(names, null)
+    }
+  }
 
   return (
     <SidebarLayout
       title="Sessions"
-      subtitle={subtitle}
       actions={[
         {
+          icon: Search,
+          label: 'Search',
+          onClick: () => { setShowSearch(!showSearch); if (showSearch) setFilter('') },
+        },
+        {
           icon: FolderPlus,
-          label: 'New group',
-          onClick: () => useProjectStore.getState().addSessionGroup('New Group', []),
+          label: 'New folder',
+          onClick: () => useProjectStore.getState().addSessionFolder('New Folder', null),
         },
       ]}
     >
-      <div className="p-1">
-        {/* Sort toolbar */}
-        <div className="px-2 py-1 mb-2 border-b border-zinc-700/50 pb-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-1 text-ui-xs text-zinc-500 hover:text-zinc-300 transition-colors">
-                <SortIcon className="w-3 h-3" />
-                <span>Sort: {SORT_LABELS[sessionSort]}</span>
-                <ChevronDown className="w-2.5 h-2.5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="bg-zinc-900 border-zinc-700" align="start">
-              {SORT_CYCLE.map(order => {
-                const Icon = SORT_ICONS[order]
-                const isActive = order === sessionSort
-                return (
-                  <DropdownMenuItem
-                    key={order}
-                    className={`gap-2 text-ui-base cursor-pointer ${isActive ? 'bg-zinc-700 text-white' : ''}`}
-                    onSelect={() => useProjectStore.getState().setSessionSort(order)}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    {SORT_LABELS[order]}
-                  </DropdownMenuItem>
-                )
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
+      {/* Search bar */}
+      {showSearch && (
+        <div className="px-2 py-1.5 border-b border-zinc-700/50">
+          <input
+            ref={searchInputRef}
+            className="w-full bg-zinc-800 text-zinc-200 text-ui-base px-2 py-1 rounded border border-zinc-700 outline-none focus:border-blue-500 placeholder:text-zinc-600"
+            placeholder="Filter sessions…"
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Escape') { setShowSearch(false); setFilter('') }
+            }}
+          />
         </div>
+      )}
 
-        {/* User-defined groups */}
-        {sessionGroups.map(group => {
-          const sessions = groupedSessions.get(group.id) || []
-          return (
-            <SessionGroupSection
-              key={group.id}
-              group={group}
-              sessions={sessions}
-              selectedIds={selectedIds}
-              onRowClick={handleRowClick}
-              onDragStateChange={setIsDraggingActive}
-              isDraggingActive={isDraggingActive}
-              isManualSort={sessionSort === 'none'}
-              onRefresh={refresh}
-              sessionToGroup={sessionToGroup}
-            />
-          )
-        })}
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <ScrollArea className="flex-1 h-full">
+            <div
+              className="py-1 w-full overflow-x-hidden"
+              onDragOver={handleRootDragOver}
+              onDrop={handleRootDrop}
+            >
+              {/* Folders at root */}
+              {rootFolders.map(f => (
+                <FolderTreeNode
+                  key={f.id}
+                  folder={f}
+                  depth={0}
+                  allFolders={sessionFolders}
+                  sessionMap={sessionMap}
+                  selectedIds={selectedIds}
+                  onRowClick={handleRowClick}
+                  onDragStateChange={setIsDraggingActive}
+                  onKillSelected={killSelected}
+                  isDraggingActive={isDraggingActive}
+                  filter={filter}
+                  onRefresh={refresh}
+                />
+              ))}
 
-        {/* Ungrouped sessions (always visible) */}
-        <SessionGroupSection
-          group={null}
-          sessions={ungrouped}
-          selectedIds={selectedIds}
-          onRowClick={handleRowClick}
-          onDragStateChange={setIsDraggingActive}
-          isDraggingActive={isDraggingActive}
-          isManualSort={sessionSort === 'none'}
-          onRefresh={refresh}
-          sessionToGroup={sessionToGroup}
-        />
-
-        {/* Stale work sessions */}
-        {orphanedWorkSessions.length > 0 && (
-          <div className="mb-3">
-            <div className="px-2 mb-1 text-ui-xs font-medium uppercase tracking-wider text-zinc-300">
-              Stale
+              {/* Default folder for unfolder'd sessions — always shown */}
+              <DefaultFolderNode
+                sessions={rootSessions}
+                sessionMap={sessionMap}
+                selectedIds={selectedIds}
+                onRowClick={handleRowClick}
+                onDragStateChange={setIsDraggingActive}
+                onKillSelected={killSelected}
+                isDraggingActive={isDraggingActive}
+                filter={filter}
+                allFolders={sessionFolders}
+                onRefresh={refresh}
+              />
             </div>
-            {orphanedWorkSessions.map(ws => (
-              <OrphanedWorkSessionRow key={ws.id} session={ws} onAction={refresh} />
-            ))}
-          </div>
-        )}
+          </ScrollArea>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
+          <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={() => {
+            useProjectStore.getState().addSessionFolder('New Folder', null)
+          }}>
+            <FolderPlus className="w-3.5 h-3.5" />
+            New folder
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
 
-        {/* Selection action bar */}
-        {selectedIds.size > 0 && (
-          <div className="sticky bottom-0 bg-zinc-900 border-t border-zinc-700/50 p-2 mt-2 rounded">
-            <div className="flex items-center gap-2 text-ui-xs">
-              <span className="text-zinc-400 font-medium">{selectedIds.size} selected</span>
-              <div className="flex-1" />
-              <button
-                onClick={() => setSelectedIds(new Set())}
-                className="text-zinc-500 hover:text-zinc-300 transition-colors"
-              >
-                Clear
-              </button>
-            </div>
-
-            <div className="mt-1.5">
-              <button
-                onClick={killSelected}
-                className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-900/30 text-red-400 hover:bg-red-900/50 text-ui-xs transition-colors"
-              >
-                <Square className="w-3 h-3" />
-                Kill all
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
     </SidebarLayout>
   )
 }

@@ -49,23 +49,36 @@ async function remountSidebar(page: import('@playwright/test').Page) {
   await page.waitForTimeout(300)
 }
 
-/** Create a session group via the project store. */
-async function createSessionGroup(
+/** Create a session folder via the project store. */
+async function createSessionFolder(
   page: import('@playwright/test').Page,
   name: string,
-  sessionIds: string[] = [],
+  parentId: string | null = null,
 ): Promise<string> {
   return page.evaluate(
-    ({ name, sessionIds }) =>
-      (window as any).__stores__.project.getState().addSessionGroup(name, sessionIds),
-    { name, sessionIds },
+    ({ name, parentId }) =>
+      (window as any).__stores__.project.getState().addSessionFolder(name, parentId),
+    { name, parentId },
   )
 }
 
-/** Get session group data from the store. */
-async function getSessionGroups(page: import('@playwright/test').Page) {
+/** Move sessions into a folder via the project store. */
+async function moveSessionsToFolder(
+  page: import('@playwright/test').Page,
+  sessionIds: string[],
+  folderId: string | null,
+): Promise<void> {
+  return page.evaluate(
+    ({ sessionIds, folderId }) =>
+      (window as any).__stores__.project.getState().moveSessionsToFolder(sessionIds, folderId),
+    { sessionIds, folderId },
+  )
+}
+
+/** Get session folder data from the store. */
+async function getSessionFolders(page: import('@playwright/test').Page) {
   return page.evaluate(() =>
-    (window as any).__stores__.project.getState().sessionGroups,
+    (window as any).__stores__.project.getState().sessionFolders,
   )
 }
 
@@ -146,106 +159,143 @@ test.describe('Sessions Sidebar', () => {
   })
 })
 
-test.describe('Session Groups', () => {
+test.describe('Session Info Panel', () => {
   test.beforeEach(async ({ page }) => {
     await installTestMocks(page)
     await waitForApp(page)
   })
 
-  test('displays user-defined session groups', async ({ page }) => {
+  test('info panel stays within sidebar bounds and is not clipped', async ({ page }) => {
+    await openSessionsSidebar(page)
+    await injectSessions(page, [
+      { name: 'test-session-with-long-name', cwd: '/Users/chrisle/code/conductor/app' },
+    ])
+
+    // Click the info button to expand the details panel
+    const sessionRow = page.locator('text=test-session-with-long-name').first()
+    await sessionRow.waitFor({ state: 'visible', timeout: 3000 })
+
+    // Find and click the info (i) button within the session row
+    const infoButton = sessionRow.locator('..').locator('button').first()
+    await infoButton.click()
+
+    // Wait for the info panel to appear (it shows the cwd)
+    const infoPanel = page.locator('text=/Users/chrisle/code/conductor/app').first()
+    await infoPanel.waitFor({ state: 'visible', timeout: 3000 })
+
+    // Get the sidebar bounds and the info panel bounds
+    const sidebar = page.locator('[class*="overflow-y-auto"]').first()
+    const sidebarBox = await sidebar.boundingBox()
+    const panelContainer = infoPanel.locator('..')
+    const panelBox = await panelContainer.boundingBox()
+
+    expect(sidebarBox).toBeTruthy()
+    expect(panelBox).toBeTruthy()
+
+    // The info panel's right edge must not exceed the sidebar's right edge
+    const sidebarRight = sidebarBox!.x + sidebarBox!.width
+    const panelRight = panelBox!.x + panelBox!.width
+    expect(panelRight).toBeLessThanOrEqual(sidebarRight + 1) // +1px tolerance
+  })
+})
+
+test.describe('Session Folders', () => {
+  test.beforeEach(async ({ page }) => {
+    await installTestMocks(page)
+    await waitForApp(page)
+  })
+
+  test('displays user-defined session folders', async ({ page }) => {
     await openSessionsSidebar(page)
     await injectSessions(page, [
       { name: 'sess-a', cwd: '/tmp' },
       { name: 'sess-b', cwd: '/tmp' },
     ])
-    await createSessionGroup(page, 'Feature Work', ['sess-a'])
+    const folderId = await createSessionFolder(page, 'Feature Work')
+    await moveSessionsToFolder(page, ['sess-a'], folderId)
     await remountSidebar(page)
 
     await expect(page.locator('text=Feature Work')).toBeVisible({ timeout: 3000 })
   })
 
-  test('sessions in a group appear under that group header', async ({ page }) => {
+  test('sessions in a folder appear under that folder', async ({ page }) => {
     await openSessionsSidebar(page)
     await injectSessions(page, [
       { name: 't-NP-10', cwd: '/tmp' },
       { name: 't-NP-20', cwd: '/tmp' },
       { name: 'ungrouped-sess', cwd: '/tmp' },
     ])
-    await createSessionGroup(page, 'Sprint 5', ['t-NP-10', 't-NP-20'])
+    const folderId = await createSessionFolder(page, 'Sprint 5')
+    await moveSessionsToFolder(page, ['t-NP-10', 't-NP-20'], folderId)
     await remountSidebar(page)
 
     await expect(page.locator('text=Sprint 5')).toBeVisible({ timeout: 3000 })
-    await expect(page.locator('text=NP-10')).toBeVisible()
-    await expect(page.locator('text=NP-20')).toBeVisible()
-    // Ungrouped section should exist too
-    await expect(page.locator('text=Ungrouped')).toBeVisible()
+    await expect(page.locator('text=t-NP-10')).toBeVisible()
+    await expect(page.locator('text=t-NP-20')).toBeVisible()
   })
 
-  test('drag session into a group moves it via store', async ({ page }) => {
+  test('drag session into a folder moves it via store', async ({ page }) => {
     await openSessionsSidebar(page)
     await injectSessions(page, [
       { name: 'drag-me', cwd: '/tmp' },
     ])
-    const groupId = await createSessionGroup(page, 'Target Group', [])
+    const folderId = await createSessionFolder(page, 'Target Folder')
     await remountSidebar(page)
 
-    await expect(page.locator('text=Target Group')).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('text=Target Folder')).toBeVisible({ timeout: 3000 })
 
-    // Locate the session row and the group header
-    const sessionRow = page.locator('text=shell').first()
-    const groupHeader = page.locator('text=Target Group')
+    const sessionRow = page.locator('text=drag-me').first()
+    const folderRow = page.locator('text=Target Folder')
 
-    // Perform drag and drop
-    await sessionRow.dragTo(groupHeader)
+    await sessionRow.dragTo(folderRow)
 
-    // Verify the store was updated
-    const groups = await getSessionGroups(page)
-    const target = groups.find((g: any) => g.id === groupId)
+    const folders = await getSessionFolders(page)
+    const target = folders.find((f: any) => f.id === folderId)
     expect(target.sessionIds).toContain('drag-me')
   })
 
-  test('drag session between groups moves it from old to new', async ({ page }) => {
+  test('drag session between folders moves it from old to new', async ({ page }) => {
     await openSessionsSidebar(page)
     await injectSessions(page, [{ name: 'moving-sess', cwd: '/tmp' }])
-    const group1Id = await createSessionGroup(page, 'Group A', ['moving-sess'])
-    const group2Id = await createSessionGroup(page, 'Group B', [])
+    const folder1Id = await createSessionFolder(page, 'Folder A')
+    const folder2Id = await createSessionFolder(page, 'Folder B')
+    await moveSessionsToFolder(page, ['moving-sess'], folder1Id)
     await remountSidebar(page)
 
-    await expect(page.locator('text=Group A')).toBeVisible({ timeout: 3000 })
-    await expect(page.locator('text=Group B')).toBeVisible()
+    await expect(page.locator('text=Folder A')).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('text=Folder B')).toBeVisible()
 
-    // Find the session under Group A and drag to Group B
-    const sessionRow = page.locator('text=shell').first()
-    const groupBHeader = page.locator('text=Group B')
-    await sessionRow.dragTo(groupBHeader)
+    const sessionRow = page.locator('text=moving-sess').first()
+    const folderBRow = page.locator('text=Folder B')
+    await sessionRow.dragTo(folderBRow)
 
-    const groups = await getSessionGroups(page)
-    const gA = groups.find((g: any) => g.id === group1Id)
-    const gB = groups.find((g: any) => g.id === group2Id)
-    expect(gA.sessionIds).not.toContain('moving-sess')
-    expect(gB.sessionIds).toContain('moving-sess')
+    const folders = await getSessionFolders(page)
+    const fA = folders.find((f: any) => f.id === folder1Id)
+    const fB = folders.find((f: any) => f.id === folder2Id)
+    expect(fA.sessionIds).not.toContain('moving-sess')
+    expect(fB.sessionIds).toContain('moving-sess')
   })
 
-  test('cannot drop session onto ungrouped section', async ({ page }) => {
+  test('drop session on root area moves it out of folder', async ({ page }) => {
     await openSessionsSidebar(page)
     await injectSessions(page, [
       { name: 'grouped-sess', cwd: '/tmp' },
       { name: 'other-sess', cwd: '/tmp' },
     ])
-    const groupId = await createSessionGroup(page, 'My Group', ['grouped-sess'])
+    const folderId = await createSessionFolder(page, 'My Folder')
+    await moveSessionsToFolder(page, ['grouped-sess'], folderId)
     await remountSidebar(page)
 
-    await expect(page.locator('text=My Group')).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('text=My Folder')).toBeVisible({ timeout: 3000 })
 
-    // Try dragging a grouped session to "Ungrouped" — should NOT remove from group
-    // (Ungrouped has group=null so drop is rejected)
-    const sessionRow = page.locator('text=shell').first()
-    const ungroupedHeader = page.locator('text=Ungrouped')
-    await sessionRow.dragTo(ungroupedHeader)
+    // Drag out to root area
+    const sessionRow = page.locator('text=grouped-sess').first()
+    const rootArea = page.locator('text=other-sess').first()
+    await sessionRow.dragTo(rootArea)
 
-    const groups = await getSessionGroups(page)
-    const myGroup = groups.find((g: any) => g.id === groupId)
-    expect(myGroup.sessionIds).toContain('grouped-sess')
+    const folders = await getSessionFolders(page)
+    const myFolder = folders.find((f: any) => f.id === folderId)
+    expect(myFolder.sessionIds).not.toContain('grouped-sess')
   })
 })
 
@@ -472,72 +522,58 @@ test.describe('Tab Switching and Independent Data', () => {
   })
 })
 
-test.describe('Session Sort and Group Management', () => {
+test.describe('Session Folder Management', () => {
   test.beforeEach(async ({ page }) => {
     await installTestMocks(page)
     await waitForApp(page)
   })
 
-  test('creating a group via store shows in sidebar', async ({ page }) => {
+  test('creating a folder via store shows in sidebar', async ({ page }) => {
     await openSessionsSidebar(page)
     await injectSessions(page, [
       { name: 'sess-1', cwd: '/tmp' },
     ])
-    await createSessionGroup(page, 'Test Group', ['sess-1'])
+    const folderId = await createSessionFolder(page, 'Test Folder')
+    await moveSessionsToFolder(page, ['sess-1'], folderId)
     await remountSidebar(page)
 
-    await expect(page.locator('text=Test Group')).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('text=Test Folder')).toBeVisible({ timeout: 3000 })
   })
 
-  test('removing a group removes it from sidebar', async ({ page }) => {
+  test('removing a folder removes it from sidebar', async ({ page }) => {
     await openSessionsSidebar(page)
     await injectSessions(page, [{ name: 'sess-1', cwd: '/tmp' }])
-    const groupId = await createSessionGroup(page, 'Doomed Group', ['sess-1'])
+    const folderId = await createSessionFolder(page, 'Doomed Folder')
+    await moveSessionsToFolder(page, ['sess-1'], folderId)
     await remountSidebar(page)
-    await expect(page.locator('text=Doomed Group')).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('text=Doomed Folder')).toBeVisible({ timeout: 3000 })
 
-    // Remove the group
+    // Remove the folder
     await page.evaluate(
-      (id) => (window as any).__stores__.project.getState().removeSessionGroup(id),
-      groupId,
+      (id) => (window as any).__stores__.project.getState().removeSessionFolder(id),
+      folderId,
     )
 
-    await expect(page.locator('text=Doomed Group')).not.toBeVisible({ timeout: 3000 })
+    await expect(page.locator('text=Doomed Folder')).not.toBeVisible({ timeout: 3000 })
   })
 
-  test('renaming a group updates the sidebar header', async ({ page }) => {
+  test('renaming a folder updates the sidebar', async ({ page }) => {
     await openSessionsSidebar(page)
     await injectSessions(page, [{ name: 'sess-1', cwd: '/tmp' }])
-    const groupId = await createSessionGroup(page, 'Old Name', ['sess-1'])
+    const folderId = await createSessionFolder(page, 'Old Name')
+    await moveSessionsToFolder(page, ['sess-1'], folderId)
     await remountSidebar(page)
     await expect(page.locator('text=Old Name')).toBeVisible({ timeout: 3000 })
 
     // Rename
     await page.evaluate(
       ({ id, name }) =>
-        (window as any).__stores__.project.getState().renameSessionGroup(id, name),
-      { id: groupId, name: 'New Name' },
+        (window as any).__stores__.project.getState().renameSessionFolder(id, name),
+      { id: folderId, name: 'New Name' },
     )
 
     await expect(page.locator('text=New Name')).toBeVisible({ timeout: 3000 })
     await expect(page.locator('text=Old Name')).not.toBeVisible()
-  })
-
-  test('session group shows correct count badge', async ({ page }) => {
-    await openSessionsSidebar(page)
-    await injectSessions(page, [
-      { name: 's1', cwd: '/tmp' },
-      { name: 's2', cwd: '/tmp' },
-      { name: 's3', cwd: '/tmp' },
-    ])
-    await createSessionGroup(page, 'Counted', ['s1', 's2'])
-    await remountSidebar(page)
-
-    // The count badge shows next to the group header
-    await expect(page.locator('text=Counted')).toBeVisible({ timeout: 3000 })
-    // The "2" count should appear near the group header
-    const groupRow = page.locator('text=Counted').locator('..')
-    await expect(groupRow.locator('text=2')).toBeVisible()
   })
 })
 

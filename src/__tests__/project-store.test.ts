@@ -14,8 +14,7 @@ function resetStore() {
     projectSettings: undefined,
     workspaceSettings: undefined,
     sessionTitles: {},
-    sessionGroups: [],
-    sessionSort: 'created',
+    sessionFolders: [],
   })
 }
 
@@ -79,8 +78,7 @@ describe('useProjectStore', () => {
       expect(state.projectSettings).toBeUndefined()
       expect(state.workspaceSettings).toBeUndefined()
       expect(state.sessionTitles).toEqual({})
-      expect(state.sessionGroups).toEqual([])
-      expect(state.sessionSort).toBe('created')
+      expect(state.sessionFolders).toEqual([])
     })
   })
 
@@ -221,90 +219,100 @@ describe('useProjectStore', () => {
     })
   })
 
-  describe('session groups', () => {
+  describe('session folders', () => {
     beforeEach(() => {
       useProjectStore.getState().setActiveWorkspace('default')
     })
 
-    it('addSessionGroup creates a group and returns its id', () => {
-      const id = useProjectStore.getState().addSessionGroup('Dev', ['s1', 's2'])
+    it('addSessionFolder creates a folder and returns its id', () => {
+      const id = useProjectStore.getState().addSessionFolder('Dev', null)
       expect(id).toBeTruthy()
-      const groups = useProjectStore.getState().sessionGroups
-      expect(groups).toHaveLength(1)
-      expect(groups[0].name).toBe('Dev')
-      expect(groups[0].sessionIds).toEqual(['s1', 's2'])
+      const folders = useProjectStore.getState().sessionFolders
+      expect(folders).toHaveLength(1)
+      expect(folders[0].name).toBe('Dev')
+      expect(folders[0].parentId).toBeNull()
+      expect(folders[0].sessionIds).toEqual([])
     })
 
-    it('addSessionGroup removes sessions from existing groups', () => {
-      useProjectStore.getState().addSessionGroup('Group1', ['s1', 's2'])
-      useProjectStore.getState().addSessionGroup('Group2', ['s2', 's3'])
-      const groups = useProjectStore.getState().sessionGroups
-      expect(groups[0].sessionIds).toEqual(['s1'])
-      expect(groups[1].sessionIds).toEqual(['s2', 's3'])
+    it('addSessionFolder supports nesting', () => {
+      const parentId = useProjectStore.getState().addSessionFolder('Parent', null)
+      const childId = useProjectStore.getState().addSessionFolder('Child', parentId)
+      const folders = useProjectStore.getState().sessionFolders
+      expect(folders).toHaveLength(2)
+      expect(folders[1].parentId).toBe(parentId)
     })
 
-    it('removeSessionGroup removes a group', () => {
-      const id = useProjectStore.getState().addSessionGroup('Group', ['s1'])
-      useProjectStore.getState().removeSessionGroup(id)
-      expect(useProjectStore.getState().sessionGroups).toHaveLength(0)
+    it('removeSessionFolder removes a folder', () => {
+      const id = useProjectStore.getState().addSessionFolder('Folder', null)
+      useProjectStore.getState().removeSessionFolder(id)
+      expect(useProjectStore.getState().sessionFolders).toHaveLength(0)
     })
 
-    it('renameSessionGroup renames a group', () => {
-      const id = useProjectStore.getState().addSessionGroup('Old', ['s1'])
-      useProjectStore.getState().renameSessionGroup(id, 'New')
-      expect(useProjectStore.getState().sessionGroups[0].name).toBe('New')
+    it('removeSessionFolder removes descendants', () => {
+      const parentId = useProjectStore.getState().addSessionFolder('Parent', null)
+      useProjectStore.getState().addSessionFolder('Child', parentId)
+      useProjectStore.getState().removeSessionFolder(parentId)
+      expect(useProjectStore.getState().sessionFolders).toHaveLength(0)
     })
 
-    it('addSessionsToGroup merges sessions and removes from others', () => {
-      const g1 = useProjectStore.getState().addSessionGroup('G1', ['s1', 's2'])
-      const g2 = useProjectStore.getState().addSessionGroup('G2', ['s3'])
-      useProjectStore.getState().addSessionsToGroup(g2, ['s2', 's4'])
-      const groups = useProjectStore.getState().sessionGroups
-      const group1 = groups.find(g => g.id === g1)!
-      const group2 = groups.find(g => g.id === g2)!
-      expect(group1.sessionIds).toEqual(['s1'])
-      expect(group2.sessionIds).toContain('s2')
-      expect(group2.sessionIds).toContain('s3')
-      expect(group2.sessionIds).toContain('s4')
+    it('renameSessionFolder renames a folder', () => {
+      const id = useProjectStore.getState().addSessionFolder('Old', null)
+      useProjectStore.getState().renameSessionFolder(id, 'New')
+      expect(useProjectStore.getState().sessionFolders[0].name).toBe('New')
     })
 
-    it('removeSessionFromGroup removes a single session', () => {
-      const id = useProjectStore.getState().addSessionGroup('G', ['s1', 's2', 's3'])
-      useProjectStore.getState().removeSessionFromGroup(id, 's2')
-      const group = useProjectStore.getState().sessionGroups[0]
-      expect(group.sessionIds).toEqual(['s1', 's3'])
+    it('moveSessionToFolder moves a session into a folder', () => {
+      const fid = useProjectStore.getState().addSessionFolder('F', null)
+      useProjectStore.getState().moveSessionToFolder('s1', fid)
+      expect(useProjectStore.getState().sessionFolders[0].sessionIds).toEqual(['s1'])
     })
 
-    it('setSessionGroups replaces all groups', () => {
-      useProjectStore.getState().addSessionGroup('Old', ['s1'])
-      useProjectStore.getState().setSessionGroups([
-        { id: 'g1', name: 'New', sessionIds: ['x1'] },
+    it('moveSessionToFolder removes from previous folder', () => {
+      const f1 = useProjectStore.getState().addSessionFolder('F1', null)
+      const f2 = useProjectStore.getState().addSessionFolder('F2', null)
+      useProjectStore.getState().moveSessionToFolder('s1', f1)
+      useProjectStore.getState().moveSessionToFolder('s1', f2)
+      const folders = useProjectStore.getState().sessionFolders
+      expect(folders.find(f => f.id === f1)!.sessionIds).toEqual([])
+      expect(folders.find(f => f.id === f2)!.sessionIds).toEqual(['s1'])
+    })
+
+    it('moveSessionsToFolder moves multiple sessions', () => {
+      const fid = useProjectStore.getState().addSessionFolder('F', null)
+      useProjectStore.getState().moveSessionsToFolder(['s1', 's2'], fid)
+      expect(useProjectStore.getState().sessionFolders[0].sessionIds).toEqual(['s1', 's2'])
+    })
+
+    it('moveFolderToFolder reparents a folder', () => {
+      const f1 = useProjectStore.getState().addSessionFolder('F1', null)
+      const f2 = useProjectStore.getState().addSessionFolder('F2', null)
+      useProjectStore.getState().moveFolderToFolder(f2, f1)
+      expect(useProjectStore.getState().sessionFolders.find(f => f.id === f2)!.parentId).toBe(f1)
+    })
+
+    it('moveFolderToFolder prevents moving into self', () => {
+      const fid = useProjectStore.getState().addSessionFolder('F', null)
+      useProjectStore.getState().moveFolderToFolder(fid, fid)
+      expect(useProjectStore.getState().sessionFolders[0].parentId).toBeNull()
+    })
+
+    it('removeSessionFromAllFolders removes a session everywhere', () => {
+      const f1 = useProjectStore.getState().addSessionFolder('F1', null)
+      const f2 = useProjectStore.getState().addSessionFolder('F2', null)
+      useProjectStore.getState().moveSessionToFolder('s1', f1)
+      useProjectStore.getState().moveSessionToFolder('s1', f2)
+      useProjectStore.getState().removeSessionFromAllFolders('s1')
+      const folders = useProjectStore.getState().sessionFolders
+      expect(folders.every(f => !f.sessionIds.includes('s1'))).toBe(true)
+    })
+
+    it('setSessionFolders replaces all folders', () => {
+      useProjectStore.getState().addSessionFolder('Old', null)
+      useProjectStore.getState().setSessionFolders([
+        { id: 'f1', name: 'New', parentId: null, sessionIds: ['x1'], collapsed: false },
       ])
-      expect(useProjectStore.getState().sessionGroups).toHaveLength(1)
-      expect(useProjectStore.getState().sessionGroups[0].id).toBe('g1')
-    })
-  })
-
-  describe('session sort', () => {
-    beforeEach(() => {
-      useProjectStore.getState().setActiveWorkspace('default')
-    })
-
-    it('defaults to created', () => {
-      expect(useProjectStore.getState().sessionSort).toBe('created')
-    })
-
-    it('setSessionSort changes sort order and marks dirty', () => {
-      useProjectStore.getState().setSessionSort('alpha')
-      expect(useProjectStore.getState().sessionSort).toBe('alpha')
-      expect(useProjectStore.getState().isWorkspaceDirty()).toBe(true)
-    })
-
-    it('supports all sort modes', () => {
-      for (const mode of ['created', 'alpha', 'activity', 'attached'] as const) {
-        useProjectStore.getState().setSessionSort(mode)
-        expect(useProjectStore.getState().sessionSort).toBe(mode)
-      }
+      expect(useProjectStore.getState().sessionFolders).toHaveLength(1)
+      expect(useProjectStore.getState().sessionFolders[0].id).toBe('f1')
     })
   })
 
