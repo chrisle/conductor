@@ -38,10 +38,11 @@ export const aiCliExtension: Extension = {
       iconClassName: 'w-3.5 h-3.5 text-[#D97757] shrink-0',
       action: (groupId: string) => {
         const cwd = useSidebarStore.getState().rootPath || undefined
+        const id = nextSessionId('claude-code')
         useTabsStore.getState().addTab(groupId, {
-          id: nextSessionId('claude-code'),
+          id,
           type: 'claude-code',
-          title: 'Claude Code',
+          title: id,
           filePath: cwd,
           initialCommand: 'claude\n',
         })
@@ -54,10 +55,11 @@ export const aiCliExtension: Extension = {
       iconClassName: 'w-3.5 h-3.5 text-[#D97757] shrink-0',
       action: (groupId: string) => {
         const cwd = useSidebarStore.getState().rootPath || undefined
+        const id = nextSessionId('claude-code')
         useTabsStore.getState().addTab(groupId, {
-          id: nextSessionId('claude-code'),
+          id,
           type: 'claude-code',
-          title: 'Claude Code',
+          title: id,
           filePath: cwd,
           initialCommand: 'claude --continue\n',
         })
@@ -69,10 +71,11 @@ export const aiCliExtension: Extension = {
       iconClassName: 'w-3.5 h-3.5 text-[#D97757] shrink-0',
       action: (groupId: string) => {
         const cwd = useSidebarStore.getState().rootPath || undefined
+        const id = nextSessionId('claude-code')
         useTabsStore.getState().addTab(groupId, {
-          id: nextSessionId('claude-code'),
+          id,
           type: 'claude-code',
-          title: 'Claude Code',
+          title: id,
           filePath: cwd,
           initialCommand: 'claude --resume\n',
         })
@@ -84,10 +87,11 @@ export const aiCliExtension: Extension = {
       iconClassName: 'w-3.5 h-3.5 text-[#10a37f] shrink-0',
       action: (groupId: string) => {
         const cwd = useSidebarStore.getState().rootPath || undefined
+        const id = nextSessionId('codex')
         useTabsStore.getState().addTab(groupId, {
-          id: nextSessionId('codex'),
+          id,
           type: 'codex',
-          title: 'Codex',
+          title: id,
           filePath: cwd,
           initialCommand: 'codex\n',
         })
