@@ -182,27 +182,140 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   const [dropZone, setDropZone] = useState<DropZone>(null)
   const [dragOverTabIndex, setDragOverTabIndex] = useState<number | null>(null)
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
+  const [floatingMenuOpen, setFloatingMenuOpen] = useState(false)
+  const [floatingMenuPos, setFloatingMenuPos] = useState({ x: 0, y: 0 })
+  const [floatingSubmenu, setFloatingSubmenu] = useState<'claude' | 'browser' | null>(null)
+  const floatingAnchorRef = useRef<HTMLDivElement>(null)
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const renameInputRef = useRef<HTMLInputElement>(null)
   const tabBarRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const dragIndexRef = useRef<number | null>(null)
+  const mousePos = useRef({ x: 0, y: 0 })
   const { rootPath } = useSidebarStore()
   const isFocused = focusedGroupId === groupId
 
-  // Cmd+T opens new tab menu (same as the + button)
+  // Track mouse position for Cmd+T
+  useEffect(() => {
+    function onMouseMove(e: MouseEvent) {
+      mousePos.current = { x: e.clientX, y: e.clientY }
+    }
+    document.addEventListener('mousemove', onMouseMove)
+    return () => document.removeEventListener('mousemove', onMouseMove)
+  }, [])
+
+  // Cmd+T opens new tab menu at mouse position
   useEffect(() => {
     if (!isFocused) return
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 't') {
         e.preventDefault()
-        setNewTabMenuOpen(prev => !prev)
+        setFloatingMenuPos(mousePos.current)
+        setFloatingMenuOpen(prev => !prev)
       }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [isFocused])
+
+  // Cmd+W closes active tab
+  useEffect(() => {
+    if (!isFocused || !group) return
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
+        e.preventDefault()
+        if (group.activeTabId) closeTab(group.activeTabId)
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [isFocused, group?.activeTabId])
+
+  const claudeAccounts = useConfigStore(s => s.config.claudeAccounts)
+
+  function addClaudeTab(apiKey?: string, accountName?: string) {
+    const cwd = rootPath || undefined
+    const id = nextSessionId('claude-code')
+    useTabsStore.getState().addTab(groupId, {
+      id,
+      type: 'claude-code',
+      title: accountName ? `${id} (${accountName})` : id,
+      filePath: cwd,
+      initialCommand: 'claude\n',
+      apiKey,
+    })
+  }
+
+  // Get menu items from plugin registry (for third-party extensions)
+  const menuItems = extensionRegistry.getNewTabMenuItems()
+  // Filter out built-in items we render ourselves
+  const extraMenuItems = menuItems.filter(item =>
+    !['Claude Code', 'Claude Code (continue)', 'Claude Code (resume)', 'Codex', 'Terminal', 'Browser'].includes(item.label)
+  )
+
+  // Keyboard number shortcuts for the floating menu
+  useEffect(() => {
+    if (!floatingMenuOpen) {
+      setFloatingSubmenu(null)
+      return
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      const n = parseInt(e.key)
+      if (isNaN(n) || n < 1) return
+      e.preventDefault()
+      e.stopPropagation()
+
+      if (floatingSubmenu === 'claude') {
+        if (n === 1) {
+          addClaudeTab()
+          setFloatingMenuOpen(false)
+        } else {
+          const account = claudeAccounts[n - 2]
+          if (account) {
+            addClaudeTab(account.apiKey, account.name)
+            setFloatingMenuOpen(false)
+          }
+        }
+        return
+      }
+
+      if (floatingSubmenu === 'browser') {
+        if (n === 1) {
+          useTabsStore.getState().addTab(groupId, { type: 'browser', title: 'Browser', url: 'https://google.com' })
+          setFloatingMenuOpen(false)
+        } else if (n === 2) {
+          window.electronAPI.openExternal('https://google.com')
+          setFloatingMenuOpen(false)
+        }
+        return
+      }
+
+      // Top level: 1=Claude, 2=Codex, 3=Terminal, 4=Browser, 5+=extras
+      if (n === 1) {
+        setFloatingSubmenu('claude')
+      } else if (n === 2) {
+        const cwd = rootPath || undefined
+        const codexId = nextSessionId('codex')
+        useTabsStore.getState().addTab(groupId, { id: codexId, type: 'codex', title: codexId, filePath: cwd, initialCommand: 'codex\n' })
+        setFloatingMenuOpen(false)
+      } else if (n === 3) {
+        const cwd = rootPath || undefined
+        useTabsStore.getState().addTab(groupId, { type: 'terminal', title: 'Terminal', filePath: cwd })
+        setFloatingMenuOpen(false)
+      } else if (n === 4) {
+        setFloatingSubmenu('browser')
+      } else {
+        const extra = extraMenuItems[n - 5]
+        if (extra) {
+          extra.action(groupId)
+          setFloatingMenuOpen(false)
+        }
+      }
+    }
+    document.addEventListener('keydown', onKeyDown, true)
+    return () => document.removeEventListener('keydown', onKeyDown, true)
+  }, [floatingMenuOpen, floatingSubmenu, claudeAccounts, rootPath, groupId, extraMenuItems])
 
   if (!group) return <div className="h-full w-full bg-zinc-950" />
 
@@ -295,18 +408,6 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     }, 0)
   }
 
-  useEffect(() => {
-    if (!isFocused) return
-    function onKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
-        e.preventDefault()
-        if (group.activeTabId) closeTab(group.activeTabId)
-      }
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [isFocused, group.activeTabId])
-
   function isTerminalLike(type: string): boolean {
     return type === 'terminal' || type === 'claude-code' || type === 'codex'
   }
@@ -369,30 +470,16 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     setRenamingTabId(null)
   }
 
-  const claudeAccounts = useConfigStore(s => s.config.claudeAccounts)
-
-  function addClaudeTab(apiKey?: string, accountName?: string) {
-    const cwd = rootPath || undefined
-    useTabsStore.getState().addTab(groupId, {
-      id: nextSessionId('claude-code'),
-      type: 'claude-code',
-      title: accountName ? `Claude (${accountName})` : 'Claude Code',
-      filePath: cwd,
-      initialCommand: 'claude\n',
-      apiKey,
-    })
-  }
-
   const friendly = (p: string) => p.replace(/^\/Users\/[^/]+/, '~')
 
-  // Get menu items from plugin registry (for third-party extensions)
-  const menuItems = extensionRegistry.getNewTabMenuItems()
-  // Filter out built-in items we render ourselves
-  const extraMenuItems = menuItems.filter(item =>
-    !['Claude Code', 'Claude Code (continue)', 'Claude Code (resume)', 'Codex', 'Terminal', 'Browser'].includes(item.label)
-  )
+  function NumberHint({ n }: { n: number }) {
+    return (
+      <span className="ml-auto text-[10px] text-zinc-500 font-mono leading-none">{n}</span>
+    )
+  }
 
-  function renderMenuItems(onDone: () => void) {
+  function renderMenuItems(onDone: () => void, showHints = false) {
+    const builtinCount = 4 // Claude, Codex, Terminal, Browser
     return (
       <>
         {/* Current directory */}
@@ -409,6 +496,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
           <DropdownMenuSubTrigger className="gap-2 text-ui-base cursor-pointer">
             <ClaudeIcon className="w-3.5 h-3.5 text-[#D97757] shrink-0" />
             <span>Claude</span>
+            {showHints && <NumberHint n={1} />}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="bg-zinc-900 border-zinc-700 shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
             <DropdownMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5">Claude Accounts</DropdownMenuLabel>
@@ -418,15 +506,17 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
               className="gap-2 text-ui-base cursor-pointer"
             >
               Default
+              {showHints && <NumberHint n={1} />}
             </DropdownMenuItem>
             {claudeAccounts.length > 0 && <DropdownMenuSeparator />}
-            {claudeAccounts.map(account => (
+            {claudeAccounts.map((account, i) => (
               <DropdownMenuItem
                 key={account.id}
                 onClick={() => { addClaudeTab(account.apiKey, account.name); onDone() }}
                 className="gap-2 text-ui-base cursor-pointer"
               >
                 {account.name}
+                {showHints && <NumberHint n={i + 2} />}
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
@@ -444,10 +534,11 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
         <DropdownMenuItem
           onClick={() => {
             const cwd = rootPath || undefined
+            const codexId = nextSessionId('codex')
             useTabsStore.getState().addTab(groupId, {
-              id: nextSessionId('codex'),
+              id: codexId,
               type: 'codex',
-              title: 'Codex',
+              title: codexId,
               filePath: cwd,
               initialCommand: 'codex\n',
             })
@@ -457,6 +548,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
         >
           <CodexIcon className="w-3.5 h-3.5 text-[#10a37f] shrink-0" />
           <span>Codex</span>
+          {showHints && <NumberHint n={2} />}
         </DropdownMenuItem>
 
         {/* Terminal */}
@@ -474,6 +566,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
         >
           <Terminal className="w-3.5 h-3.5 text-green-400 shrink-0" />
           <span>Terminal</span>
+          {showHints && <NumberHint n={3} />}
         </DropdownMenuItem>
 
         {/* Browser submenu */}
@@ -481,6 +574,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
           <DropdownMenuSubTrigger className="gap-2 text-ui-base cursor-pointer">
             <Globe className="w-3.5 h-3.5 text-blue-400 shrink-0" />
             <span>Browser</span>
+            {showHints && <NumberHint n={4} />}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="bg-zinc-900 border-zinc-700">
             <DropdownMenuItem
@@ -495,6 +589,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
               className="gap-2 text-ui-base cursor-pointer"
             >
               Internal
+              {showHints && <NumberHint n={1} />}
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => {
@@ -504,6 +599,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
               className="gap-2 text-ui-base cursor-pointer"
             >
               System
+              {showHints && <NumberHint n={2} />}
             </DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
@@ -518,6 +614,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
           >
             <item.icon className={item.iconClassName || "w-3.5 h-3.5 shrink-0"} />
             <span>{item.label}</span>
+            {showHints && <NumberHint n={builtinCount + i + 1} />}
           </DropdownMenuItem>
         ))}
       </>
@@ -576,10 +673,11 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
         <ContextMenuItem
           onClick={() => {
             const cwd = rootPath || undefined
+            const codexId = nextSessionId('codex')
             useTabsStore.getState().addTab(groupId, {
-              id: nextSessionId('codex'),
+              id: codexId,
               type: 'codex',
-              title: 'Codex',
+              title: codexId,
               filePath: cwd,
               initialCommand: 'codex\n',
             })
@@ -784,6 +882,57 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
         </div>
         </div>
       </div>
+
+      {/* Floating new tab menu (Cmd+T at mouse position) */}
+      <DropdownMenu open={floatingMenuOpen} onOpenChange={(open) => { setFloatingMenuOpen(open); if (!open) setFloatingSubmenu(null) }}>
+        <DropdownMenuTrigger asChild>
+          <div
+            ref={floatingAnchorRef}
+            style={{
+              position: 'fixed',
+              left: floatingMenuPos.x,
+              top: floatingMenuPos.y,
+              width: 0,
+              height: 0,
+              pointerEvents: 'none',
+            }}
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-44 bg-zinc-900 border-zinc-700 shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
+          {floatingSubmenu === 'claude' ? (
+            <>
+              <DropdownMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5">Claude Accounts</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => { addClaudeTab(); setFloatingMenuOpen(false) }} className="gap-2 text-ui-base cursor-pointer">
+                Default
+                <NumberHint n={1} />
+              </DropdownMenuItem>
+              {claudeAccounts.length > 0 && <DropdownMenuSeparator />}
+              {claudeAccounts.map((account, i) => (
+                <DropdownMenuItem key={account.id} onClick={() => { addClaudeTab(account.apiKey, account.name); setFloatingMenuOpen(false) }} className="gap-2 text-ui-base cursor-pointer">
+                  {account.name}
+                  <NumberHint n={i + 2} />
+                </DropdownMenuItem>
+              ))}
+            </>
+          ) : floatingSubmenu === 'browser' ? (
+            <>
+              <DropdownMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5">Browser</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => { useTabsStore.getState().addTab(groupId, { type: 'browser', title: 'Browser', url: 'https://google.com' }); setFloatingMenuOpen(false) }} className="gap-2 text-ui-base cursor-pointer">
+                Internal
+                <NumberHint n={1} />
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { window.electronAPI.openExternal('https://google.com'); setFloatingMenuOpen(false) }} className="gap-2 text-ui-base cursor-pointer">
+                System
+                <NumberHint n={2} />
+              </DropdownMenuItem>
+            </>
+          ) : (
+            renderMenuItems(() => setFloatingMenuOpen(false), true)
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/* Tab content */}
       <div
