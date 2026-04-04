@@ -3,7 +3,9 @@ import { FitAddon } from '@xterm/addon-fit'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { WebglAddon } from '@xterm/addon-webgl'
 import '@xterm/xterm/css/xterm.css'
-import { terminalConfig, terminalColors } from './theme'
+import { terminalConfig, terminalColorThemes } from './theme'
+import { useConfigStore } from '@/store/config'
+import type { TerminalCustomization } from '@/types/app-config'
 
 export type { Terminal, FitAddon, SerializeAddon }
 
@@ -35,15 +37,23 @@ function injectXtermStyles() {
   document.head.appendChild(style)
 }
 
+function getTerminalCustomization(): TerminalCustomization {
+  return useConfigStore.getState().config.customization.terminal
+}
+
 export async function createXtermTerminal(container: HTMLElement): Promise<{ term: Terminal; fitAddon: FitAddon; serializeAddon: SerializeAddon }> {
   injectXtermStyles()
 
+  const custom = getTerminalCustomization()
+  const theme = terminalColorThemes[custom.colorTheme] ?? terminalColorThemes.default
+
   const term = new Terminal({
-    theme: terminalColors,
-    fontFamily: terminalConfig.fontFamily,
-    fontSize: terminalConfig.fontSize,
-    cursorBlink: terminalConfig.cursorBlink,
-    cursorStyle: terminalConfig.cursorStyle,
+    theme,
+    fontFamily: custom.fontFamily || terminalConfig.fontFamily,
+    fontSize: custom.fontSize || terminalConfig.fontSize,
+    lineHeight: custom.lineHeight || terminalConfig.lineHeight,
+    cursorBlink: custom.cursorBlink ?? terminalConfig.cursorBlink,
+    cursorStyle: custom.cursorStyle || terminalConfig.cursorStyle,
     scrollback: terminalConfig.scrollback,
     allowTransparency: true,
   })

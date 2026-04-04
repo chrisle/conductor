@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import type { AppConfig, ClaudeAccount, JiraConnection, DeepPartial } from '../types/app-config'
-import { DEFAULT_APP_CONFIG } from '../types/app-config'
+import type { AppConfig, ClaudeAccount, JiraConnection, DeepPartial, TerminalCustomization, EditorCustomization, KeyboardShortcut } from '../types/app-config'
+import { DEFAULT_APP_CONFIG, DEFAULT_TERMINAL_CUSTOMIZATION, DEFAULT_EDITOR_CUSTOMIZATION, DEFAULT_KEYBOARD_SHORTCUTS } from '../types/app-config'
 
 export interface ConfigState {
   config: AppConfig
@@ -27,6 +27,13 @@ export interface ConfigState {
   updateJiraConnection: (id: string, patch: Partial<JiraConnection>) => Promise<void>
   removeJiraConnection: (id: string) => Promise<void>
   getActiveJiraConnection: () => JiraConnection | null
+
+  // Customization
+  setTerminalCustomization: (patch: Partial<TerminalCustomization>) => Promise<void>
+  setEditorCustomization: (patch: Partial<EditorCustomization>) => Promise<void>
+  setKeyboardShortcuts: (shortcuts: KeyboardShortcut[]) => Promise<void>
+  updateKeyboardShortcut: (id: string, keys: string) => Promise<void>
+  resetCustomization: () => Promise<void>
 }
 
 export const useConfigStore = create<ConfigState>((set, get) => ({
@@ -49,6 +56,11 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
             codex: { ...DEFAULT_APP_CONFIG.aiCli.codex, ...loaded.aiCli?.codex },
           },
           extensions: { ...DEFAULT_APP_CONFIG.extensions, ...loaded.extensions },
+          customization: {
+            terminal: { ...DEFAULT_TERMINAL_CUSTOMIZATION, ...(loaded as any).customization?.terminal },
+            editor: { ...DEFAULT_EDITOR_CUSTOMIZATION, ...(loaded as any).customization?.editor },
+            keyboardShortcuts: (loaded as any).customization?.keyboardShortcuts ?? [...DEFAULT_KEYBOARD_SHORTCUTS],
+          },
         }
         set({ config: merged, ready: true })
         return
@@ -167,6 +179,63 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
 
   getActiveJiraConnection: () => {
     return get().config.jiraConnections[0] ?? null
+  },
+
+  setTerminalCustomization: async (patch) => {
+    const terminal = { ...get().config.customization.terminal, ...patch }
+    set(state => ({
+      config: {
+        ...state.config,
+        customization: { ...state.config.customization, terminal },
+      },
+    }))
+    await window.electronAPI.patchConfig({ customization: { terminal } } as any)
+  },
+
+  setEditorCustomization: async (patch) => {
+    const editor = { ...get().config.customization.editor, ...patch }
+    set(state => ({
+      config: {
+        ...state.config,
+        customization: { ...state.config.customization, editor },
+      },
+    }))
+    await window.electronAPI.patchConfig({ customization: { editor } } as any)
+  },
+
+  setKeyboardShortcuts: async (shortcuts) => {
+    set(state => ({
+      config: {
+        ...state.config,
+        customization: { ...state.config.customization, keyboardShortcuts: shortcuts },
+      },
+    }))
+    await window.electronAPI.patchConfig({ customization: { keyboardShortcuts: shortcuts } } as any)
+  },
+
+  updateKeyboardShortcut: async (id, keys) => {
+    const shortcuts = get().config.customization.keyboardShortcuts.map(s =>
+      s.id === id ? { ...s, keys } : s
+    )
+    set(state => ({
+      config: {
+        ...state.config,
+        customization: { ...state.config.customization, keyboardShortcuts: shortcuts },
+      },
+    }))
+    await window.electronAPI.patchConfig({ customization: { keyboardShortcuts: shortcuts } } as any)
+  },
+
+  resetCustomization: async () => {
+    const customization = {
+      terminal: { ...DEFAULT_TERMINAL_CUSTOMIZATION },
+      editor: { ...DEFAULT_EDITOR_CUSTOMIZATION },
+      keyboardShortcuts: [...DEFAULT_KEYBOARD_SHORTCUTS],
+    }
+    set(state => ({
+      config: { ...state.config, customization },
+    }))
+    await window.electronAPI.patchConfig({ customization } as any)
   },
 }))
 
