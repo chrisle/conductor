@@ -28,6 +28,9 @@ export default defineConfig({
     clearScreen: false,
     root: '.',
     publicDir: 'public',
+    server: {
+      hmr: false
+    },
     build: {
       rollupOptions: {
         input: resolve('index.html')
