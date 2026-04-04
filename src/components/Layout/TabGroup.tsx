@@ -191,14 +191,13 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   const { rootPath } = useSidebarStore()
   const isFocused = focusedGroupId === groupId
 
-  // Cmd+T opens terminal
+  // Cmd+T opens new tab menu (same as the + button)
   useEffect(() => {
     if (!isFocused) return
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 't') {
         e.preventDefault()
-        const cwd = useSidebarStore.getState().rootPath || undefined
-        addTab(groupId, { type: 'terminal', title: 'Terminal', filePath: cwd })
+        setNewTabMenuOpen(prev => !prev)
       }
     }
     document.addEventListener('keydown', onKeyDown)
