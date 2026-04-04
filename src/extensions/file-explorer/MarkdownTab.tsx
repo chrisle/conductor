@@ -2,7 +2,10 @@ import React, { useEffect, useState, useCallback } from 'react'
 import Editor from '@monaco-editor/react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { PanelRightClose, PanelRightOpen } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
 import { useTabsStore } from '@/store/tabs'
 import type { TabProps } from '@/extensions/types'
 
@@ -11,6 +14,7 @@ export default function MarkdownTab({ tabId, groupId, isActive, tab }: TabProps)
   const [content, setContent] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showPreview, setShowPreview] = useState(true)
   const { updateTab } = useTabsStore()
 
   useEffect(() => {
@@ -86,64 +90,81 @@ export default function MarkdownTab({ tabId, groupId, isActive, tab }: TabProps)
   }
 
   return (
-    <div className="flex h-full w-full" onKeyDown={e => {
+    <div className="flex flex-col h-full w-full" onKeyDown={e => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault()
         handleSave()
       }
     }}>
-      {/* Editor */}
-      <div className="h-full w-1/2 border-r border-zinc-800">
-        <Editor
-          height="100%"
-          language="markdown"
-          value={content}
-          onChange={handleChange}
-          theme="vs-dark"
-          options={{
-            fontSize: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--ui-text-base').trim(), 10) || 13,
-            fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
-            fontLigatures: true,
-            lineHeight: 1.6,
-            minimap: { enabled: false },
-            scrollBeyondLastLine: false,
-            renderWhitespace: 'selection',
-            tabSize: 2,
-            wordWrap: 'on',
-            padding: { top: 12, bottom: 12 },
-            smoothScrolling: true,
-            cursorBlinking: 'smooth',
-            cursorSmoothCaretAnimation: 'on',
-            renderLineHighlight: 'line',
-            lineNumbers: 'on',
-            glyphMargin: false,
-            folding: true,
-            overviewRulerBorder: false,
-            scrollbar: {
-              verticalScrollbarSize: 6,
-              horizontalScrollbarSize: 6
-            }
-          }}
-        />
+      {/* Toolbar */}
+      <div className="flex items-center justify-end px-2 py-1 border-b border-zinc-800 shrink-0">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="w-6 h-6 text-zinc-400 hover:text-zinc-200"
+          onClick={() => setShowPreview(prev => !prev)}
+          title={showPreview ? 'Hide preview' : 'Show preview'}
+        >
+          {showPreview ? <PanelRightClose className="w-3.5 h-3.5" /> : <PanelRightOpen className="w-3.5 h-3.5" />}
+        </Button>
       </div>
 
-      {/* Preview */}
-      <div className="h-full w-1/2 overflow-auto p-8">
-        <div className="max-w-3xl mx-auto prose prose-invert prose-zinc prose-base
-          prose-headings:text-zinc-100 prose-headings:font-semibold
-          prose-p:text-zinc-300 prose-p:leading-relaxed
-          prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline
-          prose-strong:text-zinc-200
-          prose-code:text-pink-400 prose-code:bg-zinc-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none
-          prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800 prose-pre:rounded-lg
-          prose-blockquote:border-zinc-700 prose-blockquote:text-zinc-400
-          prose-li:text-zinc-300
-          prose-th:text-zinc-200 prose-td:text-zinc-300
-          prose-hr:border-zinc-800
-          prose-img:rounded-lg
-        ">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      <div className="flex h-full w-full min-h-0">
+        {/* Editor */}
+        <div className={cn('h-full border-r border-zinc-800', showPreview ? 'w-1/2' : 'w-full')}>
+          <Editor
+            height="100%"
+            language="markdown"
+            value={content}
+            onChange={handleChange}
+            theme="vs-dark"
+            options={{
+              fontSize: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--ui-text-base').trim(), 10) || 13,
+              fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
+              fontLigatures: true,
+              lineHeight: 1.6,
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              renderWhitespace: 'selection',
+              tabSize: 2,
+              wordWrap: 'on',
+              padding: { top: 12, bottom: 12 },
+              smoothScrolling: true,
+              cursorBlinking: 'smooth',
+              cursorSmoothCaretAnimation: 'on',
+              renderLineHighlight: 'line',
+              lineNumbers: 'on',
+              glyphMargin: false,
+              folding: true,
+              overviewRulerBorder: false,
+              scrollbar: {
+                verticalScrollbarSize: 6,
+                horizontalScrollbarSize: 6
+              }
+            }}
+          />
         </div>
+
+        {/* Preview */}
+        {showPreview && (
+          <div className="h-full w-1/2 overflow-auto p-8">
+            <div className="max-w-3xl mx-auto prose prose-invert prose-zinc prose-base
+              prose-headings:text-zinc-100 prose-headings:font-semibold
+              prose-p:text-zinc-300 prose-p:leading-relaxed
+              prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline
+              prose-strong:text-zinc-200
+              prose-code:text-pink-400 prose-code:bg-zinc-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none
+              prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800 prose-pre:rounded-lg
+              prose-blockquote:border-zinc-700 prose-blockquote:text-zinc-400
+              prose-li:text-zinc-300
+              prose-th:text-zinc-200 prose-td:text-zinc-300
+              prose-hr:border-zinc-800
+              prose-img:rounded-lg
+            ">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
