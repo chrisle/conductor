@@ -25,7 +25,7 @@ interface TabGroupProps {
   groupId: string
 }
 
-type DropZone = 'left' | 'right' | 'top' | 'bottom' | 'center' | null
+type DropZone = 'north' | 'south' | 'east' | 'west' | null
 
 const DRAGGING_TAB_KEY = '__dragging_tab__'
 const DRAGGING_GROUP_KEY = '__dragging_group__'
@@ -176,7 +176,7 @@ function TabIcon({ type }: { type: string }) {
 
 export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement {
   const { groups, setActiveTab, removeTab, addTab, moveTab } = useTabsStore()
-  const { focusedGroupId, setFocusedGroup, splitGroup, removeGroup, getAllGroupIds } = useLayoutStore()
+  const { focusedGroupId, setFocusedGroup, insertPanel, removeGroup, getAllGroupIds } = useLayoutStore()
   const group = groups[groupId]
 
   const [dropZone, setDropZone] = useState<DropZone>(null)
@@ -252,15 +252,19 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     const y = e.clientY - rect.top
     const w = rect.width
     const h = rect.height
-    const edge = 80
 
-    let zone: DropZone = 'center'
-    if (x < edge) zone = 'left'
-    else if (x > w - edge) zone = 'right'
-    else if (y < edge) zone = 'top'
-    else if (y > h - edge) zone = 'bottom'
+    // Determine zone by which edge is closest
+    const distances = {
+      west: x,
+      east: w - x,
+      north: y,
+      south: h - y,
+    }
+    const closest = (Object.keys(distances) as DropZone[]).reduce((a, b) =>
+      a && b && distances[a as keyof typeof distances] < distances[b as keyof typeof distances] ? a : b
+    )
 
-    setDropZone(zone)
+    setDropZone(closest)
     e.dataTransfer.dropEffect = 'move'
   }
 
@@ -279,16 +283,8 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
 
     if (!tabId || !zone) return
 
-    if (zone === 'center') {
-      if (sourceGroupId !== groupId) {
-        moveTab(sourceGroupId, tabId, groupId)
-      }
-      return
-    }
-
     const newGroupId = useTabsStore.getState().createGroup()
-    const direction = (zone === 'left' || zone === 'right') ? 'horizontal' : 'vertical'
-    splitGroup(groupId, direction, newGroupId)
+    insertPanel(groupId, zone, newGroupId)
     moveTab(sourceGroupId, tabId, newGroupId)
 
     setTimeout(() => {
@@ -821,21 +817,18 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
         )}
 
         {/* Drop zone overlay */}
-        {dropZone && dropZone !== 'center' && (
+        {dropZone && (
           <div className="absolute inset-0 pointer-events-none z-10">
             <div
               className={cn(
                 'absolute bg-blue-500/20 border-2 border-blue-500 transition-all',
-                dropZone === 'left' && 'top-0 left-0 bottom-0 w-1/2',
-                dropZone === 'right' && 'top-0 right-0 bottom-0 w-1/2',
-                dropZone === 'top' && 'top-0 left-0 right-0 h-1/2',
-                dropZone === 'bottom' && 'bottom-0 left-0 right-0 h-1/2'
+                dropZone === 'west' && 'top-0 left-0 bottom-0 w-1/2',
+                dropZone === 'east' && 'top-0 right-0 bottom-0 w-1/2',
+                dropZone === 'north' && 'top-0 left-0 right-0 h-1/2',
+                dropZone === 'south' && 'bottom-0 left-0 right-0 h-1/2'
               )}
             />
           </div>
-        )}
-        {dropZone === 'center' && (
-          <div className="absolute inset-0 pointer-events-none z-10 bg-blue-500/10 border-2 border-blue-500" />
         )}
 
       </div>

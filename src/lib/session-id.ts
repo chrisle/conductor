@@ -2,7 +2,7 @@ import { useTabsStore } from '@/store/tabs'
 
 /**
  * Generate a unique session ID (e.g. "claude-code-4") that won't collide with
- * open tabs or lingering tmux sessions from previously closed tabs.
+ * open tabs or lingering sessions from previously closed tabs.
  *
  * Uses a localStorage-backed monotonic counter so IDs are never reused, even
  * across app restarts.

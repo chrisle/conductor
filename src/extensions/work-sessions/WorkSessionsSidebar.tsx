@@ -34,55 +34,42 @@ import { useSessionInfoRegistry, type SessionInfoContext } from './session-info-
 
 // ── Types ──────────────────────────────────────────────
 
-interface TmuxSession {
+interface ConductorSession {
   name: string
   connected: boolean
   command: string
   cwd: string
-  created: number
-  activity: number
 }
 
-/** A live tmux session enriched with work-session + tab context */
+/** A live session enriched with work-session + tab context */
 interface EnrichedSession {
-  tmux: TmuxSession
+  session: ConductorSession
   workSession: WorkSession | null
-  /** Ticket key derived from tmux name (t-NP3-14 → NP3-14) */
+  /** Ticket key derived from session name (t-NP3-14 → NP3-14) */
   ticketKey: string | null
-  /** Whether an open tab is attached to this tmux session */
+  /** Whether an open tab is attached to this session */
   hasOpenTab: boolean
 }
 
 // ── Helpers ────────────────────────────────────────────
 
-function relativeTime(epoch: number): string {
-  const diff = Date.now() - epoch * 1000
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
-}
-
-function ticketKeyFromTmuxName(name: string): string | null {
+function ticketKeyFromSessionName(name: string): string | null {
   if (name.startsWith('t-')) return name.slice(2).toUpperCase()
   return null
 }
 
-/** Human-readable label for a tmux session */
-function sessionLabel(tmux: TmuxSession): string {
-  const custom = getSessionTitle(tmux.name)
+/** Human-readable label for a session */
+function sessionLabel(s: ConductorSession): string {
+  const custom = getSessionTitle(s.name)
   if (custom) return custom
-  const ticket = ticketKeyFromTmuxName(tmux.name)
+  const ticket = ticketKeyFromSessionName(s.name)
   if (ticket) return ticket
-  if (tmux.name.startsWith('claude-code-') || tmux.name.startsWith('codex-')) return tmux.name
-  const base = tmux.cwd.split('/').filter(Boolean).pop()
-  return base ? `shell · ${base}` : tmux.name
+  if (s.name.startsWith('claude-code-') || s.name.startsWith('codex-')) return s.name
+  const base = s.cwd.split('/').filter(Boolean).pop()
+  return base ? `shell · ${base}` : s.name
 }
 
-const SORT_CYCLE: SessionSortOrder[] = ['none', 'created', 'alpha', 'activity', 'attached']
+const SORT_CYCLE: SessionSortOrder[] = ['none', 'created', 'alpha', 'attached']
 const SORT_LABELS: Record<SessionSortOrder, string> = {
   none: 'Manual',
   created: 'Created',
@@ -104,16 +91,13 @@ function sortSessions(
   groupSessionIds?: string[],
 ): EnrichedSession[] {
   if (order === 'none' && groupSessionIds) {
-    // Respect the manual order from the group's sessionIds array
     const posMap = new Map(groupSessionIds.map((id, i) => [id, i]))
-    return [...sessions].sort((a, b) => (posMap.get(a.tmux.name) ?? 999) - (posMap.get(b.tmux.name) ?? 999))
+    return [...sessions].sort((a, b) => (posMap.get(a.session.name) ?? 999) - (posMap.get(b.session.name) ?? 999))
   }
   if (order === 'none' || order === 'created') return sessions
   const sorted = [...sessions]
   if (order === 'alpha') {
-    sorted.sort((a, b) => sessionLabel(a.tmux).localeCompare(sessionLabel(b.tmux)))
-  } else if (order === 'activity') {
-    sorted.sort((a, b) => b.tmux.activity - a.tmux.activity)
+    sorted.sort((a, b) => sessionLabel(a.session).localeCompare(sessionLabel(b.session)))
   } else if (order === 'attached') {
     sorted.sort((a, b) => (b.hasOpenTab ? 1 : 0) - (a.hasOpenTab ? 1 : 0))
   }
@@ -122,32 +106,39 @@ function sortSessions(
 
 function buildTileTree(ids: string[], depth: number): LayoutNode {
   if (ids.length === 1) return { type: 'leaf', groupId: ids[0] }
-  const mid = Math.ceil(ids.length / 2)
+  const containerType = depth % 2 === 0 ? 'row' : 'column'
   return {
-    type: 'split',
-    direction: depth % 2 === 0 ? 'horizontal' : 'vertical',
-    ratio: 0.5,
-    first: buildTileTree(ids.slice(0, mid), depth + 1),
-    second: buildTileTree(ids.slice(mid), depth + 1),
+    type: containerType,
+    children: ids.map(id => ({
+      node: { type: 'leaf' as const, groupId: id },
+      size: 1,
+    })),
   }
 }
 
 // ── Data hook ──────────────────────────────────────────
 
-function useTmuxSessions(intervalMs = 5_000) {
-  const [sessions, setSessions] = useState<TmuxSession[]>([])
+function useConductorSessions(intervalMs = 5_000) {
+  const [sessions, setSessions] = useState<ConductorSession[]>([])
   const workSessions = useWorkSessionsStore(s => s.sessions)
   const groups = useTabsStore(s => s.groups)
 
   const refresh = useCallback(async () => {
     try {
-      const list = await window.electronAPI.conductordGetTmuxSessions()
-      setSessions(list)
+      const list = await window.electronAPI.conductordGetSessions()
+      const mapped: ConductorSession[] = list
+        .filter((s: { dead: boolean }) => !s.dead)
+        .map((s: { id: string; cwd: string; command: string }) => ({
+          name: s.id,
+          connected: true,
+          command: s.command,
+          cwd: s.cwd,
+        }))
+      setSessions(mapped)
 
-      // Reconcile: prune references to tmux sessions that no longer exist
-      const liveNames = new Set(list.map((s: TmuxSession) => s.name))
+      // Reconcile: prune references to sessions that no longer exist
+      const liveNames = new Set(mapped.map(s => s.name))
 
-      // Remove dead session IDs from session groups
       const projectState = useProjectStore.getState()
       for (const sg of projectState.sessionGroups) {
         for (const sid of sg.sessionIds) {
@@ -160,7 +151,7 @@ function useTmuxSessions(intervalMs = 5_000) {
       // Mark orphaned work sessions as completed
       const wsStore = useWorkSessionsStore.getState()
       for (const ws of wsStore.sessions) {
-        if (ws.status === 'active' && ws.tmuxSessionId && !liveNames.has(ws.tmuxSessionId)) {
+        if (ws.status === 'active' && ws.sessionId && !liveNames.has(ws.sessionId)) {
           wsStore.completeSession(ws.id)
         }
       }
@@ -184,23 +175,23 @@ function useTmuxSessions(intervalMs = 5_000) {
 
   const wsMap = new Map<string, WorkSession>()
   for (const ws of workSessions) {
-    if (ws.tmuxSessionId) wsMap.set(ws.tmuxSessionId, ws)
+    if (ws.sessionId) wsMap.set(ws.sessionId, ws)
   }
 
   const enriched: EnrichedSession[] = sessions
-    .map(tmux => ({
-      tmux,
-      workSession: wsMap.get(tmux.name) ?? null,
-      ticketKey: ticketKeyFromTmuxName(tmux.name),
-      hasOpenTab: openTabIds.has(tmux.name),
+    .map(s => ({
+      session: s,
+      workSession: wsMap.get(s.name) ?? null,
+      ticketKey: ticketKeyFromSessionName(s.name),
+      hasOpenTab: openTabIds.has(s.name),
     }))
 
-  const liveTmuxNames = new Set(sessions.map(s => s.name))
+  const liveSessionNames = new Set(sessions.map(s => s.name))
   const orphanedWorkSessions = workSessions.filter(
-    ws => ws.status === 'active' && ws.tmuxSessionId && !liveTmuxNames.has(ws.tmuxSessionId)
+    ws => ws.status === 'active' && ws.sessionId && !liveSessionNames.has(ws.sessionId)
   )
 
-  return { enriched, orphanedWorkSessions, refresh, liveTmuxNames }
+  return { enriched, orphanedWorkSessions, refresh, liveSessionNames }
 }
 
 // ── Tile helper ───────────────────────────────────────
@@ -217,9 +208,9 @@ function tileSessions(sessions: EnrichedSession[]) {
   const newGroupIds: string[] = []
   for (const s of sessions) {
     for (const [gid, group] of Object.entries(tabsStore.groups)) {
-      if (group.tabs.find(t => t.id === s.tmux.name)) {
+      if (group.tabs.find(t => t.id === s.session.name)) {
         const newGid = tabsStore.createGroup()
-        tabsStore.moveTab(gid, s.tmux.name, newGid)
+        tabsStore.moveTab(gid, s.session.name, newGid)
         newGroupIds.push(newGid)
         break
       }
@@ -230,13 +221,13 @@ function tileSessions(sessions: EnrichedSession[]) {
   // Build a vertical stack for the tiled sessions
   const tileTree = buildTileTree(newGroupIds, 0)
 
-  // Insert as a horizontal split: tiled group on the left, existing layout on the right
+  // Insert as a horizontal row: tiled group on the left, existing layout on the right
   layoutStore.setRoot({
-    type: 'split',
-    direction: 'horizontal',
-    ratio: 0.5,
-    first: tileTree,
-    second: currentRoot,
+    type: 'row',
+    children: [
+      { node: tileTree, size: 1 },
+      { node: currentRoot, size: 1 },
+    ],
   })
   layoutStore.setFocusedGroup(newGroupIds[0])
 }
@@ -244,17 +235,17 @@ function tileSessions(sessions: EnrichedSession[]) {
 // ── Row components ─────────────────────────────────────
 
 function getSessionTypeIcon(session: EnrichedSession): { Icon: React.ComponentType<{ className?: string }>; className: string } {
-  const cmd = session.tmux.command.toLowerCase()
-  if (cmd === 'claude' || session.tmux.name.startsWith('claude-code-'))
+  const cmd = session.session.command.toLowerCase()
+  if (cmd === 'claude' || session.session.name.startsWith('claude-code-'))
     return { Icon: Bot, className: 'text-orange-400' }
-  if (cmd === 'codex' || session.tmux.name.startsWith('codex-'))
+  if (cmd === 'codex' || session.session.name.startsWith('codex-'))
     return { Icon: Bot, className: 'text-emerald-400' }
   if (['zsh', 'bash', 'fish'].includes(cmd))
     return { Icon: Terminal, className: 'text-zinc-400' }
   return { Icon: Terminal, className: 'text-zinc-500' }
 }
 
-function TmuxRow({
+function SessionRow({
   session,
   isSelected,
   selectedIds,
@@ -280,13 +271,13 @@ function TmuxRow({
 
   const openTab = (() => {
     for (const [gid, group] of Object.entries(groups)) {
-      const tab = group.tabs.find(t => t.id === session.tmux.name)
+      const tab = group.tabs.find(t => t.id === session.session.name)
       if (tab) return { tab, groupId: gid }
     }
     return null
   })()
 
-  const label = (openTab?.tab.title) || sessionLabel(session.tmux)
+  const label = (openTab?.tab.title) || sessionLabel(session.session)
   const isThinking = openTab?.tab.isThinking ?? false
   const thinkingTime = openTab?.tab.thinkingTime
 
@@ -304,7 +295,7 @@ function TmuxRow({
   function commitRename() {
     if (renameValue.trim()) {
       const title = renameValue.trim()
-      setSessionTitle(session.tmux.name, title)
+      setSessionTitle(session.session.name, title)
       if (openTab) {
         useTabsStore.getState().updateTab(openTab.groupId, openTab.tab.id, { title })
       }
@@ -337,10 +328,10 @@ function TmuxRow({
       targetGroup = tabsState.createGroup()
     }
     addTab(targetGroup, {
-      id: session.tmux.name,
+      id: session.session.name,
       type: 'claude-code',
       title: label,
-      filePath: session.workSession?.worktree?.path || session.tmux.cwd,
+      filePath: session.workSession?.worktree?.path || session.session.cwd,
     })
   }
 
@@ -351,10 +342,10 @@ function TmuxRow({
       : { label: 'Detached', color: 'text-amber-400' }
 
   const sessionType: { label: string; color: string } = (() => {
-    const cmd = session.tmux.command.toLowerCase()
-    if (cmd === 'claude' || session.tmux.name.startsWith('claude-code-'))
+    const cmd = session.session.command.toLowerCase()
+    if (cmd === 'claude' || session.session.name.startsWith('claude-code-'))
       return { label: 'Claude Code', color: 'text-orange-300' }
-    if (cmd === 'codex' || session.tmux.name.startsWith('codex-'))
+    if (cmd === 'codex' || session.session.name.startsWith('codex-'))
       return { label: 'Codex', color: 'text-emerald-300' }
     if (cmd === 'zsh') return { label: 'Shell (zsh)', color: 'text-zinc-300' }
     if (cmd === 'bash') return { label: 'Shell (bash)', color: 'text-zinc-300' }
@@ -375,12 +366,12 @@ function TmuxRow({
       <div
         draggable
             onDoubleClick={openInTab}
-            onClick={e => onRowClick(session.tmux.name, e)}
+            onClick={e => onRowClick(session.session.name, e)}
             onDragStart={e => {
               const names = isSelected && selectedIds.size > 1
                 ? [...selectedIds]
-                : [session.tmux.name]
-              e.dataTransfer.setData('__dragging_session__', session.tmux.name)
+                : [session.session.name]
+              e.dataTransfer.setData('__dragging_session__', session.session.name)
               e.dataTransfer.setData('__dragging_sessions__', JSON.stringify(names))
               e.dataTransfer.effectAllowed = 'move'
               // Custom drag image
@@ -428,7 +419,7 @@ function TmuxRow({
               <>
                 <span className={`truncate flex-1 ${isThinking ? 'text-shimmer' : ''}`}>{label}</span>
                 <span className="text-ui-xs shrink-0 ml-1.5 text-zinc-600">
-                  {isThinking ? (thinkingTime || 'thinking') : relativeTime(session.tmux.activity)}
+                  {isThinking ? (thinkingTime || 'thinking') : ''}
                 </span>
               </>
             )}
@@ -444,8 +435,8 @@ function TmuxRow({
                 <span className="text-zinc-600">·</span>
                 <span className={`font-medium ${status.color}`}>{status.label}</span>
                 <div className="flex-1" />
-                <span className="text-zinc-500">
-                  {relativeTime(session.tmux.activity)}
+                <span className={`font-medium ${session.session.connected ? 'text-green-500' : 'text-zinc-500'}`}>
+                  {session.session.connected ? 'active' : 'disconnected'}
                 </span>
               </div>
 
@@ -453,8 +444,8 @@ function TmuxRow({
                 {/* Directory */}
                 <div className="group/row flex items-center gap-1.5">
                   <Folder className="w-3 h-3 text-zinc-500 shrink-0" />
-                  <span className="text-zinc-300 truncate flex-1">{session.tmux.cwd}</span>
-                  <button onClick={e => copyToClipboard(session.tmux.cwd, e)} className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover/row:opacity-100">
+                  <span className="text-zinc-300 truncate flex-1">{session.session.cwd}</span>
+                  <button onClick={e => copyToClipboard(session.session.cwd, e)} className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover/row:opacity-100">
                     <Copy className="w-2.5 h-2.5" />
                   </button>
                 </div>
@@ -468,11 +459,11 @@ function TmuxRow({
                   </div>
                 )}
 
-                {/* Tmux session name */}
+                {/* Session name */}
                 <div className="group/row flex items-center gap-1.5">
                   <Terminal className="w-3 h-3 text-zinc-500 shrink-0" />
-                  <span className="text-zinc-400 truncate flex-1 font-mono">{session.tmux.name}</span>
-                  <button onClick={e => copyToClipboard(session.tmux.name, e)} className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover/row:opacity-100">
+                  <span className="text-zinc-400 truncate flex-1 font-mono">{session.session.name}</span>
+                  <button onClick={e => copyToClipboard(session.session.name, e)} className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover/row:opacity-100">
                     <Copy className="w-2.5 h-2.5" />
                   </button>
                 </div>
@@ -519,10 +510,10 @@ function TmuxRow({
                 {/* Extension-provided rows */}
                 {infoProviders.map(p => {
                   const ctx: SessionInfoContext = {
-                    tmuxName: session.tmux.name,
-                    cwd: session.tmux.cwd,
-                    command: session.tmux.command,
-                    connected: session.tmux.connected,
+                    sessionName: session.session.name,
+                    cwd: session.session.cwd,
+                    command: session.session.command,
+                    connected: session.session.connected,
                     hasOpenTab: session.hasOpenTab,
                     isThinking,
                     workSession: session.workSession,
@@ -581,7 +572,7 @@ function OrphanedWorkSessionRow({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <span className="text-ui-base font-medium text-zinc-400">{session.ticketKey}</span>
-              <span className="text-ui-xs text-red-400/70">tmux dead</span>
+              <span className="text-ui-xs text-red-400/70">dead</span>
             </div>
             {session.worktree?.branch && (
               <div className="flex items-center gap-1 mt-0.5">
@@ -752,7 +743,7 @@ function SessionGroupSection({
     if (isManualSort && insertIdx !== null) {
       // Manual reorder — insert at specific position
       const store = useProjectStore.getState()
-      const beforeSession = sessions[insertIdx]?.tmux.name ?? null
+      const beforeSession = sessions[insertIdx]?.session.name ?? null
       for (const name of names) {
         if (group) {
           const srcGroup = sessionToGroup.get(name)
@@ -876,18 +867,18 @@ function SessionGroupSection({
         sessions.length > 0 ? (
           <div ref={rowsRef}>
             {sessions.map((s, i) => (
-              <React.Fragment key={s.tmux.name}>
+              <React.Fragment key={s.session.name}>
                 {dropInsertIdx === i && (
                   <div className="mx-1 h-0.5 bg-indigo-400 rounded-full my-0.5" />
                 )}
                 <div data-session-row>
-                  <TmuxRow
+                  <SessionRow
                     session={s}
-                    isSelected={selectedIds.has(s.tmux.name)}
+                    isSelected={selectedIds.has(s.session.name)}
                     selectedIds={selectedIds}
                     onRowClick={onRowClick}
                     onDragStateChange={onDragStateChange}
-                    onKill={() => onKillSession(s.tmux.name)}
+                    onKill={() => onKillSession(s.session.name)}
                   />
                 </div>
               </React.Fragment>
@@ -907,7 +898,7 @@ function SessionGroupSection({
 // ── Main component ─────────────────────────────────────
 
 export default function WorkSessionsSidebar({ groupId }: { groupId: string }): React.ReactElement {
-  const { enriched, orphanedWorkSessions, refresh } = useTmuxSessions()
+  const { enriched, orphanedWorkSessions, refresh } = useConductorSessions()
   const sessionGroups = useProjectStore(s => s.sessionGroups)
   const sessionSort = useProjectStore(s => s.sessionSort)
   const ungroupedOrder = useProjectStore(s => s.ungroupedSessionOrder)
@@ -928,7 +919,7 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
   const ungroupedRaw: EnrichedSession[] = []
 
   for (const s of enriched) {
-    const gid = sessionToGroup.get(s.tmux.name)
+    const gid = sessionToGroup.get(s.session.name)
     if (gid) {
       if (!groupedSessions.has(gid)) groupedSessions.set(gid, [])
       groupedSessions.get(gid)!.push(s)
@@ -947,9 +938,9 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
   // Flat ordered list of all session names matching render order (for shift-click range)
   const flatSessionOrder: string[] = []
   for (const group of sessionGroups) {
-    for (const s of (groupedSessions.get(group.id) || [])) flatSessionOrder.push(s.tmux.name)
+    for (const s of (groupedSessions.get(group.id) || [])) flatSessionOrder.push(s.session.name)
   }
-  for (const s of ungrouped) flatSessionOrder.push(s.tmux.name)
+  for (const s of ungrouped) flatSessionOrder.push(s.session.name)
 
   // Escape clears selection
   useEffect(() => {
@@ -1003,11 +994,11 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
     const tabsState = useTabsStore.getState()
     const projectState = useProjectStore.getState()
 
-    await window.electronAPI.conductordKillTmuxSession(name)
+    await window.electronAPI.killTerminal(name)
     clearSessionTitle(name)
     clearSessionAutoPilot(name)
 
-    const match = enriched.find(s => s.tmux.name === name)
+    const match = enriched.find(s => s.session.name === name)
     if (match?.workSession?.status === 'active') {
       await sessionsStore.completeSession(match.workSession.id)
     }
@@ -1032,12 +1023,12 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
     const projectState = useProjectStore.getState()
 
     for (const name of selectedIds) {
-      await window.electronAPI.conductordKillTmuxSession(name)
+      await window.electronAPI.killTerminal(name)
       clearSessionTitle(name)
       clearSessionAutoPilot(name)
 
       // Complete associated work session
-      const match = enriched.find(s => s.tmux.name === name)
+      const match = enriched.find(s => s.session.name === name)
       if (match?.workSession?.status === 'active') {
         await sessionsStore.completeSession(match.workSession.id)
       }

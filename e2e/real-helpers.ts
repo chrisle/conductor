@@ -13,11 +13,10 @@ import os from 'os'
 export const APP_DIR = path.join(__dirname, '..')
 export const CONDUCTORD_SOCKET = path.join(os.homedir(), '.conductor', 'conductord.sock')
 export const CDP_PORT = 9222
-export const TMUX_BIN = path.join(os.homedir(), 'Library', 'Caches', 'conductor', 'tmux', 'tmux')
 export const HOME_DIR = os.homedir()
 
 /**
- * Kill all stale Conductor processes: conductord, Electron, electron-vite, tmux.
+ * Kill all stale Conductor processes: conductord, Electron, electron-vite.
  * Call this before and after every test run.
  */
 export function killAllConductorProcesses(): void {
@@ -25,7 +24,6 @@ export function killAllConductorProcesses(): void {
     'pkill -f conductord 2>/dev/null',
     'pkill -f "Electron" 2>/dev/null',
     'pkill -f "electron-vite" 2>/dev/null',
-    `${TMUX_BIN} -u -L conductor kill-server 2>/dev/null`,
   ]
   for (const cmd of cmds) {
     try { execSync(cmd, { stdio: 'ignore' }) } catch {}

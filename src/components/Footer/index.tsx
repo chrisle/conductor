@@ -62,7 +62,7 @@ export default function Footer(): React.ReactElement {
   const { rootPath } = useSidebarStore()
   const [gitBranch, setGitBranch] = useState<string | null>(null)
   const [gitStat, setGitStat] = useState<{ insertions: number; deletions: number }>({ insertions: 0, deletions: 0 })
-  const [conductord, setConductord] = useState<{ ok: boolean; tmux: number }>({ ok: false, tmux: 0 })
+  const [conductord, setConductord] = useState<{ ok: boolean; sessions: number }>({ ok: false, sessions: 0 })
 
   useEffect(() => {
     if (!rootPath) return
@@ -86,13 +86,13 @@ export default function Footer(): React.ReactElement {
     let cancelled = false
     const poll = async () => {
       try {
-        const [ok, tmuxList] = await Promise.all([
+        const [ok, sessionList] = await Promise.all([
           window.electronAPI.conductordHealth(),
-          window.electronAPI.conductordGetTmuxSessions(),
+          window.electronAPI.conductordGetSessions(),
         ])
-        if (!cancelled) setConductord({ ok, tmux: tmuxList.length })
+        if (!cancelled) setConductord({ ok, sessions: sessionList.filter((s: { dead: boolean }) => !s.dead).length })
       } catch {
-        if (!cancelled) setConductord({ ok: false, tmux: 0 })
+        if (!cancelled) setConductord({ ok: false, sessions: 0 })
       }
     }
     poll()
@@ -158,7 +158,7 @@ export default function Footer(): React.ReactElement {
       <Item>
         <Activity className={`w-2.5 h-2.5 ${conductord.ok ? 'text-emerald-500' : 'text-red-500'}`} />
         <span className={conductord.ok ? 'text-zinc-500' : 'text-red-500'}>
-          {conductord.ok ? `${conductord.tmux} tmux` : 'conductord offline'}
+          {conductord.ok ? `${conductord.sessions} sessions` : 'conductord offline'}
         </span>
       </Item>
       <Separator orientation="vertical" className="h-3 bg-zinc-800" />

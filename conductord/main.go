@@ -1,13 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
-	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -22,18 +20,9 @@ import (
 	"syscall"
 	"time"
 
-	"embed"
-
 	"github.com/creack/pty"
 	"github.com/gorilla/websocket"
 )
-
-// Embedded tmux bundle. The directory is populated by scripts/prepare-tmux.sh
-// before building. If the directory is absent the embed is a no-op and we fall
-// back to the system tmux.
-//
-//go:embed embedded
-var embeddedFS embed.FS
 
 // ---------------------------------------------------------------------------
 // Session — a PTY that outlives any single WebSocket connection
@@ -42,11 +31,13 @@ var embeddedFS embed.FS
 const scrollbackSize = 64 * 1024 // 64 KB ring buffer for replay on reconnect
 
 type session struct {
-	id   string
-	mu   sync.Mutex
-	ptmx *os.File
-	cmd  *exec.Cmd
-	dead bool // true once the PTY process has exited
+	id      string
+	cwd     string
+	command string
+	mu      sync.Mutex
+	ptmx    *os.File
+	cmd     *exec.Cmd
+	dead    bool // true once the PTY process has exited
 
 	// Scrollback ring buffer: stores recent PTY output so reconnecting
 	// clients can see what happened while disconnected.
@@ -171,143 +162,10 @@ var (
 // so the tray exit handler can close it for clean shutdown.
 var serverListener net.Listener
 
-// tmuxPath is the resolved path to the tmux binary (bundled or system).
-var tmuxPath string
-
-// tmuxConf is the path to the extracted tmux.conf, or "" to use defaults.
-var tmuxConf string
-
-// initTmux extracts the embedded tmux bundle (if present) and sets tmuxPath.
-// Falls back to the system tmux when no embedded bundle is available.
-func initTmux() {
-	bundleDir := fmt.Sprintf("embedded/%s-%s", runtime.GOOS, runtime.GOARCH)
-
-	entries, err := fs.ReadDir(embeddedFS, bundleDir)
-	if err != nil || len(entries) == 0 {
-		// No embedded bundle — try system PATH
-		tmuxPath, _ = exec.LookPath("tmux")
-		if tmuxPath != "" {
-			log.Printf("[tmux] using system tmux: %s", tmuxPath)
-		} else {
-			log.Printf("[tmux] not found; terminal sessions will use a plain shell")
-		}
-		return
-	}
-
-	// Extract bundle to a per-user cache directory so it survives reboots but
-	// is refreshed when the binary changes.
-	cacheDir, err := os.UserCacheDir()
-	if err != nil {
-		cacheDir = os.TempDir()
-	}
-	extractDir := filepath.Join(cacheDir, "conductor", "tmux")
-	if err := os.MkdirAll(extractDir, 0755); err != nil {
-		log.Printf("[tmux] failed to create extract dir %s: %v", extractDir, err)
-		tmuxPath, _ = exec.LookPath("tmux")
-		return
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		src := bundleDir + "/" + entry.Name()
-		data, err := embeddedFS.ReadFile(src)
-		if err != nil {
-			log.Printf("[tmux] embed read error %s: %v", src, err)
-			continue
-		}
-		dest := filepath.Join(extractDir, entry.Name())
-		// Only write if content changed (avoid touching mtime unnecessarily)
-		if existing, err := os.ReadFile(dest); err != nil || !bytes.Equal(existing, data) {
-			if err := os.WriteFile(dest, data, 0755); err != nil {
-				log.Printf("[tmux] write error %s: %v", dest, err)
-				continue
-			}
-		}
-		// Ensure executable bit is set
-		os.Chmod(dest, 0755)
-	}
-
-	// Also extract the shared tmux.conf (lives in embedded/, not the arch subdir)
-	if confData, err := embeddedFS.ReadFile("embedded/tmux.conf"); err == nil {
-		confDest := filepath.Join(extractDir, "tmux.conf")
-		if existing, err := os.ReadFile(confDest); err != nil || !bytes.Equal(existing, confData) {
-			os.WriteFile(confDest, confData, 0644)
-		}
-		tmuxConf = confDest
-	}
-
-	// On macOS, extracted binaries can hang in dyld due to security signature
-	// verification. Re-signing with an ad-hoc identity makes macOS validate the
-	// signature locally without any network calls, eliminating the hang.
-	if runtime.GOOS == "darwin" {
-		if codesign, err := exec.LookPath("codesign"); err == nil {
-			for _, entry := range entries {
-				if entry.IsDir() {
-					continue
-				}
-				dest := filepath.Join(extractDir, entry.Name())
-				if out, err := exec.Command(codesign, "--force", "--sign", "-", dest).CombinedOutput(); err != nil {
-					log.Printf("[tmux] codesign failed for %s: %v (%s)", dest, err, strings.TrimSpace(string(out)))
-				}
-			}
-		}
-	}
-
-	candidate := filepath.Join(extractDir, "tmux")
-	if _, err := os.Stat(candidate); err == nil {
-		tmuxPath = candidate
-		log.Printf("[tmux] using bundled tmux: %s (conf: %s)", tmuxPath, tmuxConf)
-	} else {
-		tmuxPath, _ = exec.LookPath("tmux")
-		log.Printf("[tmux] bundle extract failed, falling back to system: %s", tmuxPath)
-	}
-}
-
-// tmuxSocketName is the dedicated tmux socket name used by Conductor.
-// Using a separate socket isolates Conductor sessions from the user's
-// personal tmux server so they never interfere with each other.
-const tmuxSocketName = "conductor"
-
-// tmuxCmd builds a tmux exec.Cmd, prepending "-u" (force UTF-8),
-// "-L conductor" (dedicated socket), and "-f <conf>" when a config file
-// has been extracted, so every invocation uses the same settings.
-func tmuxCmd(args ...string) *exec.Cmd {
-	// -u: force UTF-8 output regardless of locale, ensuring tmux never
-	// disables UTF-8 — which would mangle box-drawing and block chars.
-	// -L: use a dedicated socket so Conductor never touches the user's
-	// tmux server or sessions.
-	prefix := []string{"-u", "-L", tmuxSocketName}
-	if tmuxConf != "" {
-		prefix = append(prefix, "-f", tmuxConf)
-	}
-	return exec.Command(tmuxPath, append(prefix, args...)...)
-}
-
-// killTmuxServer kills the Conductor-specific tmux server and all its
-// sessions. Safe to call even if no server is running.
-func killTmuxServer() {
-	if tmuxPath == "" {
-		return
-	}
-	cmd := tmuxCmd("kill-server")
-	cmd.Env = tmuxEnv()
-	if err := cmd.Run(); err != nil {
-		log.Printf("[tmux] kill-server: %v (may already be stopped)", err)
-	} else {
-		log.Println("[tmux] killed conductor tmux server")
-	}
-}
-
-// tmuxEnv returns the environment for tmux processes. It starts from the
-// current process environment and ensures the essential variables are set,
-// filling in sensible defaults for essential variables (LANG, etc.).
-func tmuxEnv() []string {
-	// Strip variables inherited from Electron / VS Code that should not
-	// leak into user terminal sessions. NODE_OPTIONS is the critical one:
-	// VS Code injects a --require for its debug bootloader, which silently
-	// crashes Node.js CLI tools (like claude) that don't expect it.
+// sessionEnv returns a clean environment for spawned terminal processes.
+// It strips variables inherited from Electron / VS Code that should not
+// leak into user terminal sessions and ensures sensible defaults.
+func sessionEnv() []string {
 	stripPrefixes := []string{
 		"NODE_OPTIONS=",
 		"ELECTRON_",
@@ -335,105 +193,41 @@ func tmuxEnv() []string {
 		}
 		env = append(env, e)
 	}
-	// Ensure UTF-8 locale — inject LANG if not already present so tmux
-	// always uses UTF-8 output.
 	if !hasLang {
 		env = append(env, "LANG=en_US.UTF-8", "LC_ALL=en_US.UTF-8")
 	}
-	// Always override TERM/COLORTERM so they're correct regardless of what
-	// the parent environment has.
 	env = append(env, "TERM=xterm-256color", "COLORTERM=truecolor")
 	return env
 }
 
-// sanitizeTmuxName converts an ID to a valid tmux session name.
-func sanitizeTmuxName(id string) string {
-	var b strings.Builder
-	for _, c := range id {
-		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-			(c >= '0' && c <= '9') || c == '-' || c == '_' {
-			b.WriteRune(c)
-		} else {
-			b.WriteRune('_')
-		}
-	}
-	if b.Len() == 0 {
-		return "default"
-	}
-	return b.String()
-}
-
-// tmuxSessionExists returns true if a tmux session with exactly this name exists.
-func tmuxSessionExists(name string) bool {
-	cmd := tmuxCmd("has-session", "-t", "="+name)
-	return cmd.Run() == nil
-}
-
-// newSession creates a new conductord session. Returns the session, whether it
-// is a brand-new tmux session (isNew=true) or an attach to an existing one
-// (isNew=false), and any error.
-//
-// If command is non-empty and the session is new, it is sent to the tmux
-// session via send-keys immediately after creation — before the PTY attach.
-// This is far more reliable than having the renderer wait for the shell prompt.
-func newSession(id, cwd, command string) (*session, bool, error) {
+// newSession creates a new conductord session backed by a PTY process.
+// If command is non-empty, it is executed inside a login shell; otherwise
+// a plain login shell is started.
+func newSession(id, cwd, command string) (*session, error) {
+	shell := getShell()
 	var cmd *exec.Cmd
-	isNew := true
 
-	if tmuxPath != "" {
-		tmuxName := sanitizeTmuxName(id)
-		isNew = !tmuxSessionExists(tmuxName)
-
-		if isNew {
-			// Create a new detached tmux session in the right directory.
-			// If a command is provided (e.g. "claude --dangerously-skip-permissions"),
-			// wrap it in a login shell so the user's full PATH, env vars, etc.
-			// are available, then exec the command. The shell-command argument
-			// is passed through "sh -c" by tmux, so we build a single string.
-			var createCmd *exec.Cmd
-			if command != "" {
-				trimmed := strings.TrimRight(command, "\r\n")
-				shell := getShell()
-				// Run through a login-interactive shell. After the command exits,
-				// drop back to an interactive shell so the user can type.
-				shellCmd := fmt.Sprintf("%s -lic '%s; exec %s'", shell, trimmed, shell)
-				createCmd = tmuxCmd("new-session", "-d", "-s", tmuxName, "-c", cwd, shellCmd)
-				log.Printf("[session %s] creating tmux session with shell-command: %s", id, shellCmd)
-			} else {
-				createCmd = tmuxCmd("new-session", "-d", "-s", tmuxName, "-c", cwd)
-			}
-			createCmd.Env = tmuxEnv()
-			if err := createCmd.Run(); err != nil {
-				return nil, false, fmt.Errorf("tmux new-session: %w", err)
-			}
-			// Enable mouse mode so scroll events are handled as scrollback
-			// instead of being translated to arrow key sequences.
-			mouseCmd := tmuxCmd("set-option", "-t", "="+tmuxName, "mouse", "on")
-			mouseCmd.Env = tmuxEnv()
-			_ = mouseCmd.Run()
-
-			log.Printf("[session %s] created tmux session '%s'", id, tmuxName)
-		} else {
-			log.Printf("[session %s] attaching to existing tmux session '%s'", id, tmuxName)
-		}
-
-		cmd = tmuxCmd("attach-session", "-t", "="+tmuxName)
-		cmd.Env = tmuxEnv()
+	if command != "" {
+		trimmed := strings.TrimRight(command, "\r\n")
+		shellCmd := fmt.Sprintf("%s -lic '%s; exec %s'", shell, trimmed, shell)
+		cmd = exec.Command(shell, "-c", shellCmd)
+		log.Printf("[session %s] starting with command: %s", id, command)
 	} else {
-		// tmux not available — fall back to a plain login shell
-		shell := getShell()
 		cmd = exec.Command(shell, "-l")
-		cmd.Dir = cwd
-		cmd.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
 	}
+
+	cmd.Dir = cwd
+	cmd.Env = sessionEnv()
 
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	s := &session{
 		id:         id,
+		cwd:        cwd,
+		command:    command,
 		ptmx:       ptmx,
 		cmd:        cmd,
 		scrollback: make([]byte, scrollbackSize),
@@ -443,9 +237,6 @@ func newSession(id, cwd, command string) (*session, bool, error) {
 
 	go func() {
 		err := s.cmd.Wait()
-		// When tmux attach-session exits the underlying tmux session may still
-		// be alive (just detached). Remove from the in-memory map so the next
-		// WebSocket connection creates a fresh attach process.
 		s.mu.Lock()
 		s.dead = true
 		conn := s.conn
@@ -454,9 +245,9 @@ func newSession(id, cwd, command string) (*session, bool, error) {
 			conn.Close()
 		}
 		if err != nil {
-			log.Printf("[session %s] attach process exited with error: %v", id, err)
+			log.Printf("[session %s] process exited with error: %v", id, err)
 		} else {
-			log.Printf("[session %s] attach process exited (status 0)", id)
+			log.Printf("[session %s] process exited (status 0)", id)
 		}
 
 		sessionsMu.Lock()
@@ -464,7 +255,7 @@ func newSession(id, cwd, command string) (*session, bool, error) {
 		sessionsMu.Unlock()
 	}()
 
-	return s, isNew, nil
+	return s, nil
 }
 
 func (s *session) readLoop() {
@@ -612,10 +403,6 @@ func (s *session) resize(cols, rows uint16) {
 }
 
 func (s *session) kill() {
-	// Kill the tmux session itself so it doesn't keep running in the background.
-	if tmuxPath != "" {
-		tmuxCmd("kill-session", "-t", "="+sanitizeTmuxName(s.id)).Run()
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.dead {
@@ -669,8 +456,7 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 	sessionsMu.Lock()
 	s, exists := sessions[id]
 	// If the session exists but its PTY process is dead, discard it and
-	// create a fresh attach. This avoids reattaching a stale session whose
-	// underlying tmux attach-session has already exited.
+	// create a fresh one.
 	if exists {
 		s.mu.Lock()
 		dead := s.dead
@@ -683,7 +469,7 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 	}
 	isNew := false
 	if !exists && id != "" {
-		s, isNew, err = newSession(id, cwd, command)
+		s, err = newSession(id, cwd, command)
 		if err != nil {
 			sessionsMu.Unlock()
 			log.Printf("session create error: %v", err)
@@ -692,9 +478,10 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		sessions[id] = s
+		isNew = true
 	} else if !exists {
 		id = fmt.Sprintf("s-%d", time.Now().UnixNano())
-		s, isNew, err = newSession(id, cwd, command)
+		s, err = newSession(id, cwd, command)
 		if err != nil {
 			sessionsMu.Unlock()
 			log.Printf("session create error: %v", err)
@@ -703,15 +490,15 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		sessions[id] = s
+		isNew = true
 	} else {
 		log.Printf("[session %s] reattached (existing conductord session)", id)
 	}
 	sessionsMu.Unlock()
 
-	// Send session ID + isNew flag to client.
-	// isNew=true means a brand-new tmux session was created → client should
-	// send its initialCommand. isNew=false means we attached to an existing
-	// tmux session → client should NOT send initialCommand (process is running).
+	// Send session info to client.
+	// isNew=true means a new process was spawned → client should send its
+	// initialCommand. isNew=false means we reattached to an existing session.
 	s.mu.Lock()
 	ap := s.autoPilot
 	s.mu.Unlock()
@@ -765,31 +552,13 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 			s.ap500Until = 0
 			s.mu.Unlock()
 			log.Printf("[session %s] autopilot %v", s.id, enabled)
-		case "tmux-option":
-			// Set a tmux option on this session's tmux window.
-			// Data: { "key": "mouse", "value": "on" | "off" }
-			if tmuxPath == "" {
-				break
-			}
-			var opt struct {
-				Key   string `json:"key"`
-				Value string `json:"value"`
-			}
-			json.Unmarshal(msg.Data, &opt)
-			// Whitelist allowed options to prevent arbitrary tmux commands.
-			allowed := map[string]bool{"mouse": true}
-			if !allowed[opt.Key] {
-				log.Printf("[session %s] tmux-option: rejected key %q", s.id, opt.Key)
-				break
-			}
-			tmuxName := sanitizeTmuxName(s.id)
-			setCmd := tmuxCmd("set-option", "-t", "="+tmuxName, opt.Key, opt.Value)
-			setCmd.Env = tmuxEnv()
-			if err := setCmd.Run(); err != nil {
-				log.Printf("[session %s] tmux-option %s=%s failed: %v", s.id, opt.Key, opt.Value, err)
-			} else {
-				log.Printf("[session %s] tmux-option %s=%s", s.id, opt.Key, opt.Value)
-			}
+		case "capture-scrollback":
+			// Return the scrollback buffer content to the client.
+			sb := s.getScrollback()
+			conn.WriteJSON(map[string]interface{}{
+				"type": "scrollback",
+				"data": string(sb),
+			})
 		}
 	}
 }
@@ -799,14 +568,15 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 
 type sessionInfo struct {
-	ID   string `json:"id"`
-	Dead bool   `json:"dead"`
+	ID      string `json:"id"`
+	Dead    bool   `json:"dead"`
+	Cwd     string `json:"cwd"`
+	Command string `json:"command"`
 }
 
 func handleSessions(w http.ResponseWriter, r *http.Request) {
 	// DELETE /api/sessions/{id} — kill a session
 	if r.Method == http.MethodDelete {
-		// Path is /api/sessions/{id}
 		id := strings.TrimPrefix(r.URL.Path, "/api/sessions/")
 		if id == "" {
 			http.Error(w, "session id required", http.StatusBadRequest)
@@ -831,7 +601,7 @@ func handleSessions(w http.ResponseWriter, r *http.Request) {
 	list := make([]sessionInfo, 0, len(sessions))
 	for _, s := range sessions {
 		s.mu.Lock()
-		list = append(list, sessionInfo{ID: s.id, Dead: s.dead})
+		list = append(list, sessionInfo{ID: s.id, Dead: s.dead, Cwd: s.cwd, Command: s.command})
 		s.mu.Unlock()
 	}
 	sessionsMu.Unlock()
@@ -847,125 +617,14 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleTmuxSessions lists live tmux sessions with details, or kills one.
-//
-//	GET  /api/tmux               → [{name, connected, command, cwd, created, activity}, ...]
-//	DELETE /api/tmux/{name}      → kills a single tmux session
-//	DELETE /api/tmux?orphaned=1  → kills all tmux sessions with no active conductord connection
-func handleTmuxSessions(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	if r.Method == http.MethodDelete {
-		// Bulk-kill orphaned sessions
-		if r.URL.Query().Get("orphaned") != "" {
-			if tmuxPath == "" {
-				json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "killed": 0})
-				return
-			}
-			out, err := tmuxCmd("ls", "-F", "#{session_name}").Output()
-			if err != nil {
-				json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "killed": 0})
-				return
-			}
-			killed := 0
-			sessionsMu.Lock()
-			connectedSet := make(map[string]bool, len(sessions))
-			for id := range sessions {
-				connectedSet[sanitizeTmuxName(id)] = true
-			}
-			sessionsMu.Unlock()
-			for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-				if line != "" && !connectedSet[line] {
-					tmuxCmd("kill-session", "-t", "="+line).Run()
-					log.Printf("[tmux] killed orphaned session '%s' via API", line)
-					killed++
-				}
-			}
-			json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "killed": killed})
-			return
-		}
-
-		// Single session kill
-		name := strings.TrimPrefix(r.URL.Path, "/api/tmux/")
-		if name == "" || tmuxPath == "" {
-			json.NewEncoder(w).Encode(map[string]bool{"ok": false})
-			return
-		}
-		tmuxCmd("kill-session", "-t", "="+name).Run()
-		log.Printf("[tmux] killed session '%s' via API", name)
-		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
-		return
-	}
-
-	if tmuxPath == "" {
-		json.NewEncoder(w).Encode([]interface{}{})
-		return
-	}
-
-	// Get session list with timestamps
-	out, err := tmuxCmd("ls", "-F", "#{session_name}\t#{session_created}\t#{session_activity}").Output()
-	if err != nil {
-		json.NewEncoder(w).Encode([]interface{}{})
-		return
-	}
-
-	// Build a set of connected session names
+// killAllSessions kills all active sessions. Used during shutdown.
+func killAllSessions() {
 	sessionsMu.Lock()
-	connectedSet := make(map[string]bool, len(sessions))
-	for id := range sessions {
-		connectedSet[sanitizeTmuxName(id)] = true
+	for id, s := range sessions {
+		s.kill()
+		log.Printf("[session %s] killed during shutdown", id)
 	}
 	sessionsMu.Unlock()
-
-	type entry struct {
-		Name      string `json:"name"`
-		Connected bool   `json:"connected"`
-		Command   string `json:"command"`
-		Cwd       string `json:"cwd"`
-		Created   int64  `json:"created"`
-		Activity  int64  `json:"activity"`
-	}
-
-	var list []entry
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if line == "" {
-			continue
-		}
-		parts := strings.SplitN(line, "\t", 3)
-		name := parts[0]
-
-		var created, activity int64
-		if len(parts) >= 2 {
-			fmt.Sscanf(parts[1], "%d", &created)
-		}
-		if len(parts) >= 3 {
-			fmt.Sscanf(parts[2], "%d", &activity)
-		}
-
-		// Get pane info (command + cwd)
-		var command, cwd string
-		paneOut, paneErr := tmuxCmd("list-panes", "-t", "="+name, "-F", "#{pane_current_command}\t#{pane_current_path}").Output()
-		if paneErr == nil {
-			paneLine := strings.SplitN(strings.TrimSpace(string(paneOut)), "\n", 2)[0]
-			paneParts := strings.SplitN(paneLine, "\t", 2)
-			if len(paneParts) >= 1 {
-				command = paneParts[0]
-			}
-			if len(paneParts) >= 2 {
-				cwd = paneParts[1]
-			}
-		}
-
-		list = append(list, entry{
-			Name:      name,
-			Connected: connectedSet[name],
-			Command:   command,
-			Cwd:       cwd,
-			Created:   created,
-			Activity:  activity,
-		})
-	}
-	json.NewEncoder(w).Encode(list)
 }
 
 // ---------------------------------------------------------------------------
@@ -1166,8 +825,6 @@ func startServer(socketPath string, devPort int) {
 	http.HandleFunc("/ws/terminal", handleTerminal)
 	http.HandleFunc("/api/sessions/", cors(handleSessions))
 	http.HandleFunc("/api/sessions", cors(handleSessions))
-	http.HandleFunc("/api/tmux/", cors(handleTmuxSessions))
-	http.HandleFunc("/api/tmux", cors(handleTmuxSessions))
 	http.HandleFunc("/api/exec", cors(handleExec))
 	http.HandleFunc("/health", cors(handleHealth))
 
@@ -1228,9 +885,6 @@ func main() {
 	// Write logs to ~/Library/Logs/conductord.log as well as stderr.
 	initLogFile()
 
-	// Extract bundled tmux (if available) and set tmuxPath.
-	initTmux()
-
 	// Start HTTP server in background.
 	startServer(*socketPath, *devPort)
 
@@ -1244,7 +898,7 @@ func main() {
 		signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 		<-sigCh
 		log.Printf("shutting down, removing socket %s", *socketPath)
-		killTmuxServer()
+		killAllSessions()
 		os.Remove(*socketPath)
 	}
 }

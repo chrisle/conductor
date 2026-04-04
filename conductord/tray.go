@@ -87,7 +87,7 @@ func onTrayReady(socketPath string) {
 
 func onTrayExit(socketPath string) {
 	log.Println("[tray] shutting down")
-	killTmuxServer()
+	killAllSessions()
 	if serverListener != nil {
 		serverListener.Close()
 	}

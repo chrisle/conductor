@@ -46,8 +46,7 @@ Object.defineProperty(window, 'electronAPI', {
     saveRecentProjects: vi.fn().mockResolvedValue(undefined),
     listClaudeSessions: vi.fn().mockResolvedValue([]),
     setAutoPilot: vi.fn(),
-    setTmuxOption: vi.fn(),
-    capturePane: vi.fn().mockResolvedValue(null),
+    captureScrollback: vi.fn().mockResolvedValue(null),
   },
   writable: true
 })

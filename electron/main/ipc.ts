@@ -538,7 +538,7 @@ export function registerIpcHandlers(): void {
             branch: data.branch_name || '',
             baseBranch: 'main',
           } : null,
-          tmuxSessionId: null,
+          sessionId: null,
           claudeSessionId: data.claude_session_id || null,
           prUrl: data.pr_url || null,
           status: 'active' as const,
@@ -882,33 +882,6 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
       return body
     } catch {
       return []
-    }
-  })
-
-  ipcMain.handle('conductord:getTmuxSessions', async () => {
-    try {
-      const { body } = await conductordFetch('/api/tmux')
-      return body
-    } catch {
-      return []
-    }
-  })
-
-  ipcMain.handle('conductord:killTmuxSession', async (_event, name: string) => {
-    try {
-      const { body } = await conductordFetch(`/api/tmux/${name}`, { method: 'DELETE' })
-      return body
-    } catch {
-      return { ok: false }
-    }
-  })
-
-  ipcMain.handle('conductord:killOrphanedTmux', async () => {
-    try {
-      const { body } = await conductordFetch('/api/tmux?orphaned=1', { method: 'DELETE' })
-      return body
-    } catch {
-      return { ok: false, killed: 0 }
     }
   })
 

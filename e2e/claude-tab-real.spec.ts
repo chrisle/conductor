@@ -146,7 +146,7 @@ test('New Tab > Claude > Default starts Claude Code', async () => {
 
     expect(claudeStarted).toBe(true)
   } finally {
-    // Force-kill the Electron process — app.close() can hang if tmux
+    // Force-kill the Electron process — app.close() can hang if
     // sessions are still running inside conductord.
     app.process().kill('SIGKILL')
   }

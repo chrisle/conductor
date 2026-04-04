@@ -122,7 +122,7 @@ const mock: typeof window.electronAPI = {
   gitShow: async () => ({ body: '', files: [] }),
   gitRemoteUrl: async () => null,
   gitShortstat: async () => ({ insertions: 0, deletions: 0 }),
-  capturePane: async () => null,
+  captureScrollback: async () => null,
 
   // App config
   loadConfig: async () => null,
@@ -140,7 +140,6 @@ const mock: typeof window.electronAPI = {
   resizeTerminal: resizeTerminalWS,
   killTerminal: killTerminalWS,
   setAutoPilot: noopAsync,
-  setTmuxOption: noopAsync,
   onTerminalData: (cb: Parameters<typeof window.electronAPI.onTerminalData>[0]) => { terminalListeners.data.add(cb) },
   offTerminalData: (cb: Parameters<typeof window.electronAPI.offTerminalData>[0]) => { terminalListeners.data.delete(cb) },
   onTerminalExit: (cb: Parameters<typeof window.electronAPI.onTerminalExit>[0]) => { terminalListeners.exit.add(cb) },
@@ -207,25 +206,6 @@ const mock: typeof window.electronAPI = {
       return res.ok ? await res.json() : []
     } catch { return [] }
   },
-  conductordGetTmuxSessions: async () => {
-    try {
-      const res = await fetch(`${CONDUCTORD_HTTP}/api/tmux`)
-      return res.ok ? await res.json() : []
-    } catch { return [] }
-  },
-  conductordKillTmuxSession: async (name: string) => {
-    try {
-      const res = await fetch(`${CONDUCTORD_HTTP}/api/tmux/${name}`, { method: 'DELETE' })
-      return res.ok ? await res.json() : { ok: false }
-    } catch { return { ok: false } }
-  },
-  conductordKillOrphanedTmux: async () => {
-    try {
-      const res = await fetch(`${CONDUCTORD_HTTP}/api/tmux?orphaned=1`, { method: 'DELETE' })
-      return res.ok ? await res.json() : { ok: false, killed: 0 }
-    } catch { return { ok: false, killed: 0 } }
-  },
-
   // Debug / shell
   logDebug: noop,
   openExternal: noopAsync,

@@ -1,6 +1,7 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SerializeAddon } from '@xterm/addon-serialize'
+import { WebglAddon } from '@xterm/addon-webgl'
 import '@xterm/xterm/css/xterm.css'
 import { terminalConfig, terminalColors } from './theme'
 
@@ -52,6 +53,16 @@ export async function createXtermTerminal(container: HTMLElement): Promise<{ ter
   term.loadAddon(fitAddon)
   term.loadAddon(serializeAddon)
   term.open(container)
+
+  try {
+    const webglAddon = new WebglAddon()
+    webglAddon.onContextLoss(() => {
+      webglAddon.dispose()
+    })
+    term.loadAddon(webglAddon)
+  } catch {
+    // WebGL not available, fall back to default canvas renderer
+  }
 
   return { term, fitAddon, serializeAddon }
 }

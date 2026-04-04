@@ -5,11 +5,9 @@
  * over a Unix domain socket. The renderer communicates through IPC only —
  * no direct network connections.
  *
- * When tmux is available, conductord wraps each session in a named tmux
- * session so it survives app restarts. createTerminal resolves with
- * { isNew: true } if a fresh tmux session was created, or { isNew: false }
- * if an existing session was reattached. Callers use this to decide whether
- * to send an initialCommand.
+ * createTerminal resolves with { isNew: true } if a new process was spawned,
+ * or { isNew: false } if an existing session was reattached. Callers use
+ * this to decide whether to send an initialCommand.
  */
 
 const activeSessions = new Set<string>()
@@ -73,12 +71,8 @@ export function resizeTerminal(id: string, cols: number, rows: number): Promise<
   return Promise.resolve()
 }
 
-export function setTmuxOption(id: string, key: string, value: string): void {
-  window.electronAPI.setTmuxOption(id, key, value)
-}
-
-export function capturePane(id: string): Promise<string | null> {
-  return window.electronAPI.capturePane(id)
+export function captureScrollback(id: string): Promise<string | null> {
+  return window.electronAPI.captureScrollback(id)
 }
 
 export function setAutoPilot(id: string, enabled: boolean): void {

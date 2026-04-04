@@ -20,7 +20,7 @@ const pendingConnections = new Map<string, Promise<{ isNew: boolean }>>()
 export function registerTerminalBridge(): void {
   ipcMain.handle('terminal:create', async (event, id: string, cwd?: string, command?: string) => {
     // If already connected, close the stale WebSocket so we get a fresh
-    // connection and let conductord decide whether the tmux session is new.
+    // connection and let conductord decide whether the session is new.
     if (sessions.has(id)) {
       const old = sessions.get(id)!
       old.intentionalClose = true
@@ -163,29 +163,28 @@ export function registerTerminalBridge(): void {
     }
   })
 
-  ipcMain.handle('terminal:setTmuxOption', async (_event, id: string, key: string, value: string) => {
+  ipcMain.handle('terminal:captureScrollback', async (_event, id: string) => {
     const session = sessions.get(id)
-    if (session && session.ws.readyState === WebSocket.OPEN) {
-      session.ws.send(JSON.stringify({ type: 'tmux-option', data: { key, value } }))
-    }
-  })
+    if (!session || session.ws.readyState !== WebSocket.OPEN) return null
 
-  ipcMain.handle('terminal:capturePane', async (_event, id: string) => {
-    try {
-      const { conductordFetch } = await import('./conductord-client')
-      const { body } = await conductordFetch('/api/exec', {
-        method: 'POST',
-        body: JSON.stringify({
-          command: 'tmux',
-          args: ['capture-pane', '-t', id, '-p', '-S', '-100000', '-J'],
-          timeout: 10,
-        }),
-      }) as { body: { success: boolean; stdout?: string; stderr?: string } }
-      if (!body.success) return null
-      return body.stdout ?? null
-    } catch {
-      return null
-    }
+    return new Promise<string | null>((resolve) => {
+      const timeout = setTimeout(() => resolve(null), 5000)
+
+      const handler = (data: WebSocket.Data, isBinary: boolean) => {
+        if (isBinary) return
+        try {
+          const msg = JSON.parse(String(data))
+          if (msg.type === 'scrollback') {
+            clearTimeout(timeout)
+            session.ws.off('message', handler)
+            resolve(msg.data ?? null)
+          }
+        } catch { /* not JSON */ }
+      }
+
+      session.ws.on('message', handler)
+      session.ws.send(JSON.stringify({ type: 'capture-scrollback' }))
+    })
   })
 
   // Clean up all connections on app quit
