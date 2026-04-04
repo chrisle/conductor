@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { extensionRegistry } from '@/extensions'
 import { useActivityBarStore } from '@/store/activityBar'
 import { useSettingsDialogStore } from '@/store/settingsDialog'
+import { useNotificationsStore } from '@/store/notifications'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 export default function ActivityBar(): React.ReactElement {
@@ -21,22 +22,30 @@ export default function ActivityBar(): React.ReactElement {
   const mainExtensions = allSidebarExtensions.filter(ext => !bottomIds.has(ext.id) && ext.id !== 'settings')
   const bottomExtensions = allSidebarExtensions.filter(ext => bottomIds.has(ext.id) && ext.id !== 'settings')
 
+  const unreadCount = useNotificationsStore(s => s.notifications.filter(n => !n.read).length)
+
   const renderIcon = (ext: typeof allSidebarExtensions[0]) => {
     const Icon = ext.icon!
     const isActive = activeExtensionId === ext.id
+    const showBadge = ext.id === 'notifications' && unreadCount > 0
     return (
       <Tooltip key={ext.id}>
         <TooltipTrigger asChild>
           <button
             onClick={() => toggleExtension(ext.id)}
             className={cn(
-              'flex items-center justify-center w-10 h-10 transition-colors',
+              'relative flex items-center justify-center w-10 h-10 transition-colors',
               isActive
                 ? 'text-white border-l-2 border-l-blue-400 bg-zinc-800/60'
                 : 'text-zinc-500 border-l-2 border-l-transparent hover:text-zinc-200'
             )}
           >
             <Icon className="w-5 h-5" />
+            {showBadge && (
+              <span className="absolute top-1.5 right-1.5 min-w-[14px] h-3.5 px-0.5 rounded-full bg-blue-500 text-white text-[9px] font-bold flex items-center justify-center leading-none">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
           </button>
         </TooltipTrigger>
         <TooltipContent side="right">{ext.name}</TooltipContent>
