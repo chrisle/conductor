@@ -1062,11 +1062,6 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
           label: 'Search',
           onClick: () => { setShowSearch(!showSearch); if (showSearch) setFilter('') },
         },
-        {
-          icon: FolderPlus,
-          label: 'New folder',
-          onClick: () => useProjectStore.getState().addSessionFolder('New Folder', null),
-        },
       ]}
     >
       {/* Search bar */}

@@ -8,6 +8,8 @@ export type { SessionInfoProvider, SessionInfoContext } from './session-info-reg
 export const workSessionsExtension: Extension = {
   id: 'work-sessions',
   name: 'Sessions',
+  description: 'Manage terminal and AI sessions with folders, renaming, and tiling',
+  version: '0.1.0',
   icon: TerminalSquare,
   sidebar: WorkSessionsSidebar,
 }
