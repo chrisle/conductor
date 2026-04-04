@@ -101,21 +101,21 @@ export function serializeProject(): ConductorProject {
     } : undefined,
     settings: project.projectSettings,
     sessionTitles: Object.keys(project.sessionTitles).length > 0 ? project.sessionTitles : undefined,
-    sessionAutoPilot: Object.keys(project.sessionAutoPilot).length > 0 ? project.sessionAutoPilot : undefined,
-    sessionGroups: project.sessionGroups.length > 0 ? project.sessionGroups : undefined,
-    sessionSort: project.sessionSort !== 'created' ? project.sessionSort : undefined,
+    sessionFolders: project.sessionFolders.length > 0 ? project.sessionFolders : undefined,
   }
 }
 
+const SESSION_TAB_TYPES = new Set(['terminal', 'claude-code', 'codex'])
+
 /** Restore a workspace (tabs + layout) */
-function restoreWorkspace(workspace: Workspace): void {
+async function restoreWorkspace(workspace: Workspace): Promise<void> {
   const tabsStore = useTabsStore.getState()
   const layoutStore = useLayoutStore.getState()
 
   // Clear current state
   for (const groupId of Object.keys(tabsStore.groups)) {
     for (const tab of tabsStore.groups[groupId].tabs) {
-      if (tab.type === 'terminal' || tab.type === 'claude-code' || tab.type === 'codex') {
+      if (SESSION_TAB_TYPES.has(tab.type)) {
         killTerminal(tab.id)
       }
     }
@@ -125,14 +125,26 @@ function restoreWorkspace(workspace: Workspace): void {
   // Restore workspace-level settings
   useProjectStore.getState().setWorkspaceSettings(workspace.settings)
 
-  // Restore groups and tabs
+  // Fetch live conductord sessions to filter out stale tabs
+  let liveSessionIds: Set<string> | null = null
+  try {
+    const sessions = await window.electronAPI.conductordGetSessions()
+    liveSessionIds = new Set(sessions.filter(s => !s.dead).map(s => s.id))
+  } catch {
+    // If conductord is unreachable, skip filtering
+  }
+
+  // Restore groups and tabs, skipping session tabs whose session no longer exists
   const newGroups: Record<string, import('@/store/tabs').TabGroup> = {}
   for (const [groupId, group] of Object.entries(workspace.groups)) {
-    newGroups[groupId] = {
-      id: group.id,
-      activeTabId: group.activeTabId,
-      worktree: group.worktree,
-      tabs: group.tabs.map(tab => ({
+    const tabs = group.tabs
+      .filter(tab => {
+        if (liveSessionIds && SESSION_TAB_TYPES.has(tab.type)) {
+          return liveSessionIds.has(tab.id)
+        }
+        return true
+      })
+      .map(tab => ({
         id: tab.id,
         type: tab.type,
         title: tab.title,
@@ -141,6 +153,12 @@ function restoreWorkspace(workspace: Workspace): void {
         content: tab.content,
         _terminalHistory: tab.terminalHistory
       } as any))
+
+    newGroups[groupId] = {
+      id: group.id,
+      activeTabId: tabs.find(t => t.id === group.activeTabId) ? group.activeTabId : (tabs[0]?.id ?? null),
+      worktree: group.worktree,
+      tabs,
     }
   }
   useTabsStore.setState({ groups: newGroups })
@@ -153,7 +171,7 @@ function restoreWorkspace(workspace: Workspace): void {
 }
 
 /** Restore a full project */
-export function restoreProject(project: ConductorProject, projectDir?: string): void {
+export async function restoreProject(project: ConductorProject, projectDir?: string): Promise<void> {
   const sidebarStore = useSidebarStore.getState()
   const activityBarStore = useActivityBarStore.getState()
 
@@ -161,7 +179,7 @@ export function restoreProject(project: ConductorProject, projectDir?: string): 
   const wsName = project.activeWorkspace || Object.keys(project.workspaces)[0]
   const workspace = project.workspaces[wsName]
   if (workspace) {
-    restoreWorkspace(workspace)
+    await restoreWorkspace(workspace)
   }
 
   // Restore sidebar — rootPath is set by caller via projectDir param
@@ -199,13 +217,24 @@ export function restoreProject(project: ConductorProject, projectDir?: string): 
     projectStore.setWorkspaceSettings(activeWorkspace.settings)
   }
 
-  // Restore session titles and autopilot states
+  // Restore session titles
   projectStore.setSessionTitles(project.sessionTitles || {})
-  projectStore.setSessionAutoPilots(project.sessionAutoPilot || {})
 
-  // Restore session groups and sort
-  projectStore.setSessionGroups(project.sessionGroups || [])
-  projectStore.setSessionSort(project.sessionSort || 'created')
+  // Restore session folders (with backward compat from old sessionGroups)
+  if (project.sessionFolders && project.sessionFolders.length > 0) {
+    projectStore.setSessionFolders(project.sessionFolders)
+  } else if (project.sessionGroups && project.sessionGroups.length > 0) {
+    // Migrate old flat groups → folders
+    projectStore.setSessionFolders(project.sessionGroups.map(g => ({
+      id: g.id,
+      name: g.name,
+      parentId: null,
+      sessionIds: g.sessionIds,
+      collapsed: false,
+    })))
+  } else {
+    projectStore.setSessionFolders([])
+  }
 }
 
 /** Save the current project to the given file path */
@@ -248,9 +277,7 @@ export async function saveProject(filePath: string): Promise<void> {
     } : undefined,
     settings: project.projectSettings,
     sessionTitles: Object.keys(project.sessionTitles).length > 0 ? project.sessionTitles : undefined,
-    sessionAutoPilot: Object.keys(project.sessionAutoPilot).length > 0 ? project.sessionAutoPilot : undefined,
-    sessionGroups: project.sessionGroups.length > 0 ? project.sessionGroups : undefined,
-    sessionSort: project.sessionSort !== 'created' ? project.sessionSort : undefined,
+    sessionFolders: project.sessionFolders.length > 0 ? project.sessionFolders : undefined,
   }
 
   await window.electronAPI.writeFile(filePath, JSON.stringify(data, null, 2))
@@ -304,7 +331,7 @@ export async function openProject(filePath: string): Promise<boolean> {
         sidebar: raw.sidebar,
         activeExtensionId: raw.activeExtensionId
       }
-      restoreProject(project, projectDir)
+      await restoreProject(project, projectDir)
       useProjectStore.getState().setProject(filePath, project.name)
       return true
     }
@@ -316,7 +343,7 @@ export async function openProject(filePath: string): Promise<boolean> {
       return false
     }
 
-    restoreProject(project, projectDir)
+    await restoreProject(project, projectDir)
     useProjectStore.getState().setProject(filePath, project.name || fileBaseName)
     return true
   } catch (err) {
@@ -347,7 +374,7 @@ export async function switchWorkspace(workspaceName: string): Promise<boolean> {
       const workspace = data.workspaces[workspaceName]
       if (!workspace) return false
 
-      restoreWorkspace(workspace)
+      await restoreWorkspace(workspace)
     } catch {
       return false
     }
@@ -563,14 +590,13 @@ export function autosaveLayout(): void {
       },
       activeExtensionId: activityBar.activeExtensionId,
       sessionTitles: Object.keys(project.sessionTitles).length > 0 ? project.sessionTitles : undefined,
-      sessionGroups: project.sessionGroups.length > 0 ? project.sessionGroups : undefined,
-      sessionSort: project.sessionSort !== 'created' ? project.sessionSort : undefined,
+      sessionFolders: project.sessionFolders.length > 0 ? project.sessionFolders : undefined,
     }
     localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data))
   } catch { /* quota exceeded — ignore */ }
 }
 
-function restoreAutosavedLayout(): boolean {
+async function restoreAutosavedLayout(): Promise<boolean> {
   try {
     const raw = localStorage.getItem(AUTOSAVE_KEY)
     if (!raw) return false
@@ -586,11 +612,10 @@ function restoreAutosavedLayout(): boolean {
       sidebar: data.sidebar || { rootPath: null, expandedPaths: [] },
       activeExtensionId: data.activeExtensionId ?? null,
       sessionTitles: data.sessionTitles,
-      sessionAutoPilot: data.sessionAutoPilot,
+      sessionFolders: data.sessionFolders,
       sessionGroups: data.sessionGroups,
-      sessionSort: data.sessionSort,
     }
-    restoreProject(project)
+    await restoreProject(project)
     return true
   } catch { return false }
 }
@@ -609,7 +634,7 @@ export async function initializeDefaultProject(): Promise<void> {
   }
 
   // Try to restore the last autosaved layout
-  if (restoreAutosavedLayout()) {
+  if (await restoreAutosavedLayout()) {
     useProjectStore.setState({
       name: 'Untitled Project',
       activeWorkspace: 'default',
