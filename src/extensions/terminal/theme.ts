@@ -3,7 +3,7 @@ import type { ITheme } from '@xterm/xterm'
 export const terminalColors: ITheme = {
   background: "#09090b",
   foreground: "#e4e4e7",
-  cursor: "#a1a1aa",
+  cursor: "#7dd3fc",
   cursorAccent: "#09090b",
   selectionBackground: "#3f3f46",
   black: "#18181b",
@@ -128,7 +128,8 @@ export const terminalConfig = {
   },
   lineHeight: 1.0,
   cursorBlink: true,
-  cursorStyle: "block" as const,
+  cursorStyle: "bar" as const,
+  cursorWidth: 2,
   scrollback: 100000,
   devicePixelRatio: window.devicePixelRatio || 2,
 };
