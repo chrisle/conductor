@@ -465,7 +465,7 @@ export default function TerminalTab({
         title={tabId}
         onClick={() => navigator.clipboard.writeText(tabId)}
       >
-        session: {tabId}
+        Terminal ID: {tabId}
       </span>
       {footerPosition === 'bottom' && footer}
     </div>
