@@ -49,8 +49,7 @@ const electronAPI = {
     ipcRenderer.invoke('terminal:resize', id, cols, rows),
   killTerminal: (id: string) => ipcRenderer.invoke('terminal:kill', id),
   setAutoPilot: (id: string, enabled: boolean) => ipcRenderer.invoke('terminal:setAutoPilot', id, enabled),
-  setTmuxOption: (id: string, key: string, value: string) => ipcRenderer.invoke('terminal:setTmuxOption', id, key, value),
-  capturePane: (id: string) => ipcRenderer.invoke('terminal:capturePane', id),
+  captureScrollback: (id: string) => ipcRenderer.invoke('terminal:captureScrollback', id),
   onTerminalData: (callback: (event: IpcRendererEvent, id: string, data: string) => void) =>
     ipcRenderer.on('terminal:data', callback),
   offTerminalData: (callback: (event: IpcRendererEvent, id: string, data: string) => void) =>
@@ -123,9 +122,6 @@ const electronAPI = {
   // Conductord REST proxy (routes through main process -> Unix socket)
   conductordHealth: () => ipcRenderer.invoke('conductord:health'),
   conductordGetSessions: () => ipcRenderer.invoke('conductord:getSessions'),
-  conductordGetTmuxSessions: () => ipcRenderer.invoke('conductord:getTmuxSessions'),
-  conductordKillTmuxSession: (name: string) => ipcRenderer.invoke('conductord:killTmuxSession', name),
-  conductordKillOrphanedTmux: () => ipcRenderer.invoke('conductord:killOrphanedTmux'),
 
   // Debug logging (forwards renderer logs to main process log file)
   logDebug: (msg: string) => ipcRenderer.send('log:debug', msg),

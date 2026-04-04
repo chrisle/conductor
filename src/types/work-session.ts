@@ -8,7 +8,7 @@ export interface WorkSession {
     branch: string
     baseBranch: string
   } | null
-  tmuxSessionId: string | null
+  sessionId: string | null
   claudeSessionId: string | null
   prUrl: string | null
   status: 'active' | 'completed'

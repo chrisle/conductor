@@ -344,21 +344,21 @@ describe('useProjectStore', () => {
 
   describe('project and workspace settings', () => {
     it('setProjectSettings stores settings', () => {
-      useProjectStore.getState().setProjectSettings({ terminal: { tmuxMouse: true } })
+      useProjectStore.getState().setProjectSettings({ terminal: {} })
       expect(useProjectStore.getState().projectSettings).toEqual({
-        terminal: { tmuxMouse: true },
+        terminal: {},
       })
     })
 
     it('setWorkspaceSettings stores settings', () => {
-      useProjectStore.getState().setWorkspaceSettings({ terminal: { tmuxMouse: false } })
+      useProjectStore.getState().setWorkspaceSettings({ terminal: {} })
       expect(useProjectStore.getState().workspaceSettings).toEqual({
-        terminal: { tmuxMouse: false },
+        terminal: {},
       })
     })
 
     it('settings can be cleared with undefined', () => {
-      useProjectStore.getState().setProjectSettings({ terminal: { tmuxMouse: true } })
+      useProjectStore.getState().setProjectSettings({ terminal: {} })
       useProjectStore.getState().setProjectSettings(undefined)
       expect(useProjectStore.getState().projectSettings).toBeUndefined()
     })

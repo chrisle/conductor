@@ -8,8 +8,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 beforeEach(() => {
   vi.clearAllMocks()
   ;(window.electronAPI as any).setAutoPilot = vi.fn()
-  ;(window.electronAPI as any).setTmuxOption = vi.fn()
-  ;(window.electronAPI as any).capturePane = vi.fn().mockResolvedValue('pane content')
+  ;(window.electronAPI as any).captureScrollback = vi.fn().mockResolvedValue('scrollback content')
   // Reset the createTerminal mock to return a proper value
   vi.mocked(window.electronAPI.createTerminal).mockResolvedValue({ isNew: true } as any)
   vi.mocked(window.electronAPI.writeTerminal).mockImplementation(() => undefined as any)
@@ -33,7 +32,7 @@ describe('terminal-ws', () => {
     it('calls electronAPI.createTerminal with id and cwd', async () => {
       const mod = await freshImport()
       await mod.createTerminal('tab-1', '/home/user')
-      expect(window.electronAPI.createTerminal).toHaveBeenCalledWith('tab-1', '/home/user')
+      expect(window.electronAPI.createTerminal).toHaveBeenCalledWith('tab-1', '/home/user', undefined)
     })
 
     it('returns the result from electronAPI', async () => {
@@ -102,14 +101,6 @@ describe('terminal-ws', () => {
     })
   })
 
-  describe('setTmuxOption', () => {
-    it('calls electronAPI.setTmuxOption', async () => {
-      const mod = await freshImport()
-      mod.setTmuxOption('tab-1', 'mouse', 'on')
-      expect((window.electronAPI as any).setTmuxOption).toHaveBeenCalledWith('tab-1', 'mouse', 'on')
-    })
-  })
-
   describe('setAutoPilot', () => {
     it('calls electronAPI.setAutoPilot', async () => {
       const mod = await freshImport()
@@ -118,12 +109,12 @@ describe('terminal-ws', () => {
     })
   })
 
-  describe('capturePane', () => {
-    it('calls electronAPI.capturePane and returns result', async () => {
+  describe('captureScrollback', () => {
+    it('calls electronAPI.captureScrollback and returns result', async () => {
       const mod = await freshImport()
-      const result = await mod.capturePane('tab-1')
-      expect(result).toBe('pane content')
-      expect((window.electronAPI as any).capturePane).toHaveBeenCalledWith('tab-1')
+      const result = await mod.captureScrollback('tab-1')
+      expect(result).toBe('scrollback content')
+      expect((window.electronAPI as any).captureScrollback).toHaveBeenCalledWith('tab-1')
     })
   })
 

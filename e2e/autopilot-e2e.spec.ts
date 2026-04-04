@@ -2,7 +2,7 @@
  * E2E test: Autopilot auto-responds to yes/no prompts in a Claude Code tab.
  *
  * Connects Playwright to the real Electron app via CDP so we have full
- * access to window.electronAPI, conductord, and tmux — no mocks.
+ * access to window.electronAPI and conductord — no mocks.
  *
  * Steps:
  *   1. Launch Electron, reset to empty project with home dir ~/

@@ -54,7 +54,7 @@ export interface ConductorProject {
     connectionId?: string
   }
   settings?: ProjectSettings
-  /** Custom titles for tmux sessions, keyed by session name (tab ID) */
+  /** Custom titles for sessions, keyed by session name (tab ID) */
   sessionTitles?: Record<string, string>
   /** Autopilot state per tmux session, keyed by session name (tab ID) */
   sessionAutoPilot?: Record<string, boolean>

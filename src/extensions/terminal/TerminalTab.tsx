@@ -4,7 +4,6 @@ import type { TabProps } from "@/extensions/types";
 import type { TerminalTabExtraProps } from "./types";
 import SearchBar from "./SearchBar";
 import * as termAPI from "@/lib/terminal-api";
-import { useResolvedSettings } from "@/hooks/useResolvedSettings";
 import { useTabsStore } from "@/store/tabs";
 import { createXtermTerminal } from "./xterm-init";
 import type { Terminal, SerializeAddon } from "./xterm-init";
@@ -47,10 +46,7 @@ export default function TerminalTab({
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error' | null>('connecting');
-  const resolvedSettings = useResolvedSettings();
-  const sessionReadyRef = useRef(false);
   const hydratingRef = useRef(false);
-  const tmuxMouseRef = useRef(resolvedSettings.terminal.tmuxMouse);
 
   const handleRefresh = useCallback(() => {
     termAPI.killTerminal(tabId);
@@ -68,17 +64,6 @@ export default function TerminalTab({
   useEffect(() => {
     onPtyDataRef.current = onPtyData;
   }, [onPtyData]);
-
-  useEffect(() => {
-    tmuxMouseRef.current = resolvedSettings.terminal.tmuxMouse;
-  }, [resolvedSettings.terminal.tmuxMouse]);
-
-  // Re-apply tmux mouse whenever the resolved setting changes
-  useEffect(() => {
-    if (sessionReadyRef.current) {
-      termAPI.setTmuxOption(tabId, 'mouse', resolvedSettings.terminal.tmuxMouse ? 'on' : 'off');
-    }
-  }, [resolvedSettings.terminal.tmuxMouse, tabId]);
 
   function doFit() {
     const fitAddon = fitAddonRef.current;
@@ -156,14 +141,6 @@ export default function TerminalTab({
       containerEl.style.visibility = "visible";
     };
 
-    // Regex to strip mouse tracking escape sequences (DEC private mode set/reset).
-    // When tmuxMouse is off, we prevent xterm.js from entering mouse reporting
-    // mode so wheel events scroll xterm's buffer and click-drag does native selection.
-    // Matches any DEC private mode set/reset sequence containing a mouse
-    // tracking mode — handles both individual (\x1b[?1000h) and combined
-    // (\x1b[?1000;1002;1006h) forms.
-    const MOUSE_MODE_RE = /\x1b\[\?[\d;]*(1000|1002|1003|1005|1006|1015)[\d;]*[hl]/g;
-
     const flushPendingData = () => {
       const term = terminalRef.current;
       if (!term || pendingDataRef.current.length === 0) return;
@@ -181,10 +158,6 @@ export default function TerminalTab({
             .replace(/\x1b\[2J/g, "")
             .replace(/\x1b\[3J/g, "")
             .replace(/\x1bc/g, "");
-          if (!data) continue;
-        }
-        if (!tmuxMouseRef.current) {
-          data = data.replace(MOUSE_MODE_RE, "");
           if (!data) continue;
         }
         writePtyData(term, data);
@@ -211,10 +184,6 @@ export default function TerminalTab({
           .replace(/\x1b\[2J/g, "")
           .replace(/\x1b\[3J/g, "")
           .replace(/\x1bc/g, "");
-        if (!data) return;
-      }
-      if (!tmuxMouseRef.current) {
-        data = data.replace(MOUSE_MODE_RE, "");
         if (!data) return;
       }
 
@@ -269,7 +238,7 @@ export default function TerminalTab({
         doFit();
         const { cols, rows } = term;
         console.log(`[terminal] xterm fit: cols=${cols} rows=${rows}`);
-        // Pass the initialCommand to conductord so it can use tmux send-keys
+        // Pass the initialCommand to conductord so it runs the command
         // immediately after creating the session — far more reliable than
         // waiting for the shell prompt from the renderer side.
         termAPI.createTerminal(tabId, cwd, initialCommand).then(async ({ isNew, autoPilot: apState }) => {
@@ -283,10 +252,7 @@ export default function TerminalTab({
           }
 
           if (disposed) return;
-          sessionReadyRef.current = true;
           setConnectionStatus('connected');
-          // Apply tmux mouse setting from resolved project/workspace config
-          termAPI.setTmuxOption(tabId, 'mouse', resolvedSettings.terminal.tmuxMouse ? 'on' : 'off');
 
           if (!isNew) {
             // Restore scrollback from serialized buffer (saved on previous
@@ -319,8 +285,8 @@ export default function TerminalTab({
             termAPI.writeTerminal(tabId, data, { programmatic: true }),
           );
           onSessionReady?.(isNew, { autoPilot: apState });
-          // Mark initialCommand as sent — conductord already sent it via
-          // tmux send-keys when creating the session.
+          // Mark initialCommand as sent — conductord already ran it
+          // when creating the session.
           if (initialCommand && isNew) {
             initCmdSentRef.current = true;
           }
@@ -345,21 +311,9 @@ export default function TerminalTab({
         processWatchers(term, start, end);
       });
 
-      // Scroll handling.
-      // When tmuxMouse is off, intercept wheel events to always scroll the
-      // xterm buffer (instead of letting tmux convert them to arrow keys).
-      // Uses { capture: true } to fire before xterm's own wheel handler.
+      // Track whether user scrolled up so we don't auto-scroll on new data.
       const el = containerRef.current;
       const onWheel = (e: WheelEvent) => {
-        if (!tmuxMouseRef.current) {
-          // Prevent xterm.js (and tmux) from seeing the wheel event.
-          // Manually scroll the viewport instead.
-          e.preventDefault();
-          e.stopPropagation();
-          const lines = Math.round(e.deltaY / 20) || (e.deltaY > 0 ? 1 : -1);
-          term.scrollLines(lines);
-        }
-
         if (e.deltaY < 0) {
           userScrolledUpRef.current = true;
         } else if (e.deltaY > 0) {
@@ -511,7 +465,7 @@ export default function TerminalTab({
         title={tabId}
         onClick={() => navigator.clipboard.writeText(tabId)}
       >
-        tmux: {tabId}
+        session: {tabId}
       </span>
       {footerPosition === 'bottom' && footer}
     </div>

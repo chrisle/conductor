@@ -24,20 +24,11 @@ vi.mock('../lib/terminal-api', () => ({
   resizeTerminal: vi.fn(),
   killTerminal: vi.fn(),
   setAutoPilot: vi.fn(),
-  setTmuxOption: vi.fn(),
-  capturePane: vi.fn().mockResolvedValue(null),
+  captureScrollback: vi.fn().mockResolvedValue(null),
   onTerminalData: vi.fn(),
   offTerminalData: vi.fn(),
   onTerminalExit: vi.fn(),
   offTerminalExit: vi.fn(),
-}))
-
-vi.mock('../hooks/useResolvedSettings', () => ({
-  useResolvedSettings: () => ({
-    terminal: {
-      tmuxMouse: false,
-    },
-  }),
 }))
 
 describe('TerminalTab', () => {
