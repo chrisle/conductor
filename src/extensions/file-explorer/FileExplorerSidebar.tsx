@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Terminal, FilePlus, FolderPlus, GitBranch } from 'lucide-react'
+import { Terminal, GitBranch, FolderOpen } from 'lucide-react'
 import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useSidebarStore } from '@/store/sidebar'
@@ -22,12 +22,6 @@ export default function FileExplorerSidebar({ groupId }: FileExplorerSidebarProp
     window.electronAPI.gitBranch(rootPath).then(branch => setIsGitRepo(branch !== null))
   }, [rootPath])
 
-  function triggerNewFile() {
-    window.dispatchEvent(new CustomEvent('sidebar:new', { detail: { type: 'file' } }))
-  }
-  function triggerNewFolder() {
-    window.dispatchEvent(new CustomEvent('sidebar:new', { detail: { type: 'folder' } }))
-  }
   function openNewTerminal() {
     const targetGroup = focusedGroupId || groupId
     addTab(targetGroup, { type: 'terminal', title: 'Terminal', filePath: rootPath || undefined })
@@ -38,8 +32,6 @@ export default function FileExplorerSidebar({ groupId }: FileExplorerSidebarProp
   }
 
   const actions: SidebarAction[] = [
-    { icon: FilePlus, label: 'New file', onClick: triggerNewFile },
-    { icon: FolderPlus, label: 'New folder', onClick: triggerNewFolder },
     { icon: Terminal, label: 'New terminal', onClick: openNewTerminal },
   ]
 
@@ -47,12 +39,24 @@ export default function FileExplorerSidebar({ groupId }: FileExplorerSidebarProp
     actions.push({ icon: GitBranch, label: 'Git graph', onClick: openGitGraph })
   }
 
+  // Format the current directory for display
+  const displayPath = rootPath
+    ? rootPath.replace(/^\/Users\/[^/]+/, '~')
+    : ''
+
   return (
     <SidebarLayout
       title="Files"
       actions={actions}
-      separatorAfter={1}
     >
+      {rootPath && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-zinc-700/50 shrink-0 min-w-0">
+          <FolderOpen className="w-3 h-3 text-zinc-500 shrink-0" />
+          <span className="text-ui-xs text-zinc-400 truncate" title={rootPath}>
+            {displayPath}
+          </span>
+        </div>
+      )}
       <div className="flex-1 overflow-hidden">
         <FileTree groupId={groupId} />
       </div>
