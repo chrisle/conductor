@@ -295,7 +295,12 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     set(state => {
       if (!state.root) return state
       const newRoot = removeFromTree(state.root, groupId)
-      return { root: newRoot ? simplify(newRoot) : null }
+      const simplified = newRoot ? simplify(newRoot) : null
+      // If the removed group was focused, pick the first remaining group
+      const focusedGroupId = state.focusedGroupId === groupId
+        ? (simplified ? collectGroupIds(simplified)[0] ?? null : null)
+        : state.focusedGroupId
+      return { root: simplified, focusedGroupId }
     })
   },
 
