@@ -71,10 +71,23 @@ export default function GoToDialog({ open, onOpenChange }: GoToDialogProps): Rea
     if (resolved.startsWith('~')) {
       const home = await window.electronAPI.getHomeDir()
       resolved = home + resolved.slice(1)
+    } else if (!resolved.startsWith('/')) {
+      // Resolve relative paths (e.g. "..") against the current rootPath
+      const home = await window.electronAPI.getHomeDir()
+      const base = rootPath || home
+      resolved = base + '/' + resolved
     }
     if (resolved.endsWith('/') && resolved.length > 1) {
       resolved = resolved.slice(0, -1)
     }
+    // Normalize path segments (resolve ".." and ".")
+    const parts = resolved.split('/')
+    const normalized: string[] = []
+    for (const part of parts) {
+      if (part === '..') normalized.pop()
+      else if (part !== '.' && part !== '') normalized.push(part)
+    }
+    resolved = '/' + normalized.join('/')
     setRootPath(resolved)
     onOpenChange(false)
   }
