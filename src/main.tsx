@@ -17,9 +17,10 @@ import { useSidebarStore } from './store/sidebar'
 import { useProjectStore } from './store/project'
 import { useActivityBarStore } from './store/activityBar'
 import { useUIStore } from './store/ui'
-import { initializeExtensions } from './extensions'
+import { useSettingsDialogStore } from './store/settingsDialog'
+import { initializeExtensions, extensionRegistry } from './extensions'
 import { mountConductorAPI } from './extensions/api'
-import { loadExternalExtensions } from './extensions/loader'
+import { loadExternalExtensions, loadExtension } from './extensions/loader'
 
 // Use local monaco-editor bundle instead of CDN (required for Electron)
 loader.config({ monaco })
@@ -57,6 +58,9 @@ loadExternalExtensions().catch(err => console.error('Failed to load external ext
   project: useProjectStore,
   activityBar: useActivityBarStore,
   ui: useUIStore,
+  settingsDialog: useSettingsDialogStore,
+  extensionRegistry,
+  loadExtension,
 }
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
