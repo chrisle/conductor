@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Server, Download, Trash2,
-  Package, RefreshCw, Puzzle, Monitor,
+  Package, RefreshCw, Puzzle, Monitor, Palette, Keyboard, RotateCcw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -10,10 +10,14 @@ import {
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Switch } from '@/components/ui/switch'
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
 import { useSettingsDialogStore } from '@/store/settingsDialog'
+import { useConfigStore } from '@/store/config'
 import { extensionRegistry } from '@/extensions'
 import { ConductorDaemonPanel } from '@/extensions/settings/TerminalServiceTab'
+import { DEFAULT_TERMINAL_CUSTOMIZATION, DEFAULT_EDITOR_CUSTOMIZATION, DEFAULT_KEYBOARD_SHORTCUTS } from '@/types/app-config'
+import type { TerminalCustomization, EditorCustomization } from '@/types/app-config'
 
 interface InstalledExtension {
   id: string
@@ -32,13 +36,15 @@ export default function SettingsDialog(): React.ReactElement {
 
   const settingsPanels = extensionRegistry.getSettingsPanels()
 
-  // Build nav items: extension panels + terminal + system tray + extensions
+  // Build nav items: extension panels + appearance + shortcuts + terminal + system tray + extensions
   const navItems: { id: string; label: string; icon: React.ElementType }[] = [
     ...settingsPanels.map(({ extension }) => ({
       id: extension.id,
       label: extension.name,
       icon: extension.icon || Puzzle,
     })),
+    { id: 'appearance', label: 'Appearance', icon: Palette },
+    { id: 'keyboard-shortcuts', label: 'Shortcuts', icon: Keyboard },
     { id: 'terminal', label: 'Terminal', icon: Monitor },
     { id: 'conductor-daemon', label: 'System Tray', icon: Server },
     { id: 'extensions', label: 'Extensions', icon: Package },
@@ -114,6 +120,14 @@ function SettingsContent({
     )
   }
 
+  if (section === 'appearance') {
+    return <AppearanceSection />
+  }
+
+  if (section === 'keyboard-shortcuts') {
+    return <KeyboardShortcutsSection />
+  }
+
   if (section === 'terminal') {
     return <TerminalSection />
   }
@@ -129,11 +143,291 @@ function SettingsContent({
   return <div className="text-ui-base text-zinc-500">Select a section from the sidebar.</div>
 }
 
+// ── Shared setting row component ──
+
+function SettingRow({ label, description, children }: { label: string; description?: string; children: React.ReactNode }): React.ReactElement {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2.5">
+      <div className="flex-1 min-w-0">
+        <div className="text-ui-sm text-zinc-200">{label}</div>
+        {description && <div className="text-ui-xs text-zinc-500 mt-0.5">{description}</div>}
+      </div>
+      <div className="shrink-0">{children}</div>
+    </div>
+  )
+}
+
+function SelectInput({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }): React.ReactElement {
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-ui-sm text-zinc-200 outline-none focus:border-zinc-500 w-44"
+    >
+      {options.map(o => (
+        <option key={o.value} value={o.value}>{o.label}</option>
+      ))}
+    </select>
+  )
+}
+
+function NumberInput({ value, onChange, min, max, step = 1 }: { value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number }): React.ReactElement {
+  return (
+    <input
+      type="number"
+      value={value}
+      onChange={e => onChange(parseFloat(e.target.value) || 0)}
+      min={min}
+      max={max}
+      step={step}
+      className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-ui-sm text-zinc-200 outline-none focus:border-zinc-500 w-20 text-right"
+    />
+  )
+}
+
+function TextInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }): React.ReactElement {
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-ui-sm text-zinc-200 outline-none focus:border-zinc-500 w-64"
+    />
+  )
+}
+
+// ── Appearance Section (Terminal + Editor) ──
+
+function AppearanceSection(): React.ReactElement {
+  const termConfig = useConfigStore(s => s.config.customization.terminal)
+  const editorConfig = useConfigStore(s => s.config.customization.editor)
+  const setTerminal = useConfigStore(s => s.setTerminalCustomization)
+  const setEditor = useConfigStore(s => s.setEditorCustomization)
+  const resetCustomization = useConfigStore(s => s.resetCustomization)
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-ui-base font-medium text-zinc-200">Appearance</h3>
+        <Button variant="ghost" size="sm" onClick={resetCustomization} className="gap-1.5 text-zinc-400 hover:text-zinc-200 text-ui-xs">
+          <RotateCcw className="w-3 h-3" />
+          Reset All
+        </Button>
+      </div>
+
+      {/* Terminal settings */}
+      <div className="mb-6">
+        <div className="text-ui-sm text-zinc-500 uppercase tracking-wider mb-3">Terminal</div>
+        <div className="divide-y divide-zinc-800">
+          <SettingRow label="Font Family" description="Monospace font for terminal text">
+            <TextInput value={termConfig.fontFamily} onChange={v => setTerminal({ fontFamily: v })} />
+          </SettingRow>
+          <SettingRow label="Font Size" description="Size in pixels">
+            <NumberInput value={termConfig.fontSize} onChange={v => setTerminal({ fontSize: v })} min={8} max={32} />
+          </SettingRow>
+          <SettingRow label="Line Height" description="Multiplier for line spacing">
+            <NumberInput value={termConfig.lineHeight} onChange={v => setTerminal({ lineHeight: v })} min={0.8} max={2.0} step={0.1} />
+          </SettingRow>
+          <SettingRow label="Cursor Style">
+            <SelectInput
+              value={termConfig.cursorStyle}
+              onChange={v => setTerminal({ cursorStyle: v as TerminalCustomization['cursorStyle'] })}
+              options={[
+                { value: 'block', label: 'Block' },
+                { value: 'underline', label: 'Underline' },
+                { value: 'bar', label: 'Bar' },
+              ]}
+            />
+          </SettingRow>
+          <SettingRow label="Cursor Blink">
+            <Switch checked={termConfig.cursorBlink} onCheckedChange={v => setTerminal({ cursorBlink: v })} />
+          </SettingRow>
+          <SettingRow label="Color Theme" description="Changes apply to new terminals">
+            <SelectInput
+              value={termConfig.colorTheme}
+              onChange={v => setTerminal({ colorTheme: v as TerminalCustomization['colorTheme'] })}
+              options={[
+                { value: 'default', label: 'Default (Zinc)' },
+                { value: 'monokai', label: 'Monokai' },
+                { value: 'solarized-dark', label: 'Solarized Dark' },
+                { value: 'dracula', label: 'Dracula' },
+                { value: 'nord', label: 'Nord' },
+              ]}
+            />
+          </SettingRow>
+        </div>
+      </div>
+
+      {/* Editor settings */}
+      <div>
+        <div className="text-ui-sm text-zinc-500 uppercase tracking-wider mb-3">Editor</div>
+        <div className="divide-y divide-zinc-800">
+          <SettingRow label="Font Family" description="Monospace font for code editing">
+            <TextInput value={editorConfig.fontFamily} onChange={v => setEditor({ fontFamily: v })} />
+          </SettingRow>
+          <SettingRow label="Font Size" description="Size in pixels">
+            <NumberInput value={editorConfig.fontSize} onChange={v => setEditor({ fontSize: v })} min={8} max={32} />
+          </SettingRow>
+          <SettingRow label="Line Height" description="Multiplier for line spacing">
+            <NumberInput value={editorConfig.lineHeight} onChange={v => setEditor({ lineHeight: v })} min={1.0} max={3.0} step={0.1} />
+          </SettingRow>
+          <SettingRow label="Tab Size" description="Number of spaces per tab">
+            <NumberInput value={editorConfig.tabSize} onChange={v => setEditor({ tabSize: v })} min={1} max={8} />
+          </SettingRow>
+          <SettingRow label="Word Wrap">
+            <SelectInput
+              value={editorConfig.wordWrap}
+              onChange={v => setEditor({ wordWrap: v as EditorCustomization['wordWrap'] })}
+              options={[
+                { value: 'on', label: 'On' },
+                { value: 'off', label: 'Off' },
+                { value: 'wordWrapColumn', label: 'At Column' },
+              ]}
+            />
+          </SettingRow>
+          <SettingRow label="Minimap">
+            <Switch checked={editorConfig.minimap} onCheckedChange={v => setEditor({ minimap: v })} />
+          </SettingRow>
+          <SettingRow label="Render Whitespace">
+            <SelectInput
+              value={editorConfig.renderWhitespace}
+              onChange={v => setEditor({ renderWhitespace: v as EditorCustomization['renderWhitespace'] })}
+              options={[
+                { value: 'none', label: 'None' },
+                { value: 'selection', label: 'Selection' },
+                { value: 'all', label: 'All' },
+              ]}
+            />
+          </SettingRow>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Keyboard Shortcuts Section ──
+
+function KeyboardShortcutsSection(): React.ReactElement {
+  const shortcuts = useConfigStore(s => s.config.customization.keyboardShortcuts)
+  const updateShortcut = useConfigStore(s => s.updateKeyboardShortcut)
+  const setKeyboardShortcuts = useConfigStore(s => s.setKeyboardShortcuts)
+  const [recordingId, setRecordingId] = useState<string | null>(null)
+
+  function handleResetAll() {
+    setKeyboardShortcuts([...DEFAULT_KEYBOARD_SHORTCUTS])
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-ui-base font-medium text-zinc-200">Keyboard Shortcuts</h3>
+        <Button variant="ghost" size="sm" onClick={handleResetAll} className="gap-1.5 text-zinc-400 hover:text-zinc-200 text-ui-xs">
+          <RotateCcw className="w-3 h-3" />
+          Reset All
+        </Button>
+      </div>
+      <div className="text-ui-xs text-zinc-500 mb-4">Click a shortcut to record a new binding. Press Escape to cancel.</div>
+      <div className="divide-y divide-zinc-800">
+        {shortcuts.map(shortcut => (
+          <ShortcutRow
+            key={shortcut.id}
+            shortcut={shortcut}
+            isRecording={recordingId === shortcut.id}
+            onStartRecording={() => setRecordingId(shortcut.id)}
+            onStopRecording={() => setRecordingId(null)}
+            onUpdate={(keys) => {
+              updateShortcut(shortcut.id, keys)
+              setRecordingId(null)
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ShortcutRow({
+  shortcut,
+  isRecording,
+  onStartRecording,
+  onStopRecording,
+  onUpdate,
+}: {
+  shortcut: { id: string; label: string; keys: string }
+  isRecording: boolean
+  onStartRecording: () => void
+  onStopRecording: () => void
+  onUpdate: (keys: string) => void
+}): React.ReactElement {
+  const buttonRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!isRecording) return
+
+    function handleKeyDown(e: KeyboardEvent) {
+      e.preventDefault()
+      e.stopPropagation()
+
+      if (e.key === 'Escape') {
+        onStopRecording()
+        return
+      }
+
+      // Ignore bare modifier presses
+      if (['Meta', 'Control', 'Shift', 'Alt'].includes(e.key)) return
+
+      const parts: string[] = []
+      if (e.metaKey) parts.push('Meta')
+      if (e.ctrlKey) parts.push('Ctrl')
+      if (e.shiftKey) parts.push('Shift')
+      if (e.altKey) parts.push('Alt')
+      parts.push(e.key.length === 1 ? e.key.toLowerCase() : e.key)
+
+      onUpdate(parts.join('+'))
+    }
+
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [isRecording, onStopRecording, onUpdate])
+
+  function formatKeys(keys: string): string {
+    return keys
+      .replace(/Meta/g, '\u2318')
+      .replace(/Ctrl/g, '\u2303')
+      .replace(/Shift/g, '\u21E7')
+      .replace(/Alt/g, '\u2325')
+      .replace(/\+/g, ' ')
+      .replace(/\]/g, ']')
+      .replace(/\[/g, '[')
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-4 py-2.5">
+      <div className="text-ui-sm text-zinc-200">{shortcut.label}</div>
+      <button
+        ref={buttonRef}
+        onClick={onStartRecording}
+        className={cn(
+          'px-3 py-1 rounded text-ui-sm font-mono transition-colors min-w-[120px] text-center',
+          isRecording
+            ? 'bg-blue-600/20 border border-blue-500 text-blue-300 animate-pulse'
+            : 'bg-zinc-800 border border-zinc-700 text-zinc-300 hover:border-zinc-500'
+        )}
+      >
+        {isRecording ? 'Press keys...' : formatKeys(shortcut.keys)}
+      </button>
+    </div>
+  )
+}
+
 function TerminalSection(): React.ReactElement {
   return (
     <div>
       <h3 className="text-ui-base font-medium text-zinc-200 mb-4">Terminal</h3>
-      <div className="text-ui-sm text-zinc-500">No terminal settings available.</div>
+      <div className="text-ui-sm text-zinc-500">
+        Terminal appearance settings have moved to the <strong className="text-zinc-300">Appearance</strong> section.
+      </div>
     </div>
   )
 }

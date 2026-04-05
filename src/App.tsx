@@ -67,28 +67,65 @@ function App(): React.ReactElement {
   }, [])
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Ctrl+G or Cmd+G
-    if (e.key === 'g' && (e.ctrlKey || e.metaKey)) {
+    const shortcuts = useConfigStore.getState().config.customization.keyboardShortcuts
+    const getKeys = (id: string) => {
+      const s = shortcuts.find(s => s.id === id)
+      return s?.keys ?? ''
+    }
+
+    const matchesShortcut = (id: string): boolean => {
+      const keys = getKeys(id)
+      if (!keys) return false
+      const parts = keys.split('+').map(p => p.trim().toLowerCase())
+      const needsMeta = parts.includes('meta') || parts.includes('cmd')
+      const needsCtrl = parts.includes('ctrl') || parts.includes('control')
+      const needsShift = parts.includes('shift')
+      const needsAlt = parts.includes('alt')
+      const keyPart = parts.filter(p => !['meta', 'cmd', 'ctrl', 'control', 'shift', 'alt'].includes(p))[0] ?? ''
+
+      if (needsMeta && !e.metaKey) return false
+      if (needsCtrl && !e.ctrlKey) return false
+      if (needsShift && !e.shiftKey) return false
+      if (needsAlt && !e.altKey) return false
+      if (!needsMeta && e.metaKey && keyPart !== '') return false
+      if (!needsShift && e.shiftKey) return false
+
+      return e.key.toLowerCase() === keyPart || e.key === keyPart
+    }
+
+    if (matchesShortcut('goToFile')) {
       e.preventDefault()
       setGoToOpen(!useUIStore.getState().goToOpen)
+      return
     }
-    // Cmd+Shift+[ / Cmd+Shift+] — switch tabs in focused group
-    if (e.metaKey && e.shiftKey && (e.key === '[' || e.key === ']')) {
+
+    if (matchesShortcut('nextTab') || matchesShortcut('prevTab')) {
       e.preventDefault()
       const groupId = useLayoutStore.getState().focusedGroupId
       if (!groupId) return
       const group = useTabsStore.getState().groups[groupId]
       if (!group || group.tabs.length < 2) return
       const idx = group.tabs.findIndex(t => t.id === group.activeTabId)
-      const delta = e.key === '[' ? -1 : 1
+      const delta = matchesShortcut('prevTab') ? -1 : 1
       const next = (idx + delta + group.tabs.length) % group.tabs.length
       useTabsStore.getState().setActiveTab(groupId, group.tabs[next].id)
+      return
     }
-    // Zoom: Cmd+= / Cmd+- / Cmd+0
-    if (e.metaKey || e.ctrlKey) {
-      if (e.key === '=' || e.key === '+') { e.preventDefault(); useUIStore.getState().zoomIn() }
-      else if (e.key === '-') { e.preventDefault(); useUIStore.getState().zoomOut() }
-      else if (e.key === '0') { e.preventDefault(); useUIStore.getState().resetZoom() }
+
+    if (matchesShortcut('zoomIn')) {
+      e.preventDefault()
+      useUIStore.getState().zoomIn()
+      return
+    }
+    if (matchesShortcut('zoomOut')) {
+      e.preventDefault()
+      useUIStore.getState().zoomOut()
+      return
+    }
+    if (matchesShortcut('zoomReset')) {
+      e.preventDefault()
+      useUIStore.getState().resetZoom()
+      return
     }
   }, [])
 

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import Editor from '@monaco-editor/react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTabsStore } from '@/store/tabs'
+import { useConfigStore } from '@/store/config'
 import type { TabProps } from '@/extensions/types'
 
 function getLanguage(filePath?: string): string {
@@ -26,6 +27,7 @@ export default function TextTab({ tabId, groupId, isActive, tab }: TabProps): Re
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { updateTab } = useTabsStore()
+  const editorConfig = useConfigStore(s => s.config.customization.editor)
 
   useEffect(() => {
     if (filePath) {
@@ -126,15 +128,15 @@ export default function TextTab({ tabId, groupId, isActive, tab }: TabProps): Re
         onChange={handleChange}
         theme="vs-dark"
         options={{
-          fontSize: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--ui-text-sm').trim(), 10) || 12,
-          fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
+          fontSize: editorConfig.fontSize,
+          fontFamily: editorConfig.fontFamily,
           fontLigatures: true,
-          lineHeight: 1.6,
-          minimap: { enabled: false },
+          lineHeight: editorConfig.lineHeight,
+          minimap: { enabled: editorConfig.minimap },
           scrollBeyondLastLine: false,
-          renderWhitespace: 'selection',
-          tabSize: 2,
-          wordWrap: 'on',
+          renderWhitespace: editorConfig.renderWhitespace,
+          tabSize: editorConfig.tabSize,
+          wordWrap: editorConfig.wordWrap,
           padding: { top: 12, bottom: 12 },
           smoothScrolling: true,
           cursorBlinking: 'smooth',
