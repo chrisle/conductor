@@ -1,4 +1,5 @@
 import { Page } from '@playwright/test'
+import { KITCHEN_SINK_MANIFEST, buildKitchenSinkBundle } from './fixtures/kitchen-sink-extension'
 
 /**
  * Installs a complete in-memory electronAPI mock via addInitScript so it
@@ -17,6 +18,8 @@ export async function installTestMocks(page: Page) {
     const knownSessions = new Set<string>()
 
     let mockSessions: any[] = []
+    /** In-memory scrollback storage for tests */
+    const scrollbackStore = new Map<string, Map<number, string>>()
 
     const testTerminal = {
       /** Push data into xterm as if it came from the PTY */
@@ -33,6 +36,8 @@ export async function installTestMocks(page: Page) {
       creates,
       /** Set sessions returned by conductordGetSessions */
       setSessions(sessions: any[]) { mockSessions = sessions },
+      /** Access scrollback store for assertions */
+      scrollbackStore,
     }
 
     ;(window as any).__testTerminal__ = testTerminal
@@ -87,12 +92,26 @@ export async function installTestMocks(page: Page) {
       resizeTerminal: noop,
       killTerminal: noop,
       setAutoPilot: noop,
+      captureScrollback: async () => null,
       onTerminalData: (cb: Function) => { dataListeners.add(cb) },
       offTerminalData: (cb: Function) => { dataListeners.delete(cb) },
       onTerminalExit: (cb: Function) => { exitListeners.add(cb) },
       offTerminalExit: (cb: Function) => { exitListeners.delete(cb) },
 
+      // Scrollback
+      scrollbackSave: async (sessionId: string, index: number, data: string) => {
+        if (!scrollbackStore.has(sessionId)) scrollbackStore.set(sessionId, new Map())
+        scrollbackStore.get(sessionId)!.set(index, data)
+      },
+      scrollbackLoad: async (sessionId: string, index: number) => {
+        return scrollbackStore.get(sessionId)?.get(index) ?? null
+      },
+      scrollbackCleanup: async (sessionId: string) => {
+        scrollbackStore.delete(sessionId)
+      },
+
       // Git
+      gitShortstat: async () => ({ insertions: 0, deletions: 0 }),
       worktreeList: async () => [],
       worktreeAdd: async () => ({ success: false, error: 'test' }),
 
@@ -130,6 +149,10 @@ export async function installTestMocks(page: Page) {
       installExtension: async () => ({ success: false, error: 'test' }),
       uninstallExtension: async () => ({ success: false, error: 'test' }),
       selectExtensionZip: async () => null,
+      selectExtensionDir: async () => null,
+      installUnpackedExtension: async () => ({ success: false, error: 'test' }),
+      onExtensionInstalled: () => () => {},
+      openNewWindow: noop,
 
       // Conductord
       watchConductordLogs: async () => 'mock',
@@ -230,4 +253,49 @@ export async function addTerminalTab(
     { timeout: 5000 },
   )
   return tabId
+}
+
+const EXT_DIR = '/tmp/extensions/kitchen-sink-test'
+
+/**
+ * Load the kitchen sink test extension into the running app.
+ *
+ * Overrides the readFile mock to serve the manifest and bundle for
+ * the test extension path, then calls loadExtension via __stores__.
+ */
+export async function loadKitchenSinkExtension(page: Page) {
+  const manifest = JSON.stringify(KITCHEN_SINK_MANIFEST)
+  const bundle = buildKitchenSinkBundle()
+
+  await page.evaluate(
+    ({ dir, manifest, bundle }) => {
+      const original = window.electronAPI.readFile.bind(window.electronAPI)
+      window.electronAPI.readFile = async (path: string) => {
+        if (path === `${dir}/manifest.json`) {
+          return { success: true, content: manifest }
+        }
+        if (path === `${dir}/index.js`) {
+          return { success: true, content: bundle }
+        }
+        return original(path)
+      }
+    },
+    { dir: EXT_DIR, manifest, bundle },
+  )
+
+  // Call the real loadExtension (exposed on __stores__)
+  await page.evaluate(
+    (dir) => (window as any).__stores__.loadExtension(dir),
+    EXT_DIR,
+  )
+
+  // Wait for the extension to be registered
+  await page.waitForFunction(
+    () => {
+      const reg = (window as any).__stores__.extensionRegistry
+      return reg && reg.getExtension('kitchen-sink-test')
+    },
+    null,
+    { timeout: 5000 },
+  )
 }
