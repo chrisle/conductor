@@ -13,18 +13,18 @@ describe('buildClaudeCommand', () => {
     expect(result).toBe('claude --dangerously-skip-permissions\n')
   })
 
-  it('adds env var prefix when disableBackgroundTasks is set', () => {
+  it('adds export prefix when disableBackgroundTasks is set', () => {
     const result = buildClaudeCommand('claude\n', { ...base, disableBackgroundTasks: true })
-    expect(result).toBe('CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude\n')
+    expect(result).toBe('export CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1; claude\n')
   })
 
-  it('adds both env var and flag when both options are set', () => {
+  it('adds both export and flag when both options are set', () => {
     const result = buildClaudeCommand('claude\n', {
       skipDangerousPermissions: true,
       disableBackgroundTasks: true,
       agentTeams: false,
     })
-    expect(result).toBe('CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude --dangerously-skip-permissions\n')
+    expect(result).toBe('export CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1; claude --dangerously-skip-permissions\n')
   })
 
   it('preserves cd prefix before claude', () => {
@@ -33,7 +33,7 @@ describe('buildClaudeCommand', () => {
       disableBackgroundTasks: true,
       agentTeams: false,
     })
-    expect(result).toBe('cd /some/path && CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude --dangerously-skip-permissions\n')
+    expect(result).toBe('export CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1; cd /some/path && claude --dangerously-skip-permissions\n')
   })
 
   it('preserves --resume flag after claude', () => {
@@ -51,7 +51,7 @@ describe('buildClaudeCommand', () => {
       disableBackgroundTasks: true,
       agentTeams: false,
     })
-    expect(result).toBe("cd /path && CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude 'fix the bug'\n")
+    expect(result).toBe("export CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1; cd /path && claude 'fix the bug'\n")
   })
 
   it('only replaces the first occurrence of claude', () => {
@@ -62,5 +62,19 @@ describe('buildClaudeCommand', () => {
       agentTeams: false,
     })
     expect(result).toBe('claude --dangerously-skip-permissions --resume claude\n')
+  })
+
+  it('adds multiple export statements when multiple env vars are set', () => {
+    const result = buildClaudeCommand('claude\n', {
+      skipDangerousPermissions: false,
+      disableBackgroundTasks: true,
+      agentTeams: true,
+    })
+    expect(result).toBe('export CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1; export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1; claude\n')
+  })
+
+  it('adds API key as export', () => {
+    const result = buildClaudeCommand('claude\n', base, 'sk-test-123')
+    expect(result).toBe('export ANTHROPIC_API_KEY=sk-test-123; claude\n')
   })
 })
