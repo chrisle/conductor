@@ -47,3 +47,8 @@
 ## Claude Usage
 
 - [x] Every X minutes, open a terminal (hidden -- not visible in the sidebar or in tabs). Run `claude "/usage"`. wait for "Esc to cancel", then scrape usage data then persist it so we can have that stat show in the footer status bar
+
+
+--resume 0977be9e-b60a-490a-b27d-2f18e5062cdd
+
+--resume "e2e-extension-load-unload-tests"
