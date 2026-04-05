@@ -9,81 +9,80 @@
 import * as termAPI from './terminal-ws'
 import { stripAnsi } from './terminal-detection'
 import { useClaudeUsageStore } from '@/store/claude-usage'
-import type { ClaudeUsageData } from '@/store/claude-usage'
+import type { ClaudeUsageData, UsageTier } from '@/store/claude-usage'
 
 /** Prefix for hidden usage-scraper session IDs */
 const SESSION_PREFIX = '__claude-usage-scraper__'
 
-/** Default scrape interval in milliseconds (5 minutes) */
-const DEFAULT_INTERVAL_MS = 5 * 60 * 1000
+/** Default scrape interval in milliseconds (15 minutes) */
+const DEFAULT_INTERVAL_MS = 15 * 60 * 1000
 
 /** Maximum time to wait for output before giving up (30 seconds) */
 const SCRAPE_TIMEOUT_MS = 30_000
 
-/** Minimum time between scrapes to avoid overlapping (10 seconds) */
-const MIN_SCRAPE_GAP_MS = 10_000
+/** Minimum time between scrapes (matches the default interval) */
+const MIN_SCRAPE_GAP_MS = DEFAULT_INTERVAL_MS
 
 let intervalHandle: ReturnType<typeof setInterval> | null = null
 let scrapeCounter = 0
 let lastScrapeTime = 0
 
 /**
- * Parse the raw output from `claude "/usage"` and extract usage data.
+ * Parse the raw output from `claude "/usage"`.
  *
- * Claude's /usage command outputs something like:
- *   "You've used approximately 42.5% of your daily limit."
- *   or token/cost information in various formats.
+ * Example output:
+ *   Current week (all models) ██████▌ 13% used Resets Apr 10 at 7am (America/Los_Angeles)
+ *   Current week (Sonnet only) ██ 4% used Resets Apr 11 at 11:59am (America/Los_Angeles)
+ *   Extra usage █ 1% used $1.96 / $100.00 spent · Resets May 1 (America/Los_Angeles)
  */
-export function parseUsageOutput(raw: string): Pick<ClaudeUsageData, 'percentUsed' | 'statusLine'> {
+export function parseUsageOutput(raw: string): Pick<ClaudeUsageData, 'percentUsed' | 'sessionPercent' | 'tiers'> {
   const clean = stripAnsi(raw)
 
-  // Look for percentage pattern: "X% of your daily limit" or similar
-  const pctMatch = clean.match(/(\d+(?:\.\d+)?)\s*%\s*(?:of\s+(?:your\s+)?(?:daily\s+)?(?:limit|quota|allowance|capacity))/i)
-  let percentUsed: number | null = null
-  if (pctMatch) {
-    percentUsed = parseFloat(pctMatch[1])
+  // Extract "all models" percentage for the color indicator
+  const allModelsMatch = clean.match(/all\s+models\)[\s\S]*?(\d+(?:\.\d+)?)\s*%\s*used/i)
+  const anyPctMatch = clean.match(/(\d+(?:\.\d+)?)\s*%\s*used/i)
+  const percentUsed = allModelsMatch
+    ? parseFloat(allModelsMatch[1])
+    : anyPctMatch
+      ? parseFloat(anyPctMatch[1])
+      : null
+
+  // Extract "Current session" percentage for the footer label
+  const sessionMatch = clean.match(/Current\s+session[\s\S]*?(\d+(?:\.\d+)?)\s*%\s*used/i)
+  const sessionPercent = sessionMatch ? parseFloat(sessionMatch[1]) : null
+
+  // Parse each usage tier with details
+  const tiers: UsageTier[] = []
+  // Match tier headers followed by their content up to the next tier or end
+  const tierPattern = /(Current session|Current week \(([^)]+)\)|Extra usage)([\s\S]*?)(?=Current session|Current week|Extra usage|Esc to cancel|$)/gi
+  let m
+  while ((m = tierPattern.exec(clean)) !== null) {
+    const fullLabel = m[1]
+    const subLabel = m[2] // e.g. "all models" or "Sonnet only"
+    const content = m[3]
+
+    const label = subLabel
+      ? subLabel
+      : /Current session/i.test(fullLabel)
+        ? 'Session'
+        : 'Extra usage'
+
+    const pctMatch = content.match(/(\d+(?:\.\d+)?)\s*%\s*used/i)
+    if (!pctMatch) continue
+    const percent = parseFloat(pctMatch[1])
+
+    // Extract reset info: "Resets Apr 10 at 7am" (stop before timezone parens)
+    const resetMatch = content.match(/Resets\s+([A-Z][a-z]+\s+\d+(?:\s+at\s+\d+(?::\d+)?(?:am|pm)?)?)/i)
+    const resets = resetMatch ? `Resets ${resetMatch[1]}` : null
+
+    // Extract dollar amounts for extra usage: "$1.96 / $100.00 spent"
+    const spentMatch = content.match(/(\$[\d.]+\s*\/\s*\$[\d.]+)\s*spent/i)
+    const spent = spentMatch ? spentMatch[1] + ' spent' : null
+
+    tiers.push({ label, percent, resets, spent })
   }
 
-  // Extract a summary status line — look for the most informative line
-  let statusLine: string | null = null
-
-  // Try to find usage-related lines
-  const lines = clean.split('\n').map(l => l.trim()).filter(l => l.length > 0)
-  for (const line of lines) {
-    // Skip prompt lines, escape messages, and other noise
-    if (/^[$>]/.test(line)) continue
-    if (/esc\s+to\s+cancel/i.test(line)) continue
-    if (/^claude\b/i.test(line)) continue
-    if (/^\s*$/.test(line)) continue
-
-    // Match lines that contain usage-related info
-    if (/\d+(\.\d+)?\s*%/i.test(line) ||
-        /token/i.test(line) ||
-        /usage/i.test(line) ||
-        /limit/i.test(line) ||
-        /cost/i.test(line) ||
-        /remaining/i.test(line) ||
-        /quota/i.test(line) ||
-        /allowance/i.test(line)) {
-      statusLine = line
-      break
-    }
-  }
-
-  // Fallback: if we still have no status line, take the first substantive line
-  if (!statusLine) {
-    for (const line of lines) {
-      if (/^[$>]/.test(line)) continue
-      if (/esc\s+to\s+cancel/i.test(line)) continue
-      if (/^claude\b/i.test(line)) continue
-      if (line.length > 5) {
-        statusLine = line
-        break
-      }
-    }
-  }
-
-  return { percentUsed, statusLine }
+  return { percentUsed, sessionPercent, tiers }
 }
 
 /**
@@ -115,6 +114,9 @@ async function scrapeOnce(): Promise<void> {
 
     // Create hidden PTY session with the usage command
     await termAPI.createTerminal(sessionId, undefined, 'claude "/usage"\n')
+
+    // Enable autopilot so conductord auto-accepts any permission prompts
+    termAPI.setAutoPilot(sessionId, true)
 
     // Wait for "Esc to cancel" or similar output indicating the response is ready,
     // or for enough substantive content to appear
@@ -185,7 +187,8 @@ async function scrapeOnce(): Promise<void> {
     const usageData: ClaudeUsageData = {
       raw: stripAnsi(result),
       percentUsed: parsed.percentUsed,
-      statusLine: parsed.statusLine,
+      sessionPercent: parsed.sessionPercent,
+      tiers: parsed.tiers,
       lastUpdated: Date.now(),
     }
 
@@ -223,14 +226,18 @@ export function startUsageScraper(intervalMs = DEFAULT_INTERVAL_MS): void {
     const cached = localStorage.getItem('conductor:claude-usage')
     if (cached) {
       const parsed = JSON.parse(cached) as ClaudeUsageData
-      // Only use cache if less than 10 minutes old
-      if (Date.now() - parsed.lastUpdated < 10 * 60 * 1000) {
+      // Discard stale cache from old schema (missing tiers)
+      if (parsed.tiers) {
         useClaudeUsageStore.getState().setUsage(parsed)
+        lastScrapeTime = parsed.lastUpdated
+      } else {
+        localStorage.removeItem('conductor:claude-usage')
       }
     }
   } catch {}
 
-  // Initial scrape after a short delay (let the app finish loading)
+  // Initial scrape after a short delay (let the app finish loading).
+  // scrapeOnce() will no-op if lastScrapeTime is recent enough.
   setTimeout(() => {
     scrapeOnce().catch(console.warn)
   }, 5_000)

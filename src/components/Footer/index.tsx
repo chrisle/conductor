@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Activity, GitBranch, Minus, Plus, RefreshCw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -63,58 +63,102 @@ function ZoomControl() {
 
 function ClaudeUsageIndicator() {
   const { usage, scraping, error } = useClaudeUsageStore()
+  const [open, setOpen] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
 
   if (!usage && !scraping && !error) return null
 
+  // Show session % in the label, fall back to all-models %
+  const displayPercent = usage?.sessionPercent ?? usage?.percentUsed
   const label = scraping
     ? 'Checking...'
     : error
       ? 'Usage: error'
-      : usage?.percentUsed != null
-        ? `Usage: ${usage.percentUsed}%`
-        : usage?.statusLine
-          ? `Usage: ${usage.statusLine.slice(0, 40)}`
-          : 'Usage: --'
+      : displayPercent != null
+        ? `Usage: ${displayPercent}%`
+        : 'Usage: --'
 
   const timeAgo = usage?.lastUpdated
     ? formatTimeAgo(usage.lastUpdated)
     : null
 
-  const tooltipText = [
-    usage?.statusLine,
-    timeAgo ? `Updated ${timeAgo}` : null,
-    error ? `Error: ${error}` : null,
-  ].filter(Boolean).join('\n')
-
-  const barColor = usage?.percentUsed != null
-    ? usage.percentUsed >= 90 ? 'text-red-400' : usage.percentUsed >= 70 ? 'text-amber-400' : 'text-emerald-400'
+  // Color based on all-models percentage (the weekly cap)
+  const colorPercent = usage?.percentUsed
+  const dotColor = colorPercent != null
+    ? colorPercent >= 90 ? 'bg-red-400' : colorPercent >= 70 ? 'bg-amber-400' : 'bg-emerald-400'
+    : error ? 'bg-red-400' : 'bg-zinc-500'
+  const textColor = colorPercent != null
+    ? colorPercent >= 90 ? 'text-red-400' : colorPercent >= 70 ? 'text-amber-400' : 'text-emerald-400'
     : 'text-zinc-500'
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            onClick={() => scrapeNow()}
-            className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer px-2"
-          >
-            {scraping ? (
-              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-            ) : (
-              <span className={`inline-block w-1.5 h-1.5 rounded-full ${
-                usage?.percentUsed != null
-                  ? usage.percentUsed >= 90 ? 'bg-red-400' : usage.percentUsed >= 70 ? 'bg-amber-400' : 'bg-emerald-400'
-                  : error ? 'bg-red-400' : 'bg-zinc-500'
-              }`} />
-            )}
-            <span className={barColor}>{label}</span>
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="bg-zinc-900 border-zinc-700 text-xs max-w-[300px] whitespace-pre-line">
-          {tooltipText || 'Claude API usage'}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <div className="relative" ref={panelRef}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer px-2"
+      >
+        {scraping ? (
+          <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+        ) : (
+          <span className={`inline-block w-1.5 h-1.5 rounded-full ${dotColor}`} />
+        )}
+        <span className={textColor}>{label}</span>
+      </button>
+      {open && (
+        <div className="absolute bottom-full mb-2 right-0 bg-zinc-900 border border-zinc-700 rounded-md text-xs w-[280px] p-3 shadow-xl z-50">
+          {usage?.tiers && usage.tiers.length > 0 ? (
+            <div className="space-y-2.5">
+              {usage.tiers.map((tier, i) => {
+                const barColor = tier.percent >= 90 ? 'bg-red-400' : tier.percent >= 70 ? 'bg-amber-400' : 'bg-emerald-400'
+                return (
+                  <div key={i}>
+                    <div className="flex items-center justify-between gap-3 mb-1">
+                      <span className="text-zinc-300 font-medium">{tier.label}</span>
+                      <span className="text-zinc-400 tabular-nums">{tier.percent}%</span>
+                    </div>
+                    <div className="h-1 rounded-full bg-zinc-700 overflow-hidden">
+                      <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(tier.percent, 100)}%` }} />
+                    </div>
+                    {(tier.resets || tier.spent) && (
+                      <div className="flex items-center justify-between gap-2 mt-1">
+                        {tier.resets && <span className="text-zinc-500">{tier.resets}</span>}
+                        {tier.spent && <span className="text-zinc-500">{tier.spent}</span>}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+              <div className="flex items-center justify-between pt-1">
+                {timeAgo && <span className="text-zinc-600">{timeAgo}</span>}
+                <button
+                  onClick={(e) => { e.stopPropagation(); scrapeNow() }}
+                  className="flex items-center gap-1 text-zinc-500 hover:text-zinc-300 transition-colors"
+                >
+                  <RefreshCw className={`w-3 h-3 ${scraping ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </div>
+          ) : error ? (
+            <div className="text-red-400">Error: {error}</div>
+          ) : (
+            <div className="text-zinc-500">Claude usage</div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -169,7 +213,7 @@ export default function Footer(): React.ReactElement {
   }, [])
 
   return (
-    <div className="flex items-center h-6 bg-zinc-900 border-t border-zinc-800 shrink-0 text-ui-sm select-none overflow-hidden">
+    <div className="flex items-center h-6 bg-zinc-900 border-t border-zinc-800 shrink-0 text-ui-sm select-none overflow-visible">
       <button
         onClick={() => useUIStore.getState().setGoToOpen(true)}
         className="flex items-center gap-1.5 text-white hover:text-zinc-300 transition-colors cursor-pointer px-2"

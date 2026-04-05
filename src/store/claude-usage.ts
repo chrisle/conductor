@@ -1,12 +1,21 @@
 import { create } from 'zustand'
 
+export interface UsageTier {
+  label: string
+  percent: number
+  resets: string | null
+  spent: string | null
+}
+
 export interface ClaudeUsageData {
   /** Raw text output from `claude "/usage"` */
   raw: string
-  /** Percentage of daily limit used (e.g. 42.5) */
+  /** Percentage of all-models weekly limit used */
   percentUsed: number | null
-  /** Human-readable status line (e.g. "42.5% of your daily limit") */
-  statusLine: string | null
+  /** Percentage of current session used */
+  sessionPercent: number | null
+  /** Parsed usage tiers for tooltip display */
+  tiers: UsageTier[]
   /** Timestamp of last successful scrape */
   lastUpdated: number
 }
