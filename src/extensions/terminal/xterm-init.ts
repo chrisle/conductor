@@ -33,6 +33,21 @@ function injectXtermStyles() {
     .xterm-viewport {
       background-color: transparent !important;
     }
+
+    /* Atom-style cursor glow/pulse animation */
+    @keyframes cursor-glow {
+      0%, 100% {
+        filter: drop-shadow(0 0 2px rgba(125, 211, 252, 0.6))
+               drop-shadow(0 0 6px rgba(125, 211, 252, 0.3));
+      }
+      50% {
+        filter: drop-shadow(0 0 4px rgba(125, 211, 252, 0.8))
+               drop-shadow(0 0 10px rgba(125, 211, 252, 0.4));
+      }
+    }
+    .xterm-cursor-layer {
+      animation: cursor-glow 2s ease-in-out infinite;
+    }
   `
   document.head.appendChild(style)
 }
@@ -54,6 +69,7 @@ export async function createXtermTerminal(container: HTMLElement): Promise<{ ter
     lineHeight: custom.lineHeight || terminalConfig.lineHeight,
     cursorBlink: custom.cursorBlink ?? terminalConfig.cursorBlink,
     cursorStyle: custom.cursorStyle || terminalConfig.cursorStyle,
+    cursorWidth: terminalConfig.cursorWidth,
     scrollback: terminalConfig.scrollback,
     allowTransparency: true,
   })
