@@ -130,7 +130,7 @@ export default function ClaudeCodeTab({
             title={sessionId}
             onClick={() => navigator.clipboard.writeText(sessionId)}
           >
-            Session: {sessionId.slice(0, 8)}
+            Claude ID: {sessionId.slice(0, 8)}
           </span>
         </>
       )}
