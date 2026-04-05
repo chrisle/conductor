@@ -62,7 +62,7 @@ export function parseUsageOutput(raw: string): Pick<ClaudeUsageData, 'percentUse
     const content = m[3]
 
     const label = subLabel
-      ? subLabel
+      ? subLabel.charAt(0).toUpperCase() + subLabel.slice(1)
       : /Current session/i.test(fullLabel)
         ? 'Session'
         : 'Extra usage'
@@ -71,8 +71,9 @@ export function parseUsageOutput(raw: string): Pick<ClaudeUsageData, 'percentUse
     if (!pctMatch) continue
     const percent = parseFloat(pctMatch[1])
 
-    // Extract reset info: "Resets Apr 10 at 7am" (stop before timezone parens)
+    // Extract reset info: "Resets Apr 10 at 7am" or "Resets at 9:00 PM" (stop before timezone parens)
     const resetMatch = content.match(/Resets\s+([A-Z][a-z]+\s+\d+(?:\s+at\s+\d+(?::\d+)?(?:am|pm)?)?)/i)
+      || content.match(/Resets\s+(?:at\s+)?(\d+(?::\d+)?\s*(?:am|pm))/i)
     const resets = resetMatch ? `Resets ${resetMatch[1]}` : null
 
     // Extract dollar amounts for extra usage: "$1.96 / $100.00 spent"
