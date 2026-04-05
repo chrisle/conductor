@@ -9,3 +9,5 @@ conductord/embedded/*/
 
 .DS_Store
 .env
+
+e2e/screenshots
