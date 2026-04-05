@@ -8,7 +8,7 @@ import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['**/claude-start*', '**/claude-tab-real*', '**/autopilot-real-claude*', '**/autopilot-e2e*', '**/autopilot-haiku*', '**/file-click-real*'],
+  testMatch: ['**/claude-start*', '**/claude-tab-real*', '**/autopilot-real-claude*', '**/autopilot-e2e*', '**/autopilot-haiku*', '**/file-click-real*', '**/jira-start-work*'],
   timeout: 90_000,
   retries: 0,
   use: {
