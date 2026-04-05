@@ -5,13 +5,21 @@
 import { useProjectStore } from '@/store/project'
 
 export function getSessionAutoPilot(sessionId: string): boolean {
-  return useProjectStore.getState().sessionAutoPilot[sessionId] ?? false
+  const state = useProjectStore.getState() as unknown as Record<string, unknown>
+  const map = state.sessionAutoPilot as Record<string, boolean> | undefined
+  return map?.[sessionId] ?? false
 }
 
 export function setSessionAutoPilot(sessionId: string, enabled: boolean) {
-  useProjectStore.getState().setSessionAutoPilot(sessionId, enabled)
+  const state = useProjectStore.getState() as unknown as Record<string, unknown>
+  if (typeof state.setSessionAutoPilot === 'function') {
+    ;(state.setSessionAutoPilot as (id: string, v: boolean) => void)(sessionId, enabled)
+  }
 }
 
 export function clearSessionAutoPilot(sessionId: string) {
-  useProjectStore.getState().clearSessionAutoPilot(sessionId)
+  const state = useProjectStore.getState() as unknown as Record<string, unknown>
+  if (typeof state.clearSessionAutoPilot === 'function') {
+    ;(state.clearSessionAutoPilot as (id: string) => void)(sessionId)
+  }
 }
