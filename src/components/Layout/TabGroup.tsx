@@ -485,7 +485,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
 
   function NumberHint({ n }: { n: number }) {
     return (
-      <span className="text-[10px] text-zinc-500 font-mono leading-none order-first">{n}</span>
+      <span className="text-[10px] text-zinc-500 font-mono leading-none order-first [[data-highlighted]_&]:text-white">{n}</span>
     )
   }
 
