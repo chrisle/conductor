@@ -18,15 +18,23 @@ export function buildClaudeCommand(
   settings: Pick<ClaudeCodeSettings, 'skipDangerousPermissions' | 'disableBackgroundTasks' | 'agentTeams'>,
   apiKey?: string,
 ): string {
-  let envPrefix = ''
-  if (apiKey) envPrefix += `ANTHROPIC_API_KEY=${apiKey} `
-  if (settings.disableBackgroundTasks) envPrefix += 'CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 '
-  if (settings.agentTeams) envPrefix += 'CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 '
+  const envVars: string[] = []
+  if (apiKey) envVars.push(`export ANTHROPIC_API_KEY=${apiKey}`)
+  if (settings.disableBackgroundTasks) envVars.push('export CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1')
+  if (settings.agentTeams) envVars.push('export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1')
 
   const flags = settings.skipDangerousPermissions
     ? ' --dangerously-skip-permissions'
     : ''
 
   // Replace the `claude` invocation, leaving anything before/after it intact.
-  return command.replace(/\bclaude\b/, `${envPrefix}claude${flags}`)
+  let result = command.replace(/\bclaude\b/, `claude${flags}`)
+
+  // Prepend env vars as export statements so they work reliably in all
+  // shell invocation modes (conductord uses `zsh -lic "cmd"`).
+  if (envVars.length > 0) {
+    result = envVars.join('; ') + '; ' + result
+  }
+
+  return result
 }
