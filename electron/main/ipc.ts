@@ -357,16 +357,20 @@ export function registerIpcHandlers(): void {
       ? path.join(basePath, branchName)
       : path.join(path.dirname(repoPath), path.basename(repoPath) + '-' + branchName)
     return new Promise<{ success: boolean; path?: string; error?: string }>((resolve) => {
-      execFile('git', ['-C', repoPath, 'worktree', 'add', '-b', branchName, worktreePath], (err) => {
-        if (err) {
-          // Branch might already exist, try without -b
+      // Prune stale worktree entries first so leftover references don't block creation
+      execFile('git', ['-C', repoPath, 'worktree', 'prune'], () => {
+        // Try creating a new branch + worktree
+        execFile('git', ['-C', repoPath, 'worktree', 'add', '-b', branchName, worktreePath], (err) => {
+          if (!err) {
+            resolve({ success: true, path: worktreePath })
+            return
+          }
+          // Branch might already exist, try checking out the existing branch
           execFile('git', ['-C', repoPath, 'worktree', 'add', worktreePath, branchName], (err2) => {
             if (err2) resolve({ success: false, error: err2.message })
             else resolve({ success: true, path: worktreePath })
           })
-        } else {
-          resolve({ success: true, path: worktreePath })
-        }
+        })
       })
     })
   })
