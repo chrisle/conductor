@@ -53,92 +53,95 @@ function getFileIcon(filename: string): LucideIcon {
   return File
 }
 
-function getFileColor(filename: string): string {
+function getIconColor(filename: string): string {
   const lower = filename.toLowerCase()
   const ext = lower.split('.').pop() || ''
 
-  // Special filenames
-  if (lower === 'dockerfile' || lower === 'docker-compose.yml' || lower === 'docker-compose.yaml') return 'text-sky-400'
-  if (lower === 'makefile' || lower === 'cmakelists.txt') return 'text-orange-400'
-  if (lower === 'license' || lower === 'licence') return 'text-yellow-500'
-  if (lower === 'readme.md' || lower === 'changelog.md') return 'text-blue-300'
-  if (lower === '.gitignore' || lower === '.gitattributes' || lower === '.gitmodules') return 'text-orange-400'
-  if (lower === '.editorconfig' || lower === '.prettierrc' || lower === '.eslintrc' || lower.startsWith('.eslintrc')) return 'text-zinc-400'
+  // Special filenames — matched to VS Code Seti icon theme
+  if (lower === 'dockerfile' || lower === 'docker-compose.yml' || lower === 'docker-compose.yaml') return 'text-[#3A96DD]'
+  if (lower === 'makefile' || lower === 'cmakelists.txt') return 'text-[#E8AB53]'
+  if (lower === 'license' || lower === 'licence') return 'text-[#CBCB41]'
+  if (lower === 'readme.md' || lower === 'changelog.md') return 'text-[#519ABA]'
+  if (lower === '.gitignore' || lower === '.gitattributes' || lower === '.gitmodules') return 'text-[#41535B]'
+  if (lower === '.editorconfig' || lower === '.prettierrc' || lower === '.eslintrc' || lower.startsWith('.eslintrc')) return 'text-[#4B32C3]'
+  if (lower === 'package.json' || lower === 'package-lock.json') return 'text-[#E8274B]'
 
-  // TypeScript — blue (VS Code Seti)
-  if (['ts', 'tsx'].includes(ext)) return 'text-blue-400'
-  // JavaScript — yellow (VS Code Seti)
-  if (['js', 'jsx', 'mjs', 'cjs'].includes(ext)) return 'text-yellow-400'
-  // JSON — yellow-green
-  if (['json', 'jsonc'].includes(ext)) return 'text-yellow-600'
-  // CSS/SCSS/Less — purple/pink (VS Code Seti uses purple for CSS)
-  if (['css'].includes(ext)) return 'text-blue-300'
-  if (['scss', 'sass', 'less'].includes(ext)) return 'text-pink-400'
-  // HTML — orange/red (VS Code Seti)
-  if (['html', 'htm'].includes(ext)) return 'text-orange-500'
-  // Vue — green
-  if (['vue'].includes(ext)) return 'text-green-400'
-  // Svelte — orange-red
-  if (['svelte'].includes(ext)) return 'text-orange-500'
+  // TypeScript — blue (VS Code Seti: #519ABA)
+  if (['ts', 'tsx'].includes(ext)) return 'text-[#519ABA]'
+  // JavaScript — yellow (VS Code Seti: #CBCB41)
+  if (['js', 'jsx', 'mjs', 'cjs'].includes(ext)) return 'text-[#CBCB41]'
+  // JSON — yellow-green (VS Code Seti: #CBCB41)
+  if (['json', 'jsonc'].includes(ext)) return 'text-[#CBCB41]'
+  // CSS — blue (VS Code Seti: #519ABA)
+  if (['css'].includes(ext)) return 'text-[#519ABA]'
+  // SCSS/Sass/Less — pink (VS Code Seti: #F55385)
+  if (['scss', 'sass', 'less'].includes(ext)) return 'text-[#F55385]'
+  // HTML — orange (VS Code Seti: #E44D26)
+  if (['html', 'htm'].includes(ext)) return 'text-[#E44D26]'
+  // Vue — green (VS Code Seti: #8DC149)
+  if (['vue'].includes(ext)) return 'text-[#8DC149]'
+  // Svelte — orange-red (VS Code Seti: #E44D26)
+  if (['svelte'].includes(ext)) return 'text-[#E44D26]'
   // Astro — orange
-  if (['astro'].includes(ext)) return 'text-orange-400'
-  // Python — blue (VS Code Seti)
-  if (['py', 'pyw', 'pyi'].includes(ext)) return 'text-blue-300'
-  // Rust — orange (VS Code Seti)
-  if (['rs'].includes(ext)) return 'text-orange-500'
-  // Go — cyan (VS Code Seti)
-  if (['go'].includes(ext)) return 'text-cyan-400'
-  // Ruby — red
-  if (['rb', 'erb'].includes(ext)) return 'text-red-400'
-  // Java — orange
-  if (['java'].includes(ext)) return 'text-orange-400'
-  // C/C++ — blue
-  if (['c', 'h'].includes(ext)) return 'text-blue-300'
-  if (['cpp', 'cc', 'cxx', 'hpp', 'hxx'].includes(ext)) return 'text-blue-400'
-  // C# — green
-  if (['cs'].includes(ext)) return 'text-green-500'
-  // PHP — purple
-  if (['php'].includes(ext)) return 'text-purple-400'
-  // Swift — orange
-  if (['swift'].includes(ext)) return 'text-orange-400'
-  // Kotlin — purple
-  if (['kt', 'kts'].includes(ext)) return 'text-purple-400'
-  // Markdown — blue (VS Code Seti)
-  if (['md', 'mdx'].includes(ext)) return 'text-blue-300'
-  // Text/docs
-  if (['txt', 'rst'].includes(ext)) return 'text-zinc-300'
-  if (['docx', 'doc'].includes(ext)) return 'text-blue-400'
-  if (['xlsx', 'xls'].includes(ext)) return 'text-green-400'
-  if (['csv'].includes(ext)) return 'text-green-500'
-  // YAML/TOML — purple (VS Code Seti uses purple for YAML)
-  if (['yaml', 'yml'].includes(ext)) return 'text-purple-300'
-  if (['toml'].includes(ext)) return 'text-zinc-300'
-  // XML — orange
-  if (['xml', 'xsl', 'xslt'].includes(ext)) return 'text-orange-400'
-  // Shell — green (VS Code Seti)
-  if (['sh', 'bash', 'zsh', 'fish', 'ps1'].includes(ext)) return 'text-green-500'
-  // SQL — yellow
-  if (['sql'].includes(ext)) return 'text-yellow-400'
-  // GraphQL — pink
-  if (['graphql', 'gql'].includes(ext)) return 'text-pink-400'
-  // Env files — yellow with warning feel
-  if (['env', 'env.local', 'env.example'].includes(filename.replace(/^\./, '')) || ext === 'env') return 'text-yellow-600'
-  // Lock files — dimmed
-  if (['lock'].includes(ext) || filename.endsWith('.lock')) return 'text-zinc-600'
-  // Images — purple (VS Code Seti)
-  if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp', 'tiff'].includes(ext)) return 'text-purple-400'
-  // Video — red-ish
-  if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext)) return 'text-red-400'
+  if (['astro'].includes(ext)) return 'text-[#E8AB53]'
+  // Python — blue (VS Code Seti: #519ABA)
+  if (['py', 'pyw', 'pyi'].includes(ext)) return 'text-[#519ABA]'
+  // Rust — orange (VS Code Seti: #DEA584)
+  if (['rs'].includes(ext)) return 'text-[#DEA584]'
+  // Go — cyan (VS Code Seti: #519ABA)
+  if (['go'].includes(ext)) return 'text-[#519ABA]'
+  // Ruby — red (VS Code Seti: #CC3E44)
+  if (['rb', 'erb'].includes(ext)) return 'text-[#CC3E44]'
+  // Java — red (VS Code Seti: #CC3E44)
+  if (['java'].includes(ext)) return 'text-[#CC3E44]'
+  // C/C++ — blue (VS Code Seti: #519ABA)
+  if (['c', 'h'].includes(ext)) return 'text-[#519ABA]'
+  if (['cpp', 'cc', 'cxx', 'hpp', 'hxx'].includes(ext)) return 'text-[#519ABA]'
+  // C# — green (VS Code Seti: #8DC149)
+  if (['cs'].includes(ext)) return 'text-[#8DC149]'
+  // PHP — purple (VS Code Seti: #A074C4)
+  if (['php'].includes(ext)) return 'text-[#A074C4]'
+  // Swift — orange (VS Code Seti: #E8AB53)
+  if (['swift'].includes(ext)) return 'text-[#E8AB53]'
+  // Kotlin — purple (VS Code Seti: #A074C4)
+  if (['kt', 'kts'].includes(ext)) return 'text-[#A074C4]'
+  // Markdown — blue (VS Code Seti: #519ABA)
+  if (['md', 'mdx'].includes(ext)) return 'text-[#519ABA]'
+  // Text/docs — white
+  if (['txt', 'rst'].includes(ext)) return 'text-[#D4D4D4]'
+  if (['docx', 'doc'].includes(ext)) return 'text-[#519ABA]'
+  if (['xlsx', 'xls'].includes(ext)) return 'text-[#8DC149]'
+  if (['csv'].includes(ext)) return 'text-[#8DC149]'
+  // YAML — purple (VS Code Seti: #A074C4)
+  if (['yaml', 'yml'].includes(ext)) return 'text-[#A074C4]'
+  // TOML — grey
+  if (['toml'].includes(ext)) return 'text-[#9AA5B1]'
+  // XML — orange (VS Code Seti: #E8AB53)
+  if (['xml', 'xsl', 'xslt'].includes(ext)) return 'text-[#E8AB53]'
+  // Shell — green (VS Code Seti: #8DC149)
+  if (['sh', 'bash', 'zsh', 'fish', 'ps1'].includes(ext)) return 'text-[#8DC149]'
+  // SQL — yellow (VS Code Seti: #CBCB41)
+  if (['sql'].includes(ext)) return 'text-[#CBCB41]'
+  // GraphQL — pink (VS Code Seti: #F55385)
+  if (['graphql', 'gql'].includes(ext)) return 'text-[#F55385]'
+  // Env files — yellow
+  if (['env', 'env.local', 'env.example'].includes(filename.replace(/^\./, '')) || ext === 'env') return 'text-[#CBCB41]'
+  // Lock files — dimmed (VS Code Seti: #41535B)
+  if (['lock'].includes(ext) || filename.endsWith('.lock')) return 'text-[#41535B]'
+  // Images — purple (VS Code Seti: #A074C4)
+  if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp', 'tiff'].includes(ext)) return 'text-[#A074C4]'
+  // Video — red
+  if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(ext)) return 'text-[#CC3E44]'
   // Audio — pink
-  if (['mp3', 'wav', 'ogg', 'flac', 'm4a'].includes(ext)) return 'text-pink-300'
+  if (['mp3', 'wav', 'ogg', 'flac', 'm4a'].includes(ext)) return 'text-[#F55385]'
   // Archives — yellow
-  if (['zip', 'tar', 'gz', 'bz2', 'rar', '7z'].includes(ext)) return 'text-yellow-500'
-  // Config files — gear grey
-  if (['config', 'rc', 'ini', 'cfg'].includes(ext)) return 'text-zinc-400'
-  // Database
-  if (['db', 'sqlite'].includes(ext)) return 'text-yellow-400'
+  if (['zip', 'tar', 'gz', 'bz2', 'rar', '7z'].includes(ext)) return 'text-[#CBCB41]'
+  // Config files — grey (VS Code Seti: #9AA5B1)
+  if (['config', 'rc', 'ini', 'cfg'].includes(ext)) return 'text-[#9AA5B1]'
+  // Database — yellow
+  if (['db', 'sqlite'].includes(ext)) return 'text-[#CBCB41]'
 
-  return 'text-zinc-400'
+  return 'text-[#9AA5B1]'
 }
 
 function getLanguageFromExtension(filename: string): string {
@@ -312,16 +315,16 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
                   )}
                 </span>
                 {expanded ? (
-                  <FolderOpen className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+                  <FolderOpen className="w-3.5 h-3.5 text-[#C09553] shrink-0" />
                 ) : (
-                  <Folder className="w-3.5 h-3.5 text-yellow-500 shrink-0" />
+                  <Folder className="w-3.5 h-3.5 text-[#C09553] shrink-0" />
                 )}
               </>
             ) : (
               <>
                 <span className="w-3 h-3 shrink-0" />
                 {React.createElement(getFileIcon(entry.name), {
-                  className: cn('w-3.5 h-3.5 shrink-0', getFileColor(entry.name))
+                  className: cn('w-3.5 h-3.5 shrink-0', getIconColor(entry.name))
                 })}
               </>
             )}
@@ -340,7 +343,7 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
                 onClick={e => e.stopPropagation()}
               />
             ) : (
-              <span className={cn('truncate', entry.isFile && getFileColor(entry.name))}>{entry.name}</span>
+              <span className="truncate">{entry.name}</span>
             )}
           </div>
         </ContextMenuTrigger>
