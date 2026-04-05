@@ -831,7 +831,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                     className="text-ui-base truncate flex-1"
                     onDoubleClick={e => { e.stopPropagation(); startRename(tab) }}
                   >
-                    {tab.isDirty ? '● ' : ''}{tab.title}
+                    {tab.title}{tab.isDirty ? '*' : ''}
                   </span>
                 )}
                 <TabBadge tabId={tab.id} />
