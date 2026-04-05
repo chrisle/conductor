@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Server, Download, Trash2,
-  Package, RefreshCw, Puzzle, Monitor, Palette, Keyboard, RotateCcw,
+  Package, RefreshCw, Puzzle, Monitor, Palette, Keyboard, RotateCcw, FolderOpen,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -15,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/comp
 import { useSettingsDialogStore } from '@/store/settingsDialog'
 import { useConfigStore } from '@/store/config'
 import { extensionRegistry } from '@/extensions'
+import { loadExtension } from '@/extensions/loader'
 import { ConductorDaemonPanel } from '@/extensions/settings/TerminalServiceTab'
 import { DEFAULT_TERMINAL_CUSTOMIZATION, DEFAULT_EDITOR_CUSTOMIZATION, DEFAULT_KEYBOARD_SHORTCUTS } from '@/types/app-config'
 import type { TerminalCustomization, EditorCustomization } from '@/types/app-config'
@@ -459,6 +460,16 @@ function ExtensionsSection(): React.ReactElement {
     loadExtensions()
   }, [loadExtensions])
 
+  // Hot-load extensions when installed without requiring a restart
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.onExtensionInstalled(async (extensionId) => {
+      const extensionsDir = await window.electronAPI.getExtensionsDir()
+      await loadExtension(`${extensionsDir}/${extensionId}`)
+      await loadExtensions()
+    })
+    return unsubscribe
+  }, [loadExtensions])
+
   async function handleInstallExtension() {
     const zipPath = await window.electronAPI.selectExtensionZip()
     if (!zipPath) return
@@ -469,10 +480,32 @@ function ExtensionsSection(): React.ReactElement {
     try {
       const result = await window.electronAPI.installExtension(zipPath)
       if (result.success) {
-        setExtMessage({ type: 'success', text: `Installed "${result.extensionId}". Restart to activate.` })
+        setExtMessage({ type: 'success', text: `Installed "${result.extensionId}".` })
         await loadExtensions()
       } else {
         setExtMessage({ type: 'error', text: result.error || 'Install failed' })
+      }
+    } catch (err) {
+      setExtMessage({ type: 'error', text: String(err) })
+    } finally {
+      setExtLoading(false)
+    }
+  }
+
+  async function handleLoadUnpacked() {
+    const dirPath = await window.electronAPI.selectExtensionDir()
+    if (!dirPath) return
+
+    setExtLoading(true)
+    setExtMessage(null)
+
+    try {
+      const result = await window.electronAPI.installUnpackedExtension(dirPath)
+      if (result.success) {
+        setExtMessage({ type: 'success', text: `Loaded "${result.extensionId}".` })
+        await loadExtensions()
+      } else {
+        setExtMessage({ type: 'error', text: result.error || 'Failed to load extension' })
       }
     } catch (err) {
       setExtMessage({ type: 'error', text: String(err) })
@@ -488,7 +521,8 @@ function ExtensionsSection(): React.ReactElement {
     try {
       const result = await window.electronAPI.uninstallExtension(extensionId)
       if (result.success) {
-        setExtMessage({ type: 'success', text: `Uninstalled "${extensionId}". Restart to take effect.` })
+        extensionRegistry.unregister(extensionId)
+        setExtMessage({ type: 'success', text: `Uninstalled "${extensionId}".` })
         await loadExtensions()
       } else {
         setExtMessage({ type: 'error', text: result.error || 'Uninstall failed' })
@@ -510,12 +544,30 @@ function ExtensionsSection(): React.ReactElement {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-ui-base font-medium text-zinc-200">Extensions</h3>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={loadExtensions} className="h-7 w-7 text-zinc-400 hover:text-zinc-200">
-              <RefreshCw className="w-3.5 h-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={handleInstallExtension} disabled={extLoading} className="h-7 w-7 text-zinc-400 hover:text-zinc-200">
-              <Download className="w-3.5 h-3.5" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={loadExtensions} className="h-7 w-7 text-zinc-400 hover:text-zinc-200">
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Refresh</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={handleLoadUnpacked} disabled={extLoading} className="h-7 w-7 text-zinc-400 hover:text-zinc-200">
+                  <FolderOpen className="w-3.5 h-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Load Unpacked</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={handleInstallExtension} disabled={extLoading} className="h-7 w-7 text-zinc-400 hover:text-zinc-200">
+                  <Download className="w-3.5 h-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Install from .zip</TooltipContent>
+            </Tooltip>
           </div>
         </div>
 

@@ -30,7 +30,7 @@ export interface SessionInfoProvider {
   render: (ctx: SessionInfoContext) => ReactNode | null
 }
 
-interface SessionInfoRegistryState {
+export interface SessionInfoRegistryState {
   providers: SessionInfoProvider[]
   register: (provider: SessionInfoProvider) => void
   unregister: (id: string) => void

@@ -677,7 +677,13 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
   ipcMain.handle('extensions:list', () => {
     if (!fs.existsSync(extensionsDir)) return []
     return fs.readdirSync(extensionsDir, { withFileTypes: true })
-      .filter(d => d.isDirectory())
+      .filter(d => {
+        if (d.isDirectory()) return true
+        if (d.isSymbolicLink()) {
+          try { return fs.statSync(path.join(extensionsDir, d.name)).isDirectory() } catch { return false }
+        }
+        return false
+      })
       .map(d => {
         const manifestPath = path.join(extensionsDir, d.name, 'manifest.json')
         try {
@@ -782,6 +788,60 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
     return result.filePaths[0]
   })
 
+  ipcMain.handle('extensions:selectDir', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Load Unpacked Extension',
+      properties: ['openDirectory']
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
+
+  ipcMain.handle('extensions:installUnpacked', async (_event, dirPath: string) => {
+    const manifestPath = path.join(dirPath, 'manifest.json')
+    if (!fs.existsSync(manifestPath)) {
+      return { success: false, error: 'No manifest.json found in directory' }
+    }
+
+    let manifest: any
+    try {
+      manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+    } catch {
+      return { success: false, error: 'Failed to parse manifest.json' }
+    }
+
+    if (!manifest.id) {
+      return { success: false, error: 'manifest.json missing id field' }
+    }
+
+    const destDir = path.join(extensionsDir, manifest.id)
+
+    // Remove existing entry (symlink or directory)
+    if (fs.existsSync(destDir) || fs.existsSync(destDir + '/')) {
+      try {
+        const stat = fs.lstatSync(destDir)
+        if (stat.isSymbolicLink()) {
+          fs.unlinkSync(destDir)
+        } else {
+          await fs.promises.rm(destDir, { recursive: true, force: true })
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Symlink the source directory so rebuilds are reflected immediately
+    const symlinkType = process.platform === 'win32' ? 'junction' : 'dir'
+    fs.symlinkSync(dirPath, destDir, symlinkType)
+
+    // Notify all renderer windows so they can hot-load the extension
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send('extensions:installed', manifest.id)
+    }
+
+    return { success: true, extensionId: manifest.id }
+  })
+
   // Conductord log watching
   ipcMain.handle('conductord:watchLogs', (event) => {
     const watchId = `log-${++logWatchCounter}`
@@ -882,6 +942,24 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
       return body
     } catch {
       return []
+    }
+  })
+
+  ipcMain.handle('conductord:getTmuxSessions', async () => {
+    try {
+      const { body } = await conductordFetch('/api/sessions')
+      return body
+    } catch {
+      return []
+    }
+  })
+
+  ipcMain.handle('conductord:killTmuxSession', async (_event, name: string) => {
+    try {
+      await conductordFetch(`/api/sessions/${encodeURIComponent(name)}`, { method: 'DELETE' })
+      return true
+    } catch {
+      return false
     }
   })
 

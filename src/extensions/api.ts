@@ -47,6 +47,9 @@ import ClaudeIcon from '@/components/ui/ClaudeIcon'
 import SidebarLayout from '@/components/Sidebar/SidebarLayout'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 
+// ── Session info registry ──────────────────────────────────────────────────
+import { useSessionInfoRegistry } from '@/extensions/work-sessions'
+
 // ── Libraries ───────────────────────────────────────────────────────────────
 import { cn } from '@/lib/utils'
 import { killTerminal } from '@/lib/terminal-api'
@@ -87,6 +90,9 @@ export const conductorAPI = {
     SidebarLayout,
     VisuallyHidden,
   },
+
+  // Session info registry
+  useSessionInfoRegistry,
 
   // Utilities
   cn,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Download, Trash2, Package, RefreshCw, Puzzle, ChevronRight } from 'lucide-react'
+import { Download, Trash2, Package, RefreshCw, Puzzle, ChevronRight, FolderOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
@@ -7,6 +7,7 @@ import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { extensionRegistry } from '@/extensions'
+import { loadExtension } from '@/extensions/loader'
 import SidebarLayout from '@/components/Sidebar/SidebarLayout'
 
 interface InstalledExtension {
@@ -38,6 +39,16 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
     loadExtensions()
   }, [loadExtensions])
 
+  // Hot-load extensions when installed without requiring a restart
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.onExtensionInstalled(async (extensionId) => {
+      const extensionsDir = await window.electronAPI.getExtensionsDir()
+      await loadExtension(`${extensionsDir}/${extensionId}`)
+      await loadExtensions()
+    })
+    return unsubscribe
+  }, [loadExtensions])
+
   async function handleInstall() {
     const zipPath = await window.electronAPI.selectExtensionZip()
     if (!zipPath) return
@@ -48,10 +59,32 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
     try {
       const result = await window.electronAPI.installExtension(zipPath)
       if (result.success) {
-        setMessage({ type: 'success', text: `Installed "${result.extensionId}". Restart to activate.` })
+        setMessage({ type: 'success', text: `Installed "${result.extensionId}".` })
         await loadExtensions()
       } else {
         setMessage({ type: 'error', text: result.error || 'Install failed' })
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: String(err) })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleLoadUnpacked() {
+    const dirPath = await window.electronAPI.selectExtensionDir()
+    if (!dirPath) return
+
+    setLoading(true)
+    setMessage(null)
+
+    try {
+      const result = await window.electronAPI.installUnpackedExtension(dirPath)
+      if (result.success) {
+        setMessage({ type: 'success', text: `Loaded "${result.extensionId}".` })
+        await loadExtensions()
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to load extension' })
       }
     } catch (err) {
       setMessage({ type: 'error', text: String(err) })
@@ -67,7 +100,8 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
     try {
       const result = await window.electronAPI.uninstallExtension(extensionId)
       if (result.success) {
-        setMessage({ type: 'success', text: `Uninstalled "${extensionId}". Restart to take effect.` })
+        extensionRegistry.unregister(extensionId)
+        setMessage({ type: 'success', text: `Uninstalled "${extensionId}".` })
         await loadExtensions()
       } else {
         setMessage({ type: 'error', text: result.error || 'Uninstall failed' })
@@ -88,9 +122,10 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
       title="Extensions"
       actions={[
         { icon: RefreshCw, label: 'Refresh', onClick: loadExtensions },
+        { icon: FolderOpen, label: 'Load Unpacked', onClick: handleLoadUnpacked, disabled: loading },
         { icon: Download, label: 'Install from .zip', onClick: handleInstall, disabled: loading },
       ]}
-      footer="Install extensions from .zip files built with the Conductor Extension SDK"
+      footer="Install extensions from .zip files or load unpacked folders built with the Conductor Extension SDK"
     >
       {/* Status message */}
       {message && (

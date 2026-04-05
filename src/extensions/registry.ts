@@ -10,9 +10,11 @@ class ExtensionRegistry {
   private listeners: Set<() => void> = new Set()
 
   register(extension: Extension, builtin = true): void {
+    // Allow re-registration for hot-reload: clean up previous registration first
     if (this.extensions.has(extension.id)) {
-      console.warn(`Extension "${extension.id}" already registered, skipping.`)
-      return
+      this.unregisterTabs(this.extensions.get(extension.id)!)
+      this.extensions.delete(extension.id)
+      this.builtinIds.delete(extension.id)
     }
     this.extensions.set(extension.id, extension)
     if (builtin) this.builtinIds.add(extension.id)
@@ -21,6 +23,17 @@ class ExtensionRegistry {
       this.registerTabs(extension)
       extension.onActivate?.()
     }
+    this.notifyListeners()
+  }
+
+  unregister(id: string): void {
+    const ext = this.extensions.get(id)
+    if (!ext) return
+    this.unregisterTabs(ext)
+    this.extensions.delete(id)
+    this.builtinIds.delete(id)
+    this.disabledIds.delete(id)
+    this.notifyListeners()
   }
 
   private registerTabs(extension: Extension): void {

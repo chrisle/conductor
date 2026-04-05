@@ -112,6 +112,8 @@ const electronAPI = {
   installExtension: (zipPath: string) => ipcRenderer.invoke('extensions:install', zipPath),
   uninstallExtension: (extensionId: string) => ipcRenderer.invoke('extensions:uninstall', extensionId),
   selectExtensionZip: () => ipcRenderer.invoke('extensions:selectZip'),
+  selectExtensionDir: () => ipcRenderer.invoke('extensions:selectDir'),
+  installUnpackedExtension: (dirPath: string) => ipcRenderer.invoke('extensions:installUnpacked', dirPath),
   onExtensionInstalled: (cb: (extensionId: string) => void) => {
     const handler = (_event: any, id: string) => cb(id)
     ipcRenderer.on('extensions:installed', handler)
@@ -130,6 +132,8 @@ const electronAPI = {
   // Conductord REST proxy (routes through main process -> Unix socket)
   conductordHealth: () => ipcRenderer.invoke('conductord:health'),
   conductordGetSessions: () => ipcRenderer.invoke('conductord:getSessions'),
+  conductordGetTmuxSessions: () => ipcRenderer.invoke('conductord:getTmuxSessions'),
+  conductordKillTmuxSession: (name: string) => ipcRenderer.invoke('conductord:killTmuxSession', name),
 
   // Debug logging (forwards renderer logs to main process log file)
   logDebug: (msg: string) => ipcRenderer.send('log:debug', msg),
