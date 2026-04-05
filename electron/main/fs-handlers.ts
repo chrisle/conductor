@@ -12,12 +12,20 @@ export async function readDir(dirPath: string): Promise<FileEntry[]> {
   try {
     const entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
     return entries
-      .map(entry => ({
-        name: entry.name,
-        path: path.join(dirPath, entry.name),
-        isDirectory: entry.isDirectory(),
-        isFile: entry.isFile()
-      }))
+      .map(entry => {
+        const entryPath = path.join(dirPath, entry.name)
+        // Use stat (follows symlinks) so symlinked directories/files appear correctly
+        let isDirectory = entry.isDirectory()
+        let isFile = entry.isFile()
+        if (entry.isSymbolicLink()) {
+          try {
+            const stat = fs.statSync(entryPath)
+            isDirectory = stat.isDirectory()
+            isFile = stat.isFile()
+          } catch { /* broken symlink — leave as false */ }
+        }
+        return { name: entry.name, path: entryPath, isDirectory, isFile }
+      })
       .sort((a, b) => {
         if (a.isDirectory && !b.isDirectory) return -1
         if (!a.isDirectory && b.isDirectory) return 1
