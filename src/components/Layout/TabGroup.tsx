@@ -19,6 +19,7 @@ import { nextSessionId } from '@/lib/session-id'
 import { setSessionTitle } from '@/lib/session-titles'
 import ClaudeIcon from '@/components/ui/ClaudeIcon'
 import CodexIcon from '@/components/ui/CodexIcon'
+import { useNotificationsStore } from '@/store/notifications'
 import { Terminal, Globe } from 'lucide-react'
 
 interface TabGroupProps {
@@ -172,6 +173,16 @@ function TabIcon({ type }: { type: string }) {
   if (!Icon) return <FileText className="w-3 h-3" />
   const iconClassName = extensionRegistry.getTabIconClassName(type) || 'w-3 h-3'
   return <Icon className={iconClassName} />
+}
+
+function TabBadge({ tabId }: { tabId: string }) {
+  const count = useNotificationsStore(s => s.tabBadges[tabId] || 0)
+  if (count === 0) return null
+  return (
+    <span className="shrink-0 min-w-[16px] h-4 px-1 rounded-full bg-blue-500 text-white text-[10px] font-medium flex items-center justify-center leading-none">
+      {count > 99 ? '99+' : count}
+    </span>
+  )
 }
 
 export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement {
@@ -781,6 +792,15 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                 onClick={() => {
                   setActiveTab(groupId, tab.id)
                   setFocusedGroup(groupId)
+                  // Clear notification badge when tab is focused
+                  const badges = useNotificationsStore.getState().tabBadges
+                  if (badges[tab.id]) {
+                    useNotificationsStore.setState(s => {
+                      const next = { ...s.tabBadges }
+                      delete next[tab.id]
+                      return { tabBadges: next }
+                    })
+                  }
                 }}
                 className={cn(
                   'flex items-center gap-1.5 px-3 h-8 cursor-pointer select-none border-r border-zinc-700/40 shrink-0 max-w-[180px] group/tab transition-colors',
@@ -814,6 +834,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                     {tab.isDirty ? '● ' : ''}{tab.title}
                   </span>
                 )}
+                <TabBadge tabId={tab.id} />
                 <Button
                   variant="ghost"
                   size="icon"
