@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Minus, Square, X, Maximize2, ChevronDown, FolderOpen, Plus, Pencil, Trash2, FilePlus2, Folder, SaveAll, AppWindow } from 'lucide-react'
+import { Minus, Square, X, Maximize2, ChevronDown, FolderOpen, Plus, Pencil, Trash2, FilePlus2, Folder, SaveAll, AppWindow, PanelLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -45,7 +45,7 @@ export default function TitleBar(): React.ReactElement {
   const [newProjectName, setNewProjectName] = useState('')
   const [newProjectDir, setNewProjectDir] = useState('')
   const [newProjectError, setNewProjectError] = useState('')
-  const { activeExtensionId, toggleExtension } = useActivityBarStore()
+  const { activeExtensionId, toggleExtension, toggleSidebar } = useActivityBarStore()
   const projectName = useProjectStore(s => s.name)
   const activeWorkspace = useProjectStore(s => s.activeWorkspace)
   const workspaceNames = useProjectStore(s => s.workspaceNames)
@@ -158,6 +158,19 @@ export default function TitleBar(): React.ReactElement {
             </Tooltip>
           </div>
         )}
+
+        {/* Sidebar toggle */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={toggleSidebar}
+              className="no-drag flex items-center justify-center w-7 h-7 rounded transition-colors text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 ml-1"
+            >
+              <PanelLeft className="w-3.5 h-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Toggle Sidebar</TooltipContent>
+        </Tooltip>
 
         {/* Breadcrumb — individual buttons are no-drag, gaps between them remain draggable */}
         <div className="flex-1 flex items-center justify-center gap-1 overflow-hidden px-4">
