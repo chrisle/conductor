@@ -209,8 +209,7 @@ func newSession(id, cwd, command string) (*session, error) {
 
 	if command != "" {
 		trimmed := strings.TrimRight(command, "\r\n")
-		shellCmd := fmt.Sprintf("%s -lic '%s; exec %s'", shell, trimmed, shell)
-		cmd = exec.Command(shell, "-c", shellCmd)
+		cmd = exec.Command(shell, "-lic", trimmed+"; exec "+shell)
 		log.Printf("[session %s] starting with command: %s", id, command)
 	} else {
 		cmd = exec.Command(shell, "-l")
@@ -245,7 +244,14 @@ func newSession(id, cwd, command string) (*session, error) {
 			conn.Close()
 		}
 		if err != nil {
-			log.Printf("[session %s] process exited with error: %v", id, err)
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				log.Printf("[session %s] process exited with code %d: %v", id, exitErr.ExitCode(), exitErr)
+				if ws, ok := exitErr.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+					log.Printf("[session %s] killed by signal: %s", id, ws.Signal())
+				}
+			} else {
+				log.Printf("[session %s] process exited with error: %v", id, err)
+			}
 		} else {
 			log.Printf("[session %s] process exited (status 0)", id)
 		}
@@ -450,6 +456,14 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 	command := r.URL.Query().Get("command")
 	if cwd == "" {
 		home, _ := os.UserHomeDir()
+		cwd = home
+	}
+	// Validate that cwd exists — Go returns a confusing "no such file or
+	// directory" error on the shell binary when the working directory is
+	// missing.
+	if _, err := os.Stat(cwd); err != nil {
+		home, _ := os.UserHomeDir()
+		log.Printf("[session %s] cwd %q does not exist, falling back to %s", id, cwd, home)
 		cwd = home
 	}
 
@@ -681,6 +695,11 @@ func handleExec(w http.ResponseWriter, r *http.Request) {
 	cwd := req.Cwd
 	if cwd == "" {
 		cwd, _ = os.UserHomeDir()
+	}
+	if _, err := os.Stat(cwd); err != nil {
+		home, _ := os.UserHomeDir()
+		log.Printf("[exec] cwd %q does not exist, falling back to %s", cwd, home)
+		cwd = home
 	}
 
 	// Run through login shell so we get the user's full PATH, aliases, etc.
