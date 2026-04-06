@@ -248,5 +248,60 @@ describe('BrowserTab', () => {
       addSpy.mockRestore()
       removeSpy.mockRestore()
     })
+
+    it('auto-resets stuck drag overlay after safety timeout', () => {
+      vi.useFakeTimers()
+      const { container } = render(<BrowserTab {...defaultProps} />)
+      const webviewContainer = container.querySelector('.flex-1.overflow-hidden.relative')!
+
+      startTabDrag()
+      expect(webviewContainer.querySelector('.absolute.inset-0.z-10')).not.toBeNull()
+
+      // Simulate the end event never firing — overlay should auto-dismiss
+      act(() => { vi.advanceTimersByTime(3000) })
+      expect(webviewContainer.querySelector('.absolute.inset-0.z-10')).toBeNull()
+
+      vi.useRealTimers()
+    })
+
+    it('auto-resets stuck resize overlay after safety timeout', () => {
+      vi.useFakeTimers()
+      const { container } = render(<BrowserTab {...defaultProps} />)
+      const webviewContainer = container.querySelector('.flex-1.overflow-hidden.relative')!
+
+      act(() => { window.dispatchEvent(new Event('pane-resize-start')) })
+      expect(webviewContainer.querySelector('.absolute.inset-0.z-10')).not.toBeNull()
+
+      // Simulate pane-resize-end never firing
+      act(() => { vi.advanceTimersByTime(3000) })
+      expect(webviewContainer.querySelector('.absolute.inset-0.z-10')).toBeNull()
+
+      vi.useRealTimers()
+    })
+
+    it('dismisses stuck overlay on mousedown (click safety valve)', () => {
+      const { container } = render(<BrowserTab {...defaultProps} />)
+      const webviewContainer = container.querySelector('.flex-1.overflow-hidden.relative')!
+
+      startTabDrag()
+      const overlay = webviewContainer.querySelector('.absolute.inset-0.z-10')!
+      expect(overlay).not.toBeNull()
+
+      // Clicking the stuck overlay should dismiss it
+      fireEvent.mouseDown(overlay)
+      expect(webviewContainer.querySelector('.absolute.inset-0.z-10')).toBeNull()
+    })
+
+    it('resets overlay state when window loses focus', () => {
+      const { container } = render(<BrowserTab {...defaultProps} />)
+      const webviewContainer = container.querySelector('.flex-1.overflow-hidden.relative')!
+
+      startTabDrag()
+      expect(webviewContainer.querySelector('.absolute.inset-0.z-10')).not.toBeNull()
+
+      // Window blur should reset the overlay
+      act(() => { window.dispatchEvent(new Event('blur')) })
+      expect(webviewContainer.querySelector('.absolute.inset-0.z-10')).toBeNull()
+    })
   })
 })
