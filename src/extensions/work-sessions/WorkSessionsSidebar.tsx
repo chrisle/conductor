@@ -71,7 +71,7 @@ function sessionIconColor(s: ConductorSession): string {
   return 'text-zinc-400'
 }
 
-function buildTileTree(ids: string[], depth: number): LayoutNode {
+export function buildTileTree(ids: string[], depth: number): LayoutNode {
   if (ids.length === 1) return { type: 'leaf', groupId: ids[0] }
   const containerType = depth % 2 === 0 ? 'row' : 'column'
   return {
@@ -158,7 +158,7 @@ function useConductorSessions(intervalMs = 5_000) {
 
 // ── Tile helper ───────────────────────────────────────
 
-function tileSessions(sessions: EnrichedSession[]) {
+export function tileSessions(sessions: EnrichedSession[]) {
   if (sessions.length === 0) return
 
   const tabsStore = useTabsStore.getState()
@@ -203,6 +203,7 @@ function SessionTreeNode({
   onRefresh,
   filter,
   allFolders,
+  sessionMap,
 }: {
   session: EnrichedSession
   depth: number
@@ -214,6 +215,7 @@ function SessionTreeNode({
   onRefresh: () => void
   filter: string
   allFolders: SessionFolder[]
+  sessionMap: Map<string, EnrichedSession>
 }) {
   const { addTab } = useTabsStore()
   const { focusedGroupId } = useLayoutStore()
@@ -451,6 +453,20 @@ function SessionTreeNode({
               ))}
             </ContextMenuSubContent>
           </ContextMenuSub>
+          {/* Tile selected sessions — only when 2+ selected sessions have open tabs */}
+          {(() => {
+            if (!(isSelected && selectedIds.size > 1)) return null
+            const tileTargets = [...selectedIds]
+              .map(id => sessionMap.get(id))
+              .filter((s): s is EnrichedSession => s != null && s.hasOpenTab)
+            if (tileTargets.length < 2) return null
+            return (
+              <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={() => tileSessions(tileTargets)}>
+                <LayoutGrid className="w-3.5 h-3.5" />
+                Tile {tileTargets.length} sessions
+              </ContextMenuItem>
+            )
+          })()}
           <ContextMenuSeparator className="bg-zinc-700" />
           {isSelected && selectedIds.size > 1 ? (
             <ContextMenuItem className="gap-2 text-xs cursor-pointer text-red-400 focus:text-red-300" onSelect={onKillSelected}>
@@ -799,6 +815,7 @@ function FolderTreeNode({
               onRefresh={onRefresh}
               filter={filter}
               allFolders={allFolders}
+              sessionMap={sessionMap}
             />
           ))}
         </div>
@@ -811,7 +828,7 @@ function FolderTreeNode({
 
 function DefaultFolderNode({
   sessions,
-  sessionMap: _sessionMap,
+  sessionMap,
   selectedIds,
   onRowClick,
   onDragStateChange,
@@ -921,6 +938,7 @@ function DefaultFolderNode({
               onRefresh={onRefresh}
               filter={filter}
               allFolders={allFolders}
+              sessionMap={sessionMap}
             />
           ))}
         </div>
