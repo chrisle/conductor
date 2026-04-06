@@ -63,14 +63,6 @@ const electronAPI = {
   offAutopilotMatch: (callback: (event: IpcRendererEvent, id: string, response: string) => void) =>
     ipcRenderer.removeListener('terminal:autopilot_match', callback),
 
-  // Scrollback disk persistence
-  scrollbackSave: (sessionId: string, chunkIndex: number, data: string) =>
-    ipcRenderer.invoke('scrollback:save', sessionId, chunkIndex, data),
-  scrollbackLoad: (sessionId: string, chunkIndex: number) =>
-    ipcRenderer.invoke('scrollback:load', sessionId, chunkIndex),
-  scrollbackCleanup: (sessionId: string) =>
-    ipcRenderer.invoke('scrollback:cleanup', sessionId),
-
   // Git
   worktreeList: (repoPath: string) => ipcRenderer.invoke('git:worktreeList', repoPath),
   worktreeAdd: (repoPath: string, branchName: string, basePath?: string) => ipcRenderer.invoke('git:worktreeAdd', repoPath, branchName, basePath),

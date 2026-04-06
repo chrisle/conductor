@@ -51,7 +51,7 @@ describe('terminalConfig', () => {
     expect(terminalConfig.cursorStyle).toBe('block')
   })
 
-  it('has large scrollback buffer', () => {
-    expect(terminalConfig.scrollback).toBeGreaterThanOrEqual(10000)
+  it('has scrollback buffer defaulting to 10000 lines', () => {
+    expect(terminalConfig.scrollback).toBe(10000)
   })
 })

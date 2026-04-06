@@ -19,6 +19,7 @@ export interface TerminalCustomization {
   cursorStyle: 'block' | 'underline' | 'bar'
   cursorBlink: boolean
   colorTheme: 'default' | 'monokai' | 'solarized-dark' | 'dracula' | 'nord'
+  scrollback: number
 }
 
 export interface EditorCustomization {
@@ -73,6 +74,7 @@ export const DEFAULT_TERMINAL_CUSTOMIZATION: TerminalCustomization = {
   cursorStyle: 'block',
   cursorBlink: true,
   colorTheme: 'default',
+  scrollback: 10000,
 }
 
 export const DEFAULT_EDITOR_CUSTOMIZATION: EditorCustomization = {
