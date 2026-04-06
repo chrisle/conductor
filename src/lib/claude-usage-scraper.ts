@@ -243,8 +243,10 @@ async function scrapeOnce(): Promise<void> {
           return
         }
 
-        // Check for a percentage or token mention — usage data arrived
-        if (/\d+(\.\d+)?\s*%/.test(stripped) && stripped.length > 20) {
+        // Check for usage data: require both a percentage AND a "Resets" line
+        // to be present before resolving. Without this, the scraper can fire
+        // on the first "13% used" chunk before the reset info has arrived.
+        if (/\d+(\.\d+)?\s*%\s*used/i.test(stripped) && /Resets\s/i.test(stripped)) {
           resolved = true
           clearTimeout(timeout)
           clearInterval(checkInterval)
