@@ -1,10 +1,20 @@
+import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { TicketCard } from '@np3/jira/TicketCard'
 import { KanbanColumn } from '@np3/jira/KanbanColumn'
 import type { Ticket, JiraConfig } from '@np3/jira/jira-api'
 
-// Mock the extension-api ui components used by TicketCard and KanbanColumn
+// Mock jira-api so network calls never fire
+vi.mock('@np3/jira/jira-api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@np3/jira/jira-api')>()
+  return {
+    ...actual,
+    transitionTicket: vi.fn().mockResolvedValue(undefined),
+    updateTicket: vi.fn().mockResolvedValue(undefined),
+  }
+})
+
 vi.mock('@conductor/extension-api', () => ({
   useWorkSessionsStore: { getState: () => ({ completeSession: vi.fn() }) },
   useConfigStore: {
@@ -21,25 +31,34 @@ vi.mock('@conductor/extension-api', () => ({
     Button: ({ children, className, ...rest }: any) => (
       <button data-testid="button" className={className} {...rest}>{children}</button>
     ),
-    DropdownMenu: ({ children }: any) => <div data-testid="dropdown-menu">{children}</div>,
-    DropdownMenuTrigger: ({ children }: any) => <div data-testid="dropdown-trigger">{children}</div>,
-    DropdownMenuContent: ({ children }: any) => <div data-testid="dropdown-content">{children}</div>,
-    DropdownMenuItem: ({ children, onSelect }: any) => (
-      <div data-testid="dropdown-item" onClick={onSelect}>{children}</div>
+    DropdownMenu: ({ children }: any) => <div>{children}</div>,
+    DropdownMenuTrigger: ({ children }: any) => <div>{children}</div>,
+    DropdownMenuContent: ({ children, className }: any) => (
+      <div data-testid="dropdown-content" className={className}>{children}</div>
+    ),
+    DropdownMenuItem: ({ children, onSelect, disabled }: any) => (
+      <div data-testid="dropdown-item" onClick={!disabled ? onSelect : undefined}>{children}</div>
     ),
     DropdownMenuSeparator: () => <hr />,
-    ContextMenu: ({ children }: any) => <div data-testid="context-menu">{children}</div>,
-    ContextMenuTrigger: ({ children }: any) => <div data-testid="context-trigger">{children}</div>,
-    ContextMenuContent: ({ children }: any) => <div data-testid="context-content">{children}</div>,
+    ContextMenu: ({ children }: any) => <div>{children}</div>,
+    ContextMenuTrigger: ({ children }: any) => <div>{children}</div>,
+    ContextMenuContent: ({ children, className }: any) => (
+      <div data-testid="context-content" className={className}>{children}</div>
+    ),
     ContextMenuItem: ({ children, onSelect, className }: any) => (
       <div data-testid="context-item" className={className} onClick={onSelect}>{children}</div>
     ),
-    ContextMenuSeparator: () => <hr data-testid="context-separator" />,
-    ContextMenuSub: ({ children }: any) => <div data-testid="context-sub">{children}</div>,
-    ContextMenuSubTrigger: ({ children }: any) => <div data-testid="context-sub-trigger">{children}</div>,
-    ContextMenuSubContent: ({ children }: any) => <div data-testid="context-sub-content">{children}</div>,
+    ContextMenuSeparator: () => <hr />,
+    ContextMenuSub: ({ children }: any) => <div>{children}</div>,
+    ContextMenuSubTrigger: ({ children }: any) => <div>{children}</div>,
+    ContextMenuSubContent: ({ children }: any) => <div>{children}</div>,
     LinkContextMenu: ({ children }: any) => <>{children}</>,
     Skeleton: ({ className }: any) => <div data-testid="skeleton" className={className} />,
+    Collapsible: ({ children, open }: any) => open !== false ? <div>{children}</div> : null,
+    CollapsibleTrigger: ({ children, className, ...rest }: any) => (
+      <button className={className} {...rest}>{children}</button>
+    ),
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
   },
 }))
 
@@ -78,209 +97,109 @@ const defaultCardProps = {
   onEditTicket: noop,
   onOpenInTerminal: noop,
   onOpenInVSCode: noop,
+  onOpenInClaude: noop,
   onRefresh: noop,
 }
 
 describe('TicketCard', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  describe('left border by issue type', () => {
-    it('renders red left border for bugs', () => {
-      const ticket = makeTicket({ issueType: 'Bug' })
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      const card = container.querySelector('.border-l-red-500')
-      expect(card).toBeTruthy()
+  // ─── Visual / Structure ─────────────────────────────────────────────────────
+
+  describe('card structure', () => {
+    it('renders the ticket summary', () => {
+      render(<TicketCard ticket={makeTicket({ summary: 'Fix login bug' })} {...defaultCardProps} />)
+      expect(screen.getByText('Fix login bug')).toBeTruthy()
     })
 
-    it('renders emerald left border for stories', () => {
-      const ticket = makeTicket({ issueType: 'Story' })
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      const card = container.querySelector('.border-l-emerald-500')
-      expect(card).toBeTruthy()
+    it('does NOT render a left-side colored border', () => {
+      const { container } = render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      expect(container.querySelector('.border-l-\\[3px\\]')).toBeNull()
+      expect(container.querySelector('.border-l-red-500')).toBeNull()
+      expect(container.querySelector('.border-l-blue-500')).toBeNull()
+      expect(container.querySelector('.border-l-emerald-500')).toBeNull()
     })
 
-    it('renders blue left border for tasks', () => {
-      const ticket = makeTicket({ issueType: 'Task' })
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      const card = container.querySelector('.border-l-blue-500')
-      expect(card).toBeTruthy()
+    it('does NOT render a status lozenge', () => {
+      const { container } = render(<TicketCard ticket={makeTicket({ status: 'in_progress' })} {...defaultCardProps} />)
+      expect(container.querySelector('.uppercase.tracking-wide')).toBeNull()
     })
 
-    it('defaults to blue border for unknown types', () => {
-      const ticket = makeTicket({ issueType: 'Improvement' })
+    it('does NOT render bottom action bar buttons (Move / Start / Edit)', () => {
+      render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      expect(screen.queryByText('Move')).toBeNull()
+      // "Start code" appears inside meatball dropdown, not as a standalone bottom button
+      // Verify it's inside dropdown-content, not a standalone button[data-testid="button"]
+      const startButtons = screen.queryAllByText('Start code')
+      const bottomButtons = document.querySelectorAll('[data-testid="button"]')
+      expect(bottomButtons.length).toBe(0)
+    })
+
+    it('applies thinking-halo class when isThinking is true', () => {
       const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
+        <TicketCard ticket={makeTicket()} {...defaultCardProps} isThinking={true} />
       )
-      const card = container.querySelector('.border-l-blue-500')
-      expect(card).toBeTruthy()
+      expect(container.querySelector('.thinking-halo')).toBeTruthy()
+    })
+
+    it('does not apply thinking-halo when isThinking is false', () => {
+      const { container } = render(
+        <TicketCard ticket={makeTicket()} {...defaultCardProps} isThinking={false} />
+      )
+      expect(container.querySelector('.thinking-halo')).toBeNull()
     })
   })
 
-  describe('status lozenge', () => {
-    it('shows Jira status text in a lozenge', () => {
-      const ticket = makeTicket({ status: 'in_progress', jiraStatus: 'In Progress' })
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      const lozenge = container.querySelector('.uppercase.tracking-wide')
-      expect(lozenge).toBeTruthy()
-      expect(lozenge!.textContent).toBe('In Progress')
-    })
-
-    it('uses blue styling for in_progress status', () => {
-      const ticket = makeTicket({ status: 'in_progress', jiraStatus: 'In Progress' })
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      const lozenge = container.querySelector('.uppercase.tracking-wide')
-      expect(lozenge!.className).toContain('text-blue-400')
-    })
-
-    it('uses emerald styling for done status', () => {
-      const ticket = makeTicket({ status: 'done', jiraStatus: 'Done' })
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      const lozenge = container.querySelector('.uppercase.tracking-wide')
-      expect(lozenge!.className).toContain('text-emerald-400')
-    })
-
-    it('uses zinc styling for backlog status', () => {
-      const ticket = makeTicket({ status: 'backlog', jiraStatus: 'Backlog' })
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      const lozenge = container.querySelector('.uppercase.tracking-wide')
-      expect(lozenge!.className).toContain('text-zinc-300')
-    })
-  })
-
-  describe('priority indicator', () => {
-    it('renders upward arrow for highest priority', () => {
-      const ticket = makeTicket({ priority: 'Highest' })
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      const arrowUp = container.querySelector('.text-red-500')
-      expect(arrowUp).toBeTruthy()
-    })
-
-    it('renders upward arrow for high priority', () => {
-      const ticket = makeTicket({ priority: 'High' })
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      const arrowUp = container.querySelector('.text-orange-500')
-      expect(arrowUp).toBeTruthy()
-    })
-
-    it('renders minus for medium priority', () => {
-      const ticket = makeTicket({ priority: 'Medium' })
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      const minus = container.querySelector('.text-yellow-500')
-      expect(minus).toBeTruthy()
-    })
-
-    it('renders downward arrow for low priority', () => {
-      const ticket = makeTicket({ priority: 'Low' })
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      const arrowDown = container.querySelector('.text-blue-400')
-      expect(arrowDown).toBeTruthy()
-    })
-
-    it('renders nothing when priority is null', () => {
-      const ticket = makeTicket({ priority: null })
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      const priorityIcons = container.querySelectorAll('.text-red-500, .text-orange-500, .text-yellow-500')
-      expect(priorityIcons.length).toBe(0)
-    })
-  })
-
-  describe('action buttons visibility', () => {
-    it('action buttons are always visible (no hover-only opacity)', () => {
-      const ticket = makeTicket()
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      // Buttons should NOT be hidden behind opacity-0
-      const hiddenContainer = container.querySelector('.opacity-0.group-hover\\:opacity-100')
-      expect(hiddenContainer).toBeNull()
-    })
-
-    it('action buttons container is rendered without opacity classes', () => {
-      const ticket = makeTicket()
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      // The Move, Start, and Edit buttons should be present and visible
-      expect(screen.getByText('Move')).toBeTruthy()
-      expect(screen.getByText('Start')).toBeTruthy()
-    })
-  })
-
-  describe('summary position', () => {
-    it('renders summary as the first visible text content', () => {
-      const ticket = makeTicket({ summary: 'Fix the login bug' })
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      const summary = container.querySelector('p')
-      expect(summary).toBeTruthy()
-      expect(summary!.textContent).toBe('Fix the login bug')
-    })
-
-    it('uses near-white text for summary readability', () => {
-      const ticket = makeTicket({ summary: 'Readable summary' })
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      const summary = container.querySelector('p')
-      expect(summary!.className).toContain('text-zinc-50')
-    })
-  })
+  // ─── Ticket key ─────────────────────────────────────────────────────────────
 
   describe('ticket key', () => {
     it('renders the ticket key as a clickable button', () => {
-      const ticket = makeTicket({ key: 'CON-42' })
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      const keyButton = screen.getByText('CON-42')
-      expect(keyButton.tagName).toBe('BUTTON')
+      render(<TicketCard ticket={makeTicket({ key: 'CON-42' })} {...defaultCardProps} />)
+      expect(screen.getByText('CON-42').tagName).toBe('BUTTON')
     })
 
-    it('calls onOpenUrl when key is clicked', () => {
+    it('calls onOpenUrl with the Jira browse URL when key is clicked', () => {
       const onOpenUrl = vi.fn()
-      const ticket = makeTicket({ key: 'CON-42' })
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} onOpenUrl={onOpenUrl} />
-      )
+      render(<TicketCard ticket={makeTicket({ key: 'CON-42' })} {...defaultCardProps} onOpenUrl={onOpenUrl} />)
       fireEvent.click(screen.getByText('CON-42'))
-      expect(onOpenUrl).toHaveBeenCalledWith(
-        'https://test.atlassian.net/browse/CON-42',
-        'CON-42'
-      )
+      expect(onOpenUrl).toHaveBeenCalledWith('https://test.atlassian.net/browse/CON-42', 'CON-42')
     })
   })
 
+  // ─── Priority indicator ──────────────────────────────────────────────────────
+
+  describe('priority indicator', () => {
+    it('shows red arrow for highest priority', () => {
+      const { container } = render(<TicketCard ticket={makeTicket({ priority: 'Highest' })} {...defaultCardProps} />)
+      expect(container.querySelector('.text-red-500')).toBeTruthy()
+    })
+
+    it('shows orange arrow for high priority', () => {
+      const { container } = render(<TicketCard ticket={makeTicket({ priority: 'High' })} {...defaultCardProps} />)
+      expect(container.querySelector('.text-orange-500')).toBeTruthy()
+    })
+
+    it('shows yellow minus for medium priority', () => {
+      const { container } = render(<TicketCard ticket={makeTicket({ priority: 'Medium' })} {...defaultCardProps} />)
+      expect(container.querySelector('.text-yellow-500')).toBeTruthy()
+    })
+
+    it('shows blue arrow for low priority', () => {
+      const { container } = render(<TicketCard ticket={makeTicket({ priority: 'Low' })} {...defaultCardProps} />)
+      expect(container.querySelector('.text-blue-400')).toBeTruthy()
+    })
+
+    it('renders nothing when priority is null', () => {
+      const { container } = render(<TicketCard ticket={makeTicket({ priority: null })} {...defaultCardProps} />)
+      expect(container.querySelector('.text-red-500, .text-orange-500, .text-yellow-500')).toBeNull()
+    })
+  })
+
+  // ─── Story points ────────────────────────────────────────────────────────────
+
   describe('story points', () => {
     it('shows story points in a circular badge', () => {
-      const ticket = makeTicket({ storyPoints: 5 })
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
+      const { container } = render(<TicketCard ticket={makeTicket({ storyPoints: 5 })} {...defaultCardProps} />)
       const badges = container.querySelectorAll('[data-testid="badge"]')
       const pointsBadge = Array.from(badges).find(b => b.textContent === '5')
       expect(pointsBadge).toBeTruthy()
@@ -288,264 +207,449 @@ describe('TicketCard', () => {
     })
 
     it('hides story points when null', () => {
-      const ticket = makeTicket({ storyPoints: null })
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
+      const { container } = render(<TicketCard ticket={makeTicket({ storyPoints: null })} {...defaultCardProps} />)
       const badges = container.querySelectorAll('[data-testid="badge"]')
-      const pointsBadge = Array.from(badges).find(b => b.className?.includes('rounded-full'))
-      expect(pointsBadge).toBeUndefined()
+      expect(Array.from(badges).find(b => b.className?.includes('rounded-full'))).toBeUndefined()
     })
   })
 
-  describe('thinking state', () => {
-    it('applies thinking-halo class when isThinking is true', () => {
-      const ticket = makeTicket()
+  // ─── Active session indicator ────────────────────────────────────────────────
+
+  describe('active session indicator', () => {
+    it('shows green pulse dot when session is active', () => {
       const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} isThinking={true} />
+        <TicketCard ticket={makeTicket()} {...defaultCardProps}
+          workSession={{ id: '1', ticketKey: 'CON-1', status: 'active' }} />
       )
-      const card = container.querySelector('.thinking-halo')
-      expect(card).toBeTruthy()
+      expect(container.querySelector('.bg-green-400.animate-pulse')).toBeTruthy()
     })
 
-    it('does not apply thinking-halo when isThinking is false', () => {
-      const ticket = makeTicket()
+    it('does not show dot when no session', () => {
+      const { container } = render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      expect(container.querySelector('.bg-green-400.animate-pulse')).toBeNull()
+    })
+
+    it('does not show dot when session is completed', () => {
       const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} isThinking={false} />
+        <TicketCard ticket={makeTicket()} {...defaultCardProps}
+          workSession={{ id: '1', ticketKey: 'CON-1', status: 'completed' }} />
       )
-      const card = container.querySelector('.thinking-halo')
-      expect(card).toBeNull()
+      expect(container.querySelector('.bg-green-400.animate-pulse')).toBeNull()
     })
   })
+
+  // ─── PR badges ───────────────────────────────────────────────────────────────
 
   describe('PR badges', () => {
-    it('shows PR badges when pull requests exist', () => {
-      const ticket = makeTicket({
-        pullRequests: [
-          { id: '1', url: 'https://github.com/org/repo/pull/42', name: 'PR', status: 'OPEN' },
-        ],
-      })
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
+    it('shows PR badge with number for open PRs', () => {
+      render(<TicketCard ticket={makeTicket({
+        pullRequests: [{ id: '1', url: 'https://github.com/org/repo/pull/42', name: 'PR', status: 'OPEN' }],
+      })} {...defaultCardProps} />)
       expect(screen.getByText('PR#42')).toBeTruthy()
     })
 
     it('uses emerald color for merged PRs', () => {
-      const ticket = makeTicket({
-        pullRequests: [
-          { id: '1', url: 'https://github.com/org/repo/pull/99', name: 'PR', status: 'MERGED' },
-        ],
-      })
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      const prBadge = screen.getByText('PR#99')
-      expect(prBadge.className).toContain('text-emerald-400')
+      render(<TicketCard ticket={makeTicket({
+        pullRequests: [{ id: '1', url: 'https://github.com/org/repo/pull/99', name: 'PR', status: 'MERGED' }],
+      })} {...defaultCardProps} />)
+      expect(screen.getByText('PR#99').className).toContain('text-emerald-400')
     })
 
     it('uses blue color for open PRs', () => {
-      const ticket = makeTicket({
+      render(<TicketCard ticket={makeTicket({
+        pullRequests: [{ id: '1', url: 'https://github.com/org/repo/pull/50', name: 'PR', status: 'OPEN' }],
+      })} {...defaultCardProps} />)
+      expect(screen.getByText('PR#50').className).toContain('text-blue-400')
+    })
+
+    it('renders PR badges in the bottom-right container (ml-auto)', () => {
+      const { container } = render(<TicketCard ticket={makeTicket({
+        pullRequests: [{ id: '1', url: 'https://github.com/org/repo/pull/7', name: 'PR', status: 'OPEN' }],
+      })} {...defaultCardProps} />)
+      const prBadge = screen.getByText('PR#7')
+      const prContainer = prBadge.closest('[class*="ml-auto"]')
+      expect(prContainer).toBeTruthy()
+    })
+
+    it('shows no PR badges when pullRequests is empty', () => {
+      render(<TicketCard ticket={makeTicket({ pullRequests: [] })} {...defaultCardProps} />)
+      expect(screen.queryByText(/^PR#/)).toBeNull()
+    })
+
+    it('renders multiple PR badges', () => {
+      render(<TicketCard ticket={makeTicket({
         pullRequests: [
-          { id: '1', url: 'https://github.com/org/repo/pull/50', name: 'PR', status: 'OPEN' },
+          { id: '1', url: 'https://github.com/org/repo/pull/10', name: 'PR1', status: 'OPEN' },
+          { id: '2', url: 'https://github.com/org/repo/pull/11', name: 'PR2', status: 'MERGED' },
         ],
-      })
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      const prBadge = screen.getByText('PR#50')
-      expect(prBadge.className).toContain('text-blue-400')
+      })} {...defaultCardProps} />)
+      expect(screen.getByText('PR#10')).toBeTruthy()
+      expect(screen.getByText('PR#11')).toBeTruthy()
     })
   })
 
-  describe('start work in background context menu item', () => {
-    it('renders a "Start coding in background" context menu item', () => {
-      const ticket = makeTicket()
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
+  // ─── Work session branch badge ───────────────────────────────────────────────
+
+  describe('work session branch', () => {
+    it('shows branch badge when worktree is present', () => {
+      const { container } = render(
+        <TicketCard ticket={makeTicket()} {...defaultCardProps}
+          workSession={{ id: '1', status: 'active', worktree: { path: '/path', branch: 'con-1', baseBranch: 'main' } }} />
       )
-      expect(screen.getByText('Start coding in background')).toBeTruthy()
+      expect(screen.getByText('con-1')).toBeTruthy()
+      expect(container.querySelector('.text-fuchsia-400')).toBeTruthy()
     })
 
-    it('calls onStartWorkInBackground when clicked', () => {
-      const onStartWorkInBackground = vi.fn()
-      const ticket = makeTicket({ key: 'CON-99' })
+    it('shows PR badge from worktree prUrl', () => {
       render(
-        <TicketCard
-          ticket={ticket}
-          {...defaultCardProps}
-          onStartWorkInBackground={onStartWorkInBackground}
-        />
+        <TicketCard ticket={makeTicket()} {...defaultCardProps}
+          workSession={{
+            id: '1', status: 'active',
+            worktree: { path: '/path', branch: 'con-1', baseBranch: 'main' },
+            prUrl: 'https://github.com/org/repo/pull/5',
+          }} />
       )
-      fireEvent.click(screen.getByText('Start coding in background'))
+      expect(screen.getByText('PR')).toBeTruthy()
+    })
+
+    it('does not show branch row when no worktree and no PRs', () => {
+      const { container } = render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      expect(container.querySelector('.text-fuchsia-400')).toBeNull()
+    })
+  })
+
+  // ─── Meatball menu ───────────────────────────────────────────────────────────
+
+  describe('meatball menu', () => {
+    it('renders the ⋯ button with hover-only visibility', () => {
+      const { container } = render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      const meatball = container.querySelector('.opacity-0.group-hover\\:opacity-100')
+      expect(meatball).toBeTruthy()
+    })
+
+    it('shows "Start code" item when no active session', () => {
+      render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      const items = screen.getAllByTestId('dropdown-item')
+      expect(items.some(el => el.textContent?.includes('Start code'))).toBe(true)
+    })
+
+    it('shows "Continue session" instead of "Start code" when session is active', () => {
+      render(
+        <TicketCard ticket={makeTicket()} {...defaultCardProps}
+          workSession={{ id: '1', status: 'active' }} />
+      )
+      const items = screen.getAllByTestId('dropdown-item')
+      expect(items.some(el => el.textContent?.includes('Continue session'))).toBe(true)
+      expect(items.some(el => el.textContent === 'Start code')).toBe(false)
+    })
+
+    it('shows "Start code (background)" item', () => {
+      render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      const items = screen.getAllByTestId('dropdown-item')
+      expect(items.some(el => el.textContent?.includes('Start code (background)'))).toBe(true)
+    })
+
+    it('shows "Open worktree in Terminal" item', () => {
+      render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      const items = screen.getAllByTestId('dropdown-item')
+      expect(items.some(el => el.textContent?.includes('Open worktree in Terminal'))).toBe(true)
+    })
+
+    it('shows "Open worktree in VSCode" item', () => {
+      render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      const items = screen.getAllByTestId('dropdown-item')
+      expect(items.some(el => el.textContent?.includes('Open worktree in VSCode'))).toBe(true)
+    })
+
+    it('shows "Move to Backlog", "Move to In Progress", "Move to Done"', () => {
+      render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      const items = screen.getAllByTestId('dropdown-item')
+      expect(items.some(el => el.textContent?.includes('Move to Backlog'))).toBe(true)
+      expect(items.some(el => el.textContent?.includes('Move to In Progress'))).toBe(true)
+      expect(items.some(el => el.textContent?.includes('Move to Done'))).toBe(true)
+    })
+
+    it('calls onStartWork when "Start code" is clicked', () => {
+      const onStartWork = vi.fn()
+      const ticket = makeTicket()
+      render(<TicketCard ticket={ticket} {...defaultCardProps} onStartWork={onStartWork} />)
+      const items = screen.getAllByTestId('dropdown-item')
+      const startItem = items.find(el => el.textContent === 'Start code')!
+      fireEvent.click(startItem)
+      expect(onStartWork).toHaveBeenCalledWith(ticket)
+    })
+
+    it('calls onContinueSession when "Continue session" is clicked', () => {
+      const onContinueSession = vi.fn()
+      const ticket = makeTicket()
+      render(
+        <TicketCard ticket={ticket} {...defaultCardProps} onContinueSession={onContinueSession}
+          workSession={{ id: '1', status: 'active' }} />
+      )
+      const items = screen.getAllByTestId('dropdown-item')
+      const continueItem = items.find(el => el.textContent?.includes('Continue session'))!
+      fireEvent.click(continueItem)
+      expect(onContinueSession).toHaveBeenCalledWith(ticket)
+    })
+
+    it('calls onStartWorkInBackground when "Start code (background)" is clicked', () => {
+      const onStartWorkInBackground = vi.fn()
+      const ticket = makeTicket()
+      render(<TicketCard ticket={ticket} {...defaultCardProps} onStartWorkInBackground={onStartWorkInBackground} />)
+      const items = screen.getAllByTestId('dropdown-item')
+      const bgItem = items.find(el => el.textContent?.includes('Start code (background)'))!
+      fireEvent.click(bgItem)
       expect(onStartWorkInBackground).toHaveBeenCalledWith(ticket)
     })
 
-    it('renders alongside the "Start coding in tab" menu item', () => {
+    it('calls onOpenInTerminal when "Open worktree in Terminal" is clicked', () => {
+      const onOpenInTerminal = vi.fn()
       const ticket = makeTicket()
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      expect(screen.getByText('Start coding in tab')).toBeTruthy()
-      expect(screen.getByText('Start coding in background')).toBeTruthy()
+      render(<TicketCard ticket={ticket} {...defaultCardProps} onOpenInTerminal={onOpenInTerminal} />)
+      const items = screen.getAllByTestId('dropdown-item')
+      const terminalItem = items.find(el => el.textContent?.includes('Open worktree in Terminal'))!
+      fireEvent.click(terminalItem)
+      expect(onOpenInTerminal).toHaveBeenCalledWith(ticket)
+    })
+
+    it('calls onOpenInVSCode when "Open worktree in VSCode" is clicked', () => {
+      const onOpenInVSCode = vi.fn()
+      const ticket = makeTicket()
+      render(<TicketCard ticket={ticket} {...defaultCardProps} onOpenInVSCode={onOpenInVSCode} />)
+      const items = screen.getAllByTestId('dropdown-item')
+      const vscodeItem = items.find(el => el.textContent?.includes('Open worktree in VSCode'))!
+      fireEvent.click(vscodeItem)
+      expect(onOpenInVSCode).toHaveBeenCalledWith(ticket)
+    })
+
+    it('shows "Open worktree in Claude" item', () => {
+      render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      const items = screen.getAllByTestId('dropdown-item')
+      expect(items.some(el => el.textContent?.includes('Open worktree in Claude'))).toBe(true)
+    })
+
+    it('calls onOpenInClaude when "Open worktree in Claude" is clicked', () => {
+      const onOpenInClaude = vi.fn()
+      const ticket = makeTicket()
+      render(<TicketCard ticket={ticket} {...defaultCardProps} onOpenInClaude={onOpenInClaude} />)
+      const items = screen.getAllByTestId('dropdown-item')
+      const claudeItem = items.find(el => el.textContent?.includes('Open worktree in Claude'))!
+      fireEvent.click(claudeItem)
+      expect(onOpenInClaude).toHaveBeenCalledWith(ticket)
+    })
+
+    it('dropdown content has shadow class', () => {
+      render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      const content = screen.getAllByTestId('dropdown-content')[0]
+      expect(content.className).toContain('shadow-xl')
     })
   })
 
-  describe('active session indicator', () => {
-    it('shows green pulse dot when session is active', () => {
-      const ticket = makeTicket()
-      const workSession = { id: '1', ticketKey: 'CON-1', status: 'active' }
-      const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} workSession={workSession} />
-      )
-      const dot = container.querySelector('.bg-green-400.animate-pulse')
-      expect(dot).toBeTruthy()
+  // ─── Inline editing ──────────────────────────────────────────────────────────
+
+  describe('inline editing', () => {
+    it('summary is rendered as a paragraph (not textarea) by default', () => {
+      const { container } = render(<TicketCard ticket={makeTicket({ summary: 'Hello' })} {...defaultCardProps} />)
+      expect(container.querySelector('p')).toBeTruthy()
+      expect(container.querySelector('textarea')).toBeNull()
     })
 
-    it('does not show dot when no active session', () => {
-      const ticket = makeTicket()
+    it('clicking summary switches to textarea', () => {
+      const { container } = render(<TicketCard ticket={makeTicket({ summary: 'Hello' })} {...defaultCardProps} />)
+      fireEvent.click(container.querySelector('p')!)
+      expect(container.querySelector('textarea')).toBeTruthy()
+      expect(container.querySelector('p')).toBeNull()
+    })
+
+    it('textarea is pre-filled with current summary', () => {
+      const { container } = render(<TicketCard ticket={makeTicket({ summary: 'Fix bug' })} {...defaultCardProps} />)
+      fireEvent.click(container.querySelector('p')!)
+      const ta = container.querySelector('textarea')!
+      expect(ta.value).toBe('Fix bug')
+    })
+
+    it('pressing Escape cancels edit and restores paragraph', () => {
+      const { container } = render(<TicketCard ticket={makeTicket({ summary: 'Original' })} {...defaultCardProps} />)
+      fireEvent.click(container.querySelector('p')!)
+      fireEvent.keyDown(container.querySelector('textarea')!, { key: 'Escape' })
+      expect(container.querySelector('p')).toBeTruthy()
+      expect(container.querySelector('p')!.textContent).toBe('Original')
+    })
+
+    it('pressing Enter saves and calls updateTicket', async () => {
+      const { updateTicket } = await import('@np3/jira/jira-api')
+      const onRefresh = vi.fn()
       const { container } = render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
+        <TicketCard ticket={makeTicket({ key: 'CON-5', summary: 'Old summary' })}
+          {...defaultCardProps} onRefresh={onRefresh} />
       )
-      const dot = container.querySelector('.bg-green-400.animate-pulse')
-      expect(dot).toBeNull()
+      fireEvent.click(container.querySelector('p')!)
+      const ta = container.querySelector('textarea')!
+      fireEvent.change(ta, { target: { value: 'New summary' } })
+      fireEvent.keyDown(ta, { key: 'Enter' })
+      await waitFor(() => expect(updateTicket).toHaveBeenCalledWith(
+        testConfig, 'CON-5', { summary: 'New summary' }
+      ))
+      await waitFor(() => expect(onRefresh).toHaveBeenCalled())
+    })
+
+    it('blurring textarea saves the edit', async () => {
+      const { updateTicket } = await import('@np3/jira/jira-api')
+      const { container } = render(
+        <TicketCard ticket={makeTicket({ key: 'CON-6', summary: 'Old' })} {...defaultCardProps} />
+      )
+      fireEvent.click(container.querySelector('p')!)
+      const ta = container.querySelector('textarea')!
+      fireEvent.change(ta, { target: { value: 'Blurred save' } })
+      fireEvent.blur(ta)
+      await waitFor(() => expect(updateTicket).toHaveBeenCalledWith(
+        testConfig, 'CON-6', { summary: 'Blurred save' }
+      ))
+    })
+
+    it('does not call updateTicket if summary is unchanged', async () => {
+      const { updateTicket } = await import('@np3/jira/jira-api')
+      const { container } = render(
+        <TicketCard ticket={makeTicket({ summary: 'Same' })} {...defaultCardProps} />
+      )
+      fireEvent.click(container.querySelector('p')!)
+      fireEvent.blur(container.querySelector('textarea')!)
+      await new Promise(r => setTimeout(r, 50))
+      expect(updateTicket).not.toHaveBeenCalled()
+    })
+
+    it('does not call updateTicket if trimmed value is empty', async () => {
+      const { updateTicket } = await import('@np3/jira/jira-api')
+      const { container } = render(
+        <TicketCard ticket={makeTicket({ summary: 'Some text' })} {...defaultCardProps} />
+      )
+      fireEvent.click(container.querySelector('p')!)
+      fireEvent.change(container.querySelector('textarea')!, { target: { value: '   ' } })
+      fireEvent.blur(container.querySelector('textarea')!)
+      await new Promise(r => setTimeout(r, 50))
+      expect(updateTicket).not.toHaveBeenCalled()
+    })
+
+    it('Shift+Enter does not save (allows newline)', () => {
+      const { container } = render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      fireEvent.click(container.querySelector('p')!)
+      const ta = container.querySelector('textarea')!
+      fireEvent.keyDown(ta, { key: 'Enter', shiftKey: true })
+      // Should still be editing
+      expect(container.querySelector('textarea')).toBeTruthy()
     })
   })
+
+  // ─── Context menu ─────────────────────────────────────────────────────────────
 
   describe('context menu', () => {
-    it('renders context menu with coding actions', () => {
-      const ticket = makeTicket()
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      // Context menu items should include the new actions
+    it('renders "Open in Claude" action', () => {
+      render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
       expect(screen.getByText('Open in Claude')).toBeTruthy()
-      expect(screen.getByText('Start coding in tab')).toBeTruthy()
-      expect(screen.getByText('Start coding in background')).toBeTruthy()
     })
 
-    it('renders Terminal and VSCode actions in context menu', () => {
-      const ticket = makeTicket()
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      expect(screen.getByText('Open in Terminal')).toBeTruthy()
-      expect(screen.getByText('Open in VSCode')).toBeTruthy()
+    it('renders "Start code" action in context menu', () => {
+      render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      const contextItems = screen.getAllByTestId('context-item')
+      expect(contextItems.some(el => el.textContent === 'Start code')).toBe(true)
     })
 
-    it('renders Edit ticket in context menu', () => {
-      const ticket = makeTicket()
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
+    it('renders "Start code (background)" action in context menu', () => {
+      render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      const contextItems = screen.getAllByTestId('context-item')
+      expect(contextItems.some(el => el.textContent?.includes('Start code (background)'))).toBe(true)
+    })
+
+    it('renders "Open worktree in Terminal" in context menu', () => {
+      render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      const contextItems = screen.getAllByTestId('context-item')
+      expect(contextItems.some(el => el.textContent?.includes('Open worktree in Terminal'))).toBe(true)
+    })
+
+    it('renders "Open worktree in VSCode" in context menu', () => {
+      render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      const contextItems = screen.getAllByTestId('context-item')
+      expect(contextItems.some(el => el.textContent?.includes('Open worktree in VSCode'))).toBe(true)
+    })
+
+    it('renders "Edit ticket" in context menu', () => {
+      render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
       expect(screen.getByText('Edit ticket')).toBeTruthy()
     })
 
-    it('renders Open in Jira in context menu', () => {
-      const ticket = makeTicket()
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
+    it('renders "Open in Jira" in context menu', () => {
+      render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
       expect(screen.getByText('Open in Jira')).toBeTruthy()
     })
 
-    it('renders Move to submenu in context menu', () => {
-      const ticket = makeTicket()
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
+    it('renders "Move to" sub-trigger in context menu', () => {
+      render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
       expect(screen.getByText('Move to')).toBeTruthy()
     })
 
-    it('calls onEditTicket when Edit ticket is clicked', () => {
+    it('renders "Backlog", "In Progress", "Done" in the Move submenu', () => {
+      render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      expect(screen.getByText('Backlog')).toBeTruthy()
+      expect(screen.getByText('In Progress')).toBeTruthy()
+      expect(screen.getByText('Done')).toBeTruthy()
+    })
+
+    it('shows "Continue session" in context menu when session is active', () => {
+      render(
+        <TicketCard ticket={makeTicket()} {...defaultCardProps}
+          workSession={{ id: '1', status: 'active' }} />
+      )
+      expect(screen.getAllByText('Continue session').length).toBeGreaterThan(0)
+    })
+
+    it('shows open PR links in context menu', () => {
+      render(<TicketCard ticket={makeTicket({
+        pullRequests: [{ id: '1', url: 'https://github.com/org/repo/pull/42', name: 'fix', status: 'OPEN' }],
+      })} {...defaultCardProps} />)
+      expect(screen.getByText('Open PR #42')).toBeTruthy()
+    })
+
+    it('does not show merged PRs in context menu', () => {
+      render(<TicketCard ticket={makeTicket({
+        pullRequests: [{ id: '1', url: 'https://github.com/org/repo/pull/99', name: 'fix', status: 'MERGED' }],
+      })} {...defaultCardProps} />)
+      expect(screen.queryByText('Open PR #99')).toBeNull()
+    })
+
+    it('calls onNewSession when "Open in Claude" is clicked', () => {
+      const onNewSession = vi.fn()
+      const ticket = makeTicket()
+      render(<TicketCard ticket={ticket} {...defaultCardProps} onNewSession={onNewSession} />)
+      fireEvent.click(screen.getByText('Open in Claude'))
+      expect(onNewSession).toHaveBeenCalledWith(ticket)
+    })
+
+    it('calls onEditTicket when "Edit ticket" is clicked', () => {
       const onEditTicket = vi.fn()
       const ticket = makeTicket()
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} onEditTicket={onEditTicket} />
-      )
+      render(<TicketCard ticket={ticket} {...defaultCardProps} onEditTicket={onEditTicket} />)
       fireEvent.click(screen.getByText('Edit ticket'))
       expect(onEditTicket).toHaveBeenCalledWith(ticket)
     })
 
-    it('calls onOpenInTerminal when Open in Terminal is clicked', () => {
-      const onOpenInTerminal = vi.fn()
-      const ticket = makeTicket()
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} onOpenInTerminal={onOpenInTerminal} />
-      )
-      fireEvent.click(screen.getByText('Open in Terminal'))
-      expect(onOpenInTerminal).toHaveBeenCalledWith(ticket)
+    it('calls onOpenUrl with Jira URL when "Open in Jira" is clicked', () => {
+      const onOpenUrl = vi.fn()
+      const ticket = makeTicket({ key: 'CON-7' })
+      render(<TicketCard ticket={ticket} {...defaultCardProps} onOpenUrl={onOpenUrl} />)
+      fireEvent.click(screen.getByText('Open in Jira'))
+      expect(onOpenUrl).toHaveBeenCalledWith('https://test.atlassian.net/browse/CON-7', 'CON-7')
     })
 
-    it('calls onOpenInVSCode when Open in VSCode is clicked', () => {
-      const onOpenInVSCode = vi.fn()
-      const ticket = makeTicket()
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} onOpenInVSCode={onOpenInVSCode} />
-      )
-      fireEvent.click(screen.getByText('Open in VSCode'))
-      expect(onOpenInVSCode).toHaveBeenCalledWith(ticket)
-    })
-
-    it('shows Continue session when session is active', () => {
-      const ticket = makeTicket()
-      const workSession = { id: '1', ticketKey: 'CON-1', status: 'active' }
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} workSession={workSession} />
-      )
-      expect(screen.getByText('Continue session')).toBeTruthy()
-    })
-
-    it('shows open PR links in context menu', () => {
-      const ticket = makeTicket({
-        pullRequests: [
-          { id: '1', url: 'https://github.com/org/repo/pull/42', name: 'fix-bug', status: 'OPEN' },
-        ],
-      })
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      expect(screen.getByText('Open PR #42')).toBeTruthy()
-    })
-  })
-
-  describe('quick action buttons', () => {
-    it('shows Start button when no active session', () => {
-      const ticket = makeTicket()
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      expect(screen.getByText('Start')).toBeTruthy()
-    })
-
-    it('shows Continue button when session is active', () => {
-      const ticket = makeTicket()
-      const workSession = { id: '1', ticketKey: 'CON-1', status: 'active' }
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} workSession={workSession} />
-      )
-      expect(screen.getByText('Continue')).toBeTruthy()
-    })
-
-    it('shows Move button for status transitions', () => {
-      const ticket = makeTicket()
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      expect(screen.getByText('Move')).toBeTruthy()
-    })
-
-    it('Start button uses blue accent styling as primary CTA', () => {
-      const ticket = makeTicket()
-      render(
-        <TicketCard ticket={ticket} {...defaultCardProps} />
-      )
-      const startButton = screen.getByText('Start').closest('button')
-      expect(startButton!.className).toContain('text-blue-400')
-      expect(startButton!.className).toContain('border-blue-700/30')
+    it('context menu content has dark background styling', () => {
+      render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
+      const contextContent = screen.getAllByTestId('context-content')[0]
+      expect(contextContent.className).toContain('bg-zinc-900')
+      expect(contextContent.className).toContain('border-zinc-700')
     })
   })
 })
+
+// ─── KanbanColumn ───────────────────────────────────────────────────────────────
 
 describe('KanbanColumn', () => {
   const defaultColumnProps = {
@@ -564,93 +668,136 @@ describe('KanbanColumn', () => {
     workSessions: [],
   }
 
-  describe('column header styling', () => {
-    it('renders a colored status dot for backlog', () => {
+  describe('column header', () => {
+    it('renders zinc status dot for backlog', () => {
       const { container } = render(
-        <KanbanColumn
-          title="Backlog"
-          status="backlog"
-          tickets={[]}
-          {...defaultColumnProps}
-        />
+        <KanbanColumn title="Backlog" status="backlog" tickets={[]} {...defaultColumnProps} />
       )
-      const dot = container.querySelector('.bg-zinc-500.rounded-full')
-      expect(dot).toBeTruthy()
+      expect(container.querySelector('.bg-zinc-500.rounded-full')).toBeTruthy()
     })
 
-    it('renders a blue status dot for in_progress', () => {
+    it('renders blue status dot for in_progress', () => {
       const { container } = render(
-        <KanbanColumn
-          title="In Progress"
-          status="in_progress"
-          tickets={[]}
-          {...defaultColumnProps}
-        />
+        <KanbanColumn title="In Progress" status="in_progress" tickets={[]} {...defaultColumnProps} />
       )
-      const dot = container.querySelector('.bg-blue-500.rounded-full')
-      expect(dot).toBeTruthy()
+      expect(container.querySelector('.bg-blue-500.rounded-full')).toBeTruthy()
     })
 
-    it('renders an emerald status dot for done', () => {
+    it('renders emerald status dot for done', () => {
       const { container } = render(
-        <KanbanColumn
-          title="Done"
-          status="done"
-          tickets={[]}
-          {...defaultColumnProps}
-        />
+        <KanbanColumn title="Done" status="done" tickets={[]} {...defaultColumnProps} />
       )
-      const dot = container.querySelector('.bg-emerald-500.rounded-full')
-      expect(dot).toBeTruthy()
+      expect(container.querySelector('.bg-emerald-500.rounded-full')).toBeTruthy()
     })
 
     it('renders uppercase column title', () => {
       const { container } = render(
-        <KanbanColumn
-          title="In Progress"
-          status="in_progress"
-          tickets={[]}
-          {...defaultColumnProps}
-        />
+        <KanbanColumn title="In Progress" status="in_progress" tickets={[]} {...defaultColumnProps} />
       )
       const titleEl = container.querySelector('.uppercase.tracking-wide')
-      expect(titleEl).toBeTruthy()
-      expect(titleEl!.textContent).toBe('In Progress')
+      expect(titleEl?.textContent).toBe('In Progress')
     })
   })
 
   describe('ticket count', () => {
-    it('shows the count of filtered tickets', () => {
+    it('shows count of tickets matching the column status', () => {
       const tickets = [
         makeTicket({ key: 'CON-1', status: 'backlog' }),
         makeTicket({ key: 'CON-2', status: 'backlog' }),
         makeTicket({ key: 'CON-3', status: 'in_progress' }),
       ]
       const { container } = render(
-        <KanbanColumn
-          title="Backlog"
-          status="backlog"
-          tickets={tickets}
-          {...defaultColumnProps}
-        />
+        <KanbanColumn title="Backlog" status="backlog" tickets={tickets} {...defaultColumnProps} />
       )
-      // Should show "2" for the 2 backlog tickets
       const countEl = container.querySelector('.text-zinc-600')
-      expect(countEl!.textContent).toBe('2')
+      expect(countEl?.textContent).toBe('2')
+    })
+
+    it('shows 0 when no matching tickets', () => {
+      const { container } = render(
+        <KanbanColumn title="Done" status="done" tickets={[]} {...defaultColumnProps} />
+      )
+      const countEl = container.querySelector('.text-zinc-600')
+      expect(countEl?.textContent).toBe('0')
     })
   })
 
   describe('empty state', () => {
-    it('shows "No tickets" when column is empty', () => {
+    it('shows "No tickets" message when column is empty', () => {
       render(
-        <KanbanColumn
-          title="Backlog"
-          status="backlog"
-          tickets={[]}
-          {...defaultColumnProps}
-        />
+        <KanbanColumn title="Backlog" status="backlog" tickets={[]} {...defaultColumnProps} />
       )
       expect(screen.getByText('No tickets')).toBeTruthy()
+    })
+
+    it('does not show "No tickets" when there are tickets', () => {
+      render(
+        <KanbanColumn title="Backlog" status="backlog"
+          tickets={[makeTicket({ key: 'CON-1', status: 'backlog' })]}
+          {...defaultColumnProps} />
+      )
+      expect(screen.queryByText('No tickets')).toBeNull()
+    })
+  })
+
+  describe('ticket rendering', () => {
+    it('renders TicketCards for tickets matching the column status', () => {
+      const tickets = [
+        makeTicket({ key: 'CON-10', status: 'backlog', summary: 'Backlog item' }),
+        makeTicket({ key: 'CON-11', status: 'in_progress', summary: 'In progress item' }),
+      ]
+      render(
+        <KanbanColumn title="Backlog" status="backlog" tickets={tickets} {...defaultColumnProps} />
+      )
+      expect(screen.getByText('Backlog item')).toBeTruthy()
+      expect(screen.queryByText('In progress item')).toBeNull()
+    })
+
+    it('shows pending skeleton cards while ticket is being created', () => {
+      const { container } = render(
+        <KanbanColumn title="Backlog" status="backlog" tickets={[]}
+          pendingTickets={[{ tempId: 'pending-1', status: 'backlog', epicKey: null }]}
+          {...defaultColumnProps} />
+      )
+      expect(container.querySelectorAll('[data-testid="skeleton"]').length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('create ticket button', () => {
+    it('renders a + button when onCreateTicket is provided', () => {
+      const { container } = render(
+        <KanbanColumn title="Backlog" status="backlog" tickets={[]}
+          onCreateTicket={vi.fn()} {...defaultColumnProps} />
+      )
+      const plusButton = container.querySelector('button[title="New ticket"]')
+      expect(plusButton).toBeTruthy()
+    })
+
+    it('does not render + button when onCreateTicket is not provided', () => {
+      const { container } = render(
+        <KanbanColumn title="Backlog" status="backlog" tickets={[]} {...defaultColumnProps} />
+      )
+      expect(container.querySelector('button[title="New ticket"]')).toBeNull()
+    })
+
+    it('calls onCreateTicket with the column status when + is clicked', () => {
+      const onCreateTicket = vi.fn()
+      const { container } = render(
+        <KanbanColumn title="Backlog" status="backlog" tickets={[]}
+          onCreateTicket={onCreateTicket} {...defaultColumnProps} />
+      )
+      fireEvent.click(container.querySelector('button[title="New ticket"]')!)
+      expect(onCreateTicket).toHaveBeenCalledWith('backlog')
+    })
+  })
+
+  describe('column background', () => {
+    it('uses jira-sunken background for column', () => {
+      const { container } = render(
+        <KanbanColumn title="Backlog" status="backlog" tickets={[]} {...defaultColumnProps} />
+      )
+      const col = container.querySelector('.bg-jira-sunken')
+      expect(col).toBeTruthy()
     })
   })
 })
