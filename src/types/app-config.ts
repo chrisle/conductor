@@ -47,6 +47,8 @@ export interface AppConfig {
   /** Last working directory used when opening a new terminal tab */
   lastTerminalCwd?: string
   claudeAccounts: ClaudeAccount[]
+  /** ID of the account to use by default for new AI tabs. null = system default (ANTHROPIC_API_KEY env var) */
+  defaultClaudeAccountId: string | null
   jiraConnections: JiraConnection[]
   aiCli: {
     claudeCode: {
@@ -121,6 +123,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     kanbanCompactColumns: [],
   },
   claudeAccounts: [],
+  defaultClaudeAccountId: null,
   jiraConnections: [],
   aiCli: {
     claudeCode: {

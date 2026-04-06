@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Activity, ArrowDownToLine, ArrowUpFromLine, GitBranch, Minus, Plus, RefreshCw } from 'lucide-react'
+import { Activity, ArrowDownToLine, ArrowUpFromLine, Check, GitBranch, Minus, Plus, RefreshCw, User } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -9,6 +9,7 @@ import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useUIStore } from '@/store/ui'
 import { useClaudeUsageStore } from '@/store/claude-usage'
+import { useConfigStore } from '@/store/config'
 import { useAggregateMetricsStore, selectAggregateSpeeds } from '@/store/aggregate-metrics'
 import { useShallow } from 'zustand/react/shallow'
 import { scrapeNow, formatResetCountdown, getPrimaryResetCountdown } from '@/lib/claude-usage-scraper'
@@ -65,6 +66,9 @@ function ZoomControl() {
 
 function ClaudeUsageIndicator() {
   const { usage, scraping, error } = useClaudeUsageStore()
+  const claudeAccounts = useConfigStore(s => s.config.claudeAccounts)
+  const defaultClaudeAccountId = useConfigStore(s => s.config.defaultClaudeAccountId)
+  const setDefaultClaudeAccountId = useConfigStore(s => s.setDefaultClaudeAccountId)
   const [open, setOpen] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   // Tick every 60s so relative reset countdowns stay fresh
@@ -182,6 +186,32 @@ function ClaudeUsageIndicator() {
                   <RefreshCw className={`w-3 h-3 ${scraping ? 'animate-spin' : ''}`} />
                   <span>Refresh</span>
                 </button>
+              </div>
+              {/* Account selector for new AI tabs */}
+              <div className="border-t border-zinc-700 pt-2.5">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <User className="w-3 h-3 text-zinc-500" />
+                  <span className="text-zinc-500 font-medium uppercase tracking-wide" style={{ fontSize: '10px' }}>Account for new AI tabs</span>
+                </div>
+                <div className="space-y-0.5">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setDefaultClaudeAccountId(null) }}
+                    className="w-full flex items-center justify-between gap-2 px-1.5 py-1 rounded hover:bg-zinc-800 transition-colors text-left"
+                  >
+                    <span className={defaultClaudeAccountId === null ? 'text-zinc-200' : 'text-zinc-400'}>Default</span>
+                    {defaultClaudeAccountId === null && <Check className="w-3 h-3 text-emerald-400 shrink-0" />}
+                  </button>
+                  {claudeAccounts.map(account => (
+                    <button
+                      key={account.id}
+                      onClick={(e) => { e.stopPropagation(); setDefaultClaudeAccountId(account.id) }}
+                      className="w-full flex items-center justify-between gap-2 px-1.5 py-1 rounded hover:bg-zinc-800 transition-colors text-left"
+                    >
+                      <span className={defaultClaudeAccountId === account.id ? 'text-zinc-200' : 'text-zinc-400'}>{account.name}</span>
+                      {defaultClaudeAccountId === account.id && <Check className="w-3 h-3 text-emerald-400 shrink-0" />}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           ) : error ? (

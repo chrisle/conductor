@@ -159,17 +159,28 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   // (see App.tsx tab:closeRequested listener) so no keydown handler is needed here.
 
   const claudeAccounts = useConfigStore(s => s.config.claudeAccounts)
+  const defaultClaudeAccountId = useConfigStore(s => s.config.defaultClaudeAccountId)
 
   function addClaudeTab(apiKey?: string, accountName?: string) {
     const cwd = rootPath || undefined
     const id = nextSessionId('claude-code')
+    // If no explicit account is given, fall back to the user's configured default account
+    let resolvedApiKey = apiKey
+    let resolvedName = accountName
+    if (resolvedApiKey === undefined && defaultClaudeAccountId) {
+      const defaultAccount = claudeAccounts.find(a => a.id === defaultClaudeAccountId)
+      if (defaultAccount) {
+        resolvedApiKey = defaultAccount.apiKey
+        resolvedName = defaultAccount.name
+      }
+    }
     useTabsStore.getState().addTab(groupId, {
       id,
       type: 'claude-code',
-      title: accountName ? `${id} (${accountName})` : id,
+      title: resolvedName ? `${id} (${resolvedName})` : id,
       filePath: cwd,
       initialCommand: 'claude\n',
-      apiKey,
+      apiKey: resolvedApiKey,
     })
   }
 

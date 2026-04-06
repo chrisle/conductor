@@ -21,6 +21,7 @@ export interface ConfigState {
   addClaudeAccount: (account: ClaudeAccount) => Promise<void>
   updateClaudeAccount: (id: string, patch: Partial<ClaudeAccount>) => Promise<void>
   removeClaudeAccount: (id: string) => Promise<void>
+  setDefaultClaudeAccountId: (id: string | null) => Promise<void>
 
   // Jira connection management
   addJiraConnection: (connection: JiraConnection) => Promise<void>
@@ -50,6 +51,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
           ...loaded,
           ui: { ...DEFAULT_APP_CONFIG.ui, ...loaded.ui },
           claudeAccounts: loaded.claudeAccounts ?? DEFAULT_APP_CONFIG.claudeAccounts,
+          defaultClaudeAccountId: loaded.defaultClaudeAccountId ?? DEFAULT_APP_CONFIG.defaultClaudeAccountId,
           jiraConnections: loaded.jiraConnections ?? DEFAULT_APP_CONFIG.jiraConnections,
           aiCli: {
             claudeCode: { ...DEFAULT_APP_CONFIG.aiCli.claudeCode, ...loaded.aiCli?.claudeCode },
@@ -147,10 +149,19 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
 
   removeClaudeAccount: async (id) => {
     const accounts = get().config.claudeAccounts.filter(a => a.id !== id)
+    // If the removed account was the default, clear the default
+    const defaultId = get().config.defaultClaudeAccountId === id ? null : get().config.defaultClaudeAccountId
     set(state => ({
-      config: { ...state.config, claudeAccounts: accounts },
+      config: { ...state.config, claudeAccounts: accounts, defaultClaudeAccountId: defaultId },
     }))
-    await window.electronAPI.patchConfig({ claudeAccounts: accounts } as any)
+    await window.electronAPI.patchConfig({ claudeAccounts: accounts, defaultClaudeAccountId: defaultId } as any)
+  },
+
+  setDefaultClaudeAccountId: async (id) => {
+    set(state => ({
+      config: { ...state.config, defaultClaudeAccountId: id },
+    }))
+    await window.electronAPI.patchConfig({ defaultClaudeAccountId: id } as any)
   },
 
   addJiraConnection: async (connection) => {

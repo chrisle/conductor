@@ -159,6 +159,40 @@ describe('useConfigStore', () => {
     })
   })
 
+  describe('setDefaultClaudeAccountId', () => {
+    it('defaults to null', () => {
+      expect(useConfigStore.getState().config.defaultClaudeAccountId).toBeNull()
+    })
+
+    it('sets an account as default', async () => {
+      await useConfigStore.getState().setDefaultClaudeAccountId('acc-1')
+      expect(useConfigStore.getState().config.defaultClaudeAccountId).toBe('acc-1')
+      expect(window.electronAPI.patchConfig).toHaveBeenCalledWith({ defaultClaudeAccountId: 'acc-1' })
+    })
+
+    it('clears the default by setting null', async () => {
+      await useConfigStore.getState().setDefaultClaudeAccountId('acc-1')
+      await useConfigStore.getState().setDefaultClaudeAccountId(null)
+      expect(useConfigStore.getState().config.defaultClaudeAccountId).toBeNull()
+      expect(window.electronAPI.patchConfig).toHaveBeenLastCalledWith({ defaultClaudeAccountId: null })
+    })
+
+    it('removeClaudeAccount clears defaultClaudeAccountId when removed account was default', async () => {
+      await useConfigStore.getState().addClaudeAccount({ id: 'acc-1', name: 'A', apiKey: 'k1' })
+      await useConfigStore.getState().setDefaultClaudeAccountId('acc-1')
+      await useConfigStore.getState().removeClaudeAccount('acc-1')
+      expect(useConfigStore.getState().config.defaultClaudeAccountId).toBeNull()
+    })
+
+    it('removeClaudeAccount preserves defaultClaudeAccountId when a different account is removed', async () => {
+      await useConfigStore.getState().addClaudeAccount({ id: 'acc-1', name: 'A', apiKey: 'k1' })
+      await useConfigStore.getState().addClaudeAccount({ id: 'acc-2', name: 'B', apiKey: 'k2' })
+      await useConfigStore.getState().setDefaultClaudeAccountId('acc-2')
+      await useConfigStore.getState().removeClaudeAccount('acc-1')
+      expect(useConfigStore.getState().config.defaultClaudeAccountId).toBe('acc-2')
+    })
+  })
+
   describe('Jira connections', () => {
     const conn = {
       id: 'jira-1',
