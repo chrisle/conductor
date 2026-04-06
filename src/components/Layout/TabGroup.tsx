@@ -230,18 +230,8 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [isFocused])
 
-  // Cmd+W closes active tab
-  useEffect(() => {
-    if (!isFocused || !group) return
-    function onKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
-        e.preventDefault()
-        if (group.activeTabId) closeTab(group.activeTabId)
-      }
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [isFocused, group?.activeTabId])
+  // Cmd+W close-tab is handled globally via the Electron menu accelerator
+  // (see App.tsx tab:closeRequested listener) so no keydown handler is needed here.
 
   const claudeAccounts = useConfigStore(s => s.config.claudeAccounts)
 

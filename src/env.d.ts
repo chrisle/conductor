@@ -24,6 +24,8 @@ interface ElectronAPI {
   openNewWindow: () => Promise<void>
   onCloseRequested: (callback: () => void) => void
   offCloseRequested: (callback: () => void) => void
+  onCloseTabRequested: (callback: () => void) => void
+  offCloseTabRequested: (callback: () => void) => void
 
   // File system
   readDir: (path: string) => Promise<Array<{

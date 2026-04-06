@@ -75,6 +75,37 @@ function App(): React.ReactElement {
     }
   }, [])
 
+  // Listen for Cmd+W routed from the Electron menu as "close tab" instead of "close window".
+  // Closes the active tab in the focused group; if no tabs remain, closes the window.
+  useEffect(() => {
+    const handler = () => {
+      const { focusedGroupId } = useLayoutStore.getState()
+      if (!focusedGroupId) {
+        window.electronAPI.close()
+        return
+      }
+      const group = useTabsStore.getState().groups[focusedGroupId]
+      if (!group || !group.activeTabId) {
+        window.electronAPI.close()
+        return
+      }
+
+      useTabsStore.getState().removeTab(focusedGroupId, group.activeTabId)
+
+      // If the group is now empty and there are other groups, remove the empty group
+      const updatedGroup = useTabsStore.getState().groups[focusedGroupId]
+      if (updatedGroup && updatedGroup.tabs.length === 0) {
+        const allGroupIds = Object.keys(useTabsStore.getState().groups)
+        if (allGroupIds.length > 1) {
+          useLayoutStore.getState().removeGroup(focusedGroupId)
+          useTabsStore.getState().removeGroup(focusedGroupId)
+        }
+      }
+    }
+    window.electronAPI.onCloseTabRequested(handler)
+    return () => window.electronAPI.offCloseTabRequested(handler)
+  }, [])
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     const shortcuts = useConfigStore.getState().config.customization.keyboardShortcuts
     const getKeys = (id: string) => {
