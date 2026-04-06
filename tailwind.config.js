@@ -3,11 +3,18 @@ module.exports = {
   darkMode: ['class'],
   content: [
     './src/**/*.{ts,tsx,js,jsx}',
-    './index.html'
+    './index.html',
+    '../np3-jira/src/**/*.{ts,tsx}'
   ],
   theme: {
     extend: {
       colors: {
+        jira: {
+          surface: '#22272b',
+          raised: '#2c333a',
+          sunken: '#161a1d',
+          hovered: '#282e33',
+        },
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',

@@ -28,7 +28,11 @@ export default defineConfig({
     clearScreen: false,
     root: '.',
     publicDir: 'public',
-    server: {},
+    server: {
+      fs: {
+        allow: ['..']
+      }
+    },
     build: {
       rollupOptions: {
         input: resolve('index.html')
