@@ -3,6 +3,7 @@ import { Terminal, GitBranch, FolderOpen } from 'lucide-react'
 import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useSidebarStore } from '@/store/sidebar'
+import { resolveTerminalCwd, saveTerminalCwd } from '@/lib/terminal-cwd'
 import SidebarLayout from '@/components/Sidebar/SidebarLayout'
 import type { SidebarAction } from '@/components/Sidebar/SidebarHeader'
 import FileTree from '@/components/Sidebar/FileTree'
@@ -24,7 +25,9 @@ export default function FileExplorerSidebar({ groupId }: FileExplorerSidebarProp
 
   function openNewTerminal() {
     const targetGroup = focusedGroupId || groupId
-    addTab(targetGroup, { type: 'terminal', title: 'Terminal', filePath: rootPath || undefined })
+    const cwd = resolveTerminalCwd()
+    saveTerminalCwd(cwd)
+    addTab(targetGroup, { type: 'terminal', title: 'Terminal', filePath: cwd })
   }
   function openGitGraph() {
     const targetGroup = focusedGroupId || groupId

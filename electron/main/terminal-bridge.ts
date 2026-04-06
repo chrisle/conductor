@@ -4,6 +4,7 @@
  */
 import { ipcMain, WebContents, app } from 'electron'
 import { StringDecoder } from 'string_decoder'
+import os from 'os'
 import WebSocket from 'ws'
 import { CONDUCTORD_SOCKET } from './conductord-client'
 
@@ -34,9 +35,14 @@ export function registerTerminalBridge(): void {
     }
 
     const connectionPromise = new Promise<{ isNew: boolean; autoPilot?: boolean }>((resolve, reject) => {
+      // Guard: never pass a macOS temp directory as working directory
+      const safeCwd = (cwd && !cwd.startsWith('/var/folders') && !cwd.startsWith('/private/var/folders'))
+        ? cwd
+        : os.homedir()
+
       const params = new URLSearchParams()
       params.set('id', id)
-      if (cwd) params.set('cwd', cwd)
+      if (safeCwd) params.set('cwd', safeCwd)
       if (command) params.set('command', command)
 
       const ws = new WebSocket(`ws+unix://${CONDUCTORD_SOCKET}:/ws/terminal?${params}`)

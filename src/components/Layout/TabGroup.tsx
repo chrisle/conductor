@@ -13,6 +13,7 @@ import { extensionRegistry } from '@/extensions'
 import { openProjectDialog, openProject, createNewProject } from '@/lib/project-io'
 import { useProjectStore } from '@/store/project'
 import { useConfigStore } from '@/store/config'
+import { resolveTerminalCwd, saveTerminalCwd } from '@/lib/terminal-cwd'
 import { useSettingsDialogStore } from '@/store/settingsDialog'
 import { killTerminal } from '@/lib/terminal-api'
 import { nextSessionId } from '@/lib/session-id'
@@ -311,7 +312,8 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
         useTabsStore.getState().addTab(groupId, { id: codexId, type: 'codex', title: codexId, filePath: cwd, initialCommand: 'codex\n' })
         setFloatingMenuOpen(false)
       } else if (n === 3) {
-        const cwd = rootPath || undefined
+        const cwd = resolveTerminalCwd()
+        saveTerminalCwd(cwd)
         useTabsStore.getState().addTab(groupId, { type: 'terminal', title: 'Terminal', filePath: cwd })
         setFloatingMenuOpen(false)
       } else if (n === 4) {
@@ -565,7 +567,8 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
         {/* Terminal */}
         <DropdownMenuItem
           onClick={() => {
-            const cwd = rootPath || undefined
+            const cwd = resolveTerminalCwd()
+            saveTerminalCwd(cwd)
             useTabsStore.getState().addTab(groupId, {
               type: 'terminal',
               title: 'Terminal',
@@ -702,7 +705,8 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
         {/* Terminal */}
         <ContextMenuItem
           onClick={() => {
-            const cwd = rootPath || undefined
+            const cwd = resolveTerminalCwd()
+            saveTerminalCwd(cwd)
             useTabsStore.getState().addTab(groupId, {
               type: 'terminal',
               title: 'Terminal',
