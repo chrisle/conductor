@@ -78,7 +78,7 @@ When nesting submenus, follow this pattern:
 
 ### For links/URLs
 
-Use the `<LinkContextMenu>` component from `@/components/ui/link-context-menu` instead of building a custom context menu. It provides "Open in Conductor" and "Open in System Browser" actions.
+Use the `<LinkContextMenu>` component from `@/components/ui/link-context-menu` instead of building a custom context menu. It provides "Open Action Board" and "Open Jira" actions.
 
 ## Session Info Panel Extension
 
