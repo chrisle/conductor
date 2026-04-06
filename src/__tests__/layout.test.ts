@@ -150,6 +150,116 @@ describe('useLayoutStore', () => {
         expect(root.children[2].node).toEqual({ type: 'leaf', groupId: 'g3' })
       }
     })
+
+    it('prepends to root when inserting at north edge', () => {
+      useLayoutStore.getState().setRoot({ type: 'leaf', groupId: 'g1' })
+      useLayoutStore.getState().insertAtEdge('north', 'g2')
+
+      const root = useLayoutStore.getState().root!
+      expect(root.type).toBe('column')
+      if (root.type === 'column') {
+        expect(root.children).toHaveLength(2)
+        expect(root.children[0].node).toEqual({ type: 'leaf', groupId: 'g2' })
+        expect(root.children[1].node).toEqual({ type: 'leaf', groupId: 'g1' })
+      }
+    })
+
+    it('appends to root when inserting at south edge', () => {
+      useLayoutStore.getState().setRoot({ type: 'leaf', groupId: 'g1' })
+      useLayoutStore.getState().insertAtEdge('south', 'g2')
+
+      const root = useLayoutStore.getState().root!
+      expect(root.type).toBe('column')
+      if (root.type === 'column') {
+        expect(root.children).toHaveLength(2)
+        expect(root.children[0].node).toEqual({ type: 'leaf', groupId: 'g1' })
+        expect(root.children[1].node).toEqual({ type: 'leaf', groupId: 'g2' })
+      }
+    })
+
+    it('prepends to existing column when inserting at north edge', () => {
+      const initial: LayoutNode = {
+        type: 'column',
+        children: [
+          { node: { type: 'leaf', groupId: 'g1' }, size: 1 },
+          { node: { type: 'leaf', groupId: 'g2' }, size: 1 },
+        ],
+      }
+      useLayoutStore.getState().setRoot(initial)
+      useLayoutStore.getState().insertAtEdge('north', 'g3')
+
+      const root = useLayoutStore.getState().root!
+      expect(root.type).toBe('column')
+      if (root.type === 'column') {
+        expect(root.children).toHaveLength(3)
+        expect(root.children[0].node).toEqual({ type: 'leaf', groupId: 'g3' })
+        expect(root.children[1].node).toEqual({ type: 'leaf', groupId: 'g1' })
+        expect(root.children[2].node).toEqual({ type: 'leaf', groupId: 'g2' })
+      }
+    })
+
+    it('appends to existing column when inserting at south edge', () => {
+      const initial: LayoutNode = {
+        type: 'column',
+        children: [
+          { node: { type: 'leaf', groupId: 'g1' }, size: 1 },
+          { node: { type: 'leaf', groupId: 'g2' }, size: 1 },
+        ],
+      }
+      useLayoutStore.getState().setRoot(initial)
+      useLayoutStore.getState().insertAtEdge('south', 'g3')
+
+      const root = useLayoutStore.getState().root!
+      expect(root.type).toBe('column')
+      if (root.type === 'column') {
+        expect(root.children).toHaveLength(3)
+        expect(root.children[2].node).toEqual({ type: 'leaf', groupId: 'g3' })
+      }
+    })
+
+    it('wraps row root in column when inserting at north edge', () => {
+      const initial: LayoutNode = {
+        type: 'row',
+        children: [
+          { node: { type: 'leaf', groupId: 'g1' }, size: 1 },
+          { node: { type: 'leaf', groupId: 'g2' }, size: 1 },
+        ],
+      }
+      useLayoutStore.getState().setRoot(initial)
+      useLayoutStore.getState().insertAtEdge('north', 'g3')
+
+      const root = useLayoutStore.getState().root!
+      expect(root.type).toBe('column')
+      if (root.type === 'column') {
+        expect(root.children).toHaveLength(2)
+        // First child is the new panel
+        expect(root.children[0].node).toEqual({ type: 'leaf', groupId: 'g3' })
+        // Second child is the original row
+        expect(root.children[1].node.type).toBe('row')
+      }
+    })
+
+    it('wraps column root in row when inserting at east edge', () => {
+      const initial: LayoutNode = {
+        type: 'column',
+        children: [
+          { node: { type: 'leaf', groupId: 'g1' }, size: 1 },
+          { node: { type: 'leaf', groupId: 'g2' }, size: 1 },
+        ],
+      }
+      useLayoutStore.getState().setRoot(initial)
+      useLayoutStore.getState().insertAtEdge('east', 'g3')
+
+      const root = useLayoutStore.getState().root!
+      expect(root.type).toBe('row')
+      if (root.type === 'row') {
+        expect(root.children).toHaveLength(2)
+        // First child is the original column
+        expect(root.children[0].node.type).toBe('column')
+        // Second child is the new panel
+        expect(root.children[1].node).toEqual({ type: 'leaf', groupId: 'g3' })
+      }
+    })
   })
 
   describe('removeGroup', () => {

@@ -10,10 +10,12 @@ import SettingsDialog from "../SettingsDialog";
 const DRAGGING_TAB_KEY = "__dragging_tab__";
 const DRAGGING_GROUP_KEY = "__dragging_group__";
 
-function EdgeDropZone({ side }: { side: "west" | "east" }) {
+function EdgeDropZone({ side }: { side: "west" | "east" | "north" | "south" }) {
   const [active, setActive] = useState(false);
   const { insertAtEdge, removeGroup } = useLayoutStore();
   const { moveTab, createGroup } = useTabsStore();
+
+  const isHorizontal = side === "north" || side === "south";
 
   function handleDragOver(e: React.DragEvent) {
     e.preventDefault();
@@ -51,9 +53,17 @@ function EdgeDropZone({ side }: { side: "west" | "east" }) {
   return (
     <div
       className={cn(
-        "absolute top-0 bottom-0 w-4 z-20 transition-all",
-        side === "west" ? "left-0" : "right-0",
-        active && "w-8"
+        "absolute z-20 transition-all",
+        // Horizontal edges span full width at top/bottom
+        isHorizontal && "left-0 right-0 h-4",
+        side === "north" && "top-0",
+        side === "south" && "bottom-0",
+        isHorizontal && active && "h-8",
+        // Vertical edges span full height at left/right
+        !isHorizontal && "top-0 bottom-0 w-4",
+        side === "west" && "left-0",
+        side === "east" && "right-0",
+        !isHorizontal && active && "w-8"
       )}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -62,8 +72,15 @@ function EdgeDropZone({ side }: { side: "west" | "east" }) {
       {active && (
         <div
           className={cn(
-            "absolute inset-y-0 w-1 bg-blue-500",
-            side === "west" ? "left-0" : "right-0"
+            "absolute bg-blue-500",
+            // Horizontal indicator: thin line spanning full width
+            isHorizontal && "inset-x-0 h-1",
+            side === "north" && "top-0",
+            side === "south" && "bottom-0",
+            // Vertical indicator: thin line spanning full height
+            !isHorizontal && "inset-y-0 w-1",
+            side === "west" && "left-0",
+            side === "east" && "right-0"
           )}
         />
       )}
@@ -99,9 +116,11 @@ export default function MainLayout(): React.ReactElement {
       <ActivityBar />
       <Sidebar defaultGroupId={getFirstGroupId(root)} />
       <div className="flex-1 min-w-0 overflow-hidden relative">
+        <EdgeDropZone side="north" />
         <EdgeDropZone side="west" />
         <SplitPane node={root} />
         <EdgeDropZone side="east" />
+        <EdgeDropZone side="south" />
       </div>
       <SettingsDialog />
     </div>
