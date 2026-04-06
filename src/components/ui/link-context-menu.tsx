@@ -13,14 +13,20 @@ interface LinkContextMenuProps {
   url: string
   title?: string
   children: React.ReactNode
+  /** Label for the in-app browser action (default: "Open Action Board") */
+  openInAppLabel?: string
+  /** Label for the external browser action (default: "Open Jira") */
+  openExternalLabel?: string
 }
 
 /**
  * Wraps any element to provide a right-click context menu with:
- * - Open in Conductor (in-app browser tab)
- * - Open in System Browser (external)
+ * - Open Action Board (in-app browser tab)
+ * - Open Jira (external)
+ *
+ * Labels can be customized via openInAppLabel / openExternalLabel props.
  */
-export function LinkContextMenu({ url, title, children }: LinkContextMenuProps) {
+export function LinkContextMenu({ url, title, children, openInAppLabel = 'Open Action Board', openExternalLabel = 'Open Jira' }: LinkContextMenuProps) {
   const { addTab } = useTabsStore()
   const { focusedGroupId } = useLayoutStore()
 
@@ -47,11 +53,11 @@ export function LinkContextMenu({ url, title, children }: LinkContextMenuProps) 
       <ContextMenuContent>
         <ContextMenuItem onClick={openInConductor}>
           <Globe className="w-3.5 h-3.5 mr-2" />
-          Open in Conductor
+          {openInAppLabel}
         </ContextMenuItem>
         <ContextMenuItem onClick={openInSystemBrowser}>
           <ExternalLink className="w-3.5 h-3.5 mr-2" />
-          Open in System Browser
+          {openExternalLabel}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
