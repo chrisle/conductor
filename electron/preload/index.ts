@@ -70,6 +70,7 @@ const electronAPI = {
   // Claude
   getCwd: () => ipcRenderer.invoke('app:getCwd'),
   listClaudeSessions: (projectPath: string) => ipcRenderer.invoke('claude:listSessions', projectPath),
+  getSessionMetrics: (sessionId: string, projectPath: string) => ipcRenderer.invoke('claude:getSessionMetrics', sessionId, projectPath),
   getTicketBinding: (ticketKey: string) => ipcRenderer.invoke('tickets:getBinding', ticketKey),
   setTicketBinding: (ticketKey: string, data: any) => ipcRenderer.invoke('tickets:setBinding', ticketKey, data),
   getAllTicketBindings: () => ipcRenderer.invoke('tickets:getAllBindings'),
