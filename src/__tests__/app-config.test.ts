@@ -36,6 +36,10 @@ describe('DEFAULT_APP_CONFIG', () => {
   it('has empty disabled extensions', () => {
     expect(DEFAULT_APP_CONFIG.extensions.disabled).toEqual([])
   })
+
+  it('has terminal scrollback default of 10000 lines', () => {
+    expect(DEFAULT_APP_CONFIG.customization.terminal.scrollback).toBe(10000)
+  })
 })
 
 describe('AppConfig type structure', () => {

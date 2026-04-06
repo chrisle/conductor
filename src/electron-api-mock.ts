@@ -145,11 +145,6 @@ const mock: typeof window.electronAPI = {
   onTerminalExit: (cb: Parameters<typeof window.electronAPI.onTerminalExit>[0]) => { terminalListeners.exit.add(cb) },
   offTerminalExit: (cb: Parameters<typeof window.electronAPI.offTerminalExit>[0]) => { terminalListeners.exit.delete(cb) },
 
-  // Scrollback disk persistence (in-memory for web mode)
-  scrollbackSave: async () => {},
-  scrollbackLoad: async () => null,
-  scrollbackCleanup: async () => {},
-
   // Git
   worktreeList: async () => [],
   worktreeAdd: async () => ({ success: false, error: 'Not available in web mode' }),

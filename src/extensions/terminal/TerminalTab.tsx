@@ -8,7 +8,6 @@ import { useTabsStore } from "@/store/tabs";
 import { createXtermTerminal } from "./xterm-init";
 import type { Terminal, SerializeAddon } from "./xterm-init";
 import { terminalConfig } from "./theme";
-import { ScrollbackManager, PREPEND_CHUNK_LINES } from "@/lib/scrollback-manager";
 
 export type { TerminalWatcher, TerminalTabExtraProps } from "./types";
 
@@ -44,8 +43,6 @@ export default function TerminalTab({
   const pendingDataRef = useRef<string[]>([]);
   const pendingExitRef = useRef(false);
   const mountGenerationRef = useRef(0);
-  const scrollbackRef = useRef<ScrollbackManager | null>(null);
-  const loadingScrollbackRef = useRef(false);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error' | null>('connecting');
@@ -163,7 +160,6 @@ export default function TerminalTab({
             .replace(/\x1bc/g, "");
           if (!data) continue;
         }
-        scrollbackRef.current?.onData(data);
         writePtyData(term, data);
         onPtyDataRef.current?.(data);
       }
@@ -190,9 +186,6 @@ export default function TerminalTab({
           .replace(/\x1bc/g, "");
         if (!data) return;
       }
-
-      // Feed data into scrollback manager for disk persistence
-      scrollbackRef.current?.onData(data);
 
       writePtyData(term, data);
 
@@ -221,9 +214,6 @@ export default function TerminalTab({
     };
 
     let needsRefitAfterFirstData = true;
-
-    // Initialize scrollback manager for this session
-    scrollbackRef.current = new ScrollbackManager(tabId);
 
     clearContainer();
     createTerminal(containerEl).then(({ term, fitAddon, serializeAddon }) => {
@@ -322,60 +312,16 @@ export default function TerminalTab({
       });
 
       // Track whether user scrolled up so we don't auto-scroll on new data.
-      // Also triggers lazy-loading of older scrollback chunks from disk.
       const el = containerRef.current;
       const onWheel = (e: WheelEvent) => {
         if (e.deltaY < 0) {
           userScrolledUpRef.current = true;
-
-          // Lazy-load older scrollback when user scrolls near the top
-          requestAnimationFrame(() => {
-            if (disposed || loadingScrollbackRef.current) return;
-            const buf = term.buffer.active;
-            const scrollback = scrollbackRef.current;
-            // Trigger load when within 50 lines of the top
-            if (buf.viewportY <= 50 && scrollback && scrollback.getChunkCount() > 0) {
-              loadingScrollbackRef.current = true;
-              scrollback.loadOlderChunk().then((chunkText) => {
-                if (disposed || !chunkText) {
-                  loadingScrollbackRef.current = false;
-                  return;
-                }
-                // Prepend older text as plain text lines at the top of the terminal buffer.
-                // We write the chunk followed by enough newlines to push current content down,
-                // but since xterm doesn't support true prepending, we write the old text
-                // above the current viewport using the write API.
-                const lines = chunkText.split('\n');
-                const toShow = lines.slice(Math.max(0, lines.length - PREPEND_CHUNK_LINES));
-                const prependText = toShow.join('\r\n') + '\r\n';
-
-                // Save current viewport position
-                const prevBaseY = buf.baseY;
-
-                // Write the old content — this will push existing content down in the scrollback
-                term.write('\x1b[s' + prependText + '\x1b[u', () => {
-                  // Scroll to keep the user's view roughly stable
-                  const newBaseY = buf.baseY;
-                  const delta = newBaseY - prevBaseY;
-                  if (delta > 0) {
-                    term.scrollToLine(buf.viewportY + delta);
-                  }
-                  loadingScrollbackRef.current = false;
-                });
-              }).catch(() => {
-                loadingScrollbackRef.current = false;
-              });
-            }
-          });
         } else if (e.deltaY > 0) {
           requestAnimationFrame(() => {
             if (disposed) return;
             const buf = term.buffer.active;
             if (buf.viewportY >= buf.baseY) {
               userScrolledUpRef.current = false;
-              // When user scrolls back to bottom, reset prepend state
-              // so the next scroll-up starts fresh
-              scrollbackRef.current?.resetPrependState();
             }
           });
         }
@@ -411,8 +357,6 @@ export default function TerminalTab({
         resizeObserver.disconnect();
         watchLastMatchRef.current.clear();
         watchLastFireRef.current.clear();
-        // Flush scrollback to disk before disposing
-        scrollbackRef.current?.saveRemaining();
         // Serialize the buffer with colors before disposing so it can
         // be restored on reattach (same approach as VS Code).
         try {

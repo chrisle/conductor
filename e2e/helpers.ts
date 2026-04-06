@@ -18,9 +18,6 @@ export async function installTestMocks(page: Page) {
     const knownSessions = new Set<string>()
 
     let mockSessions: any[] = []
-    /** In-memory scrollback storage for tests */
-    const scrollbackStore = new Map<string, Map<number, string>>()
-
     const testTerminal = {
       /** Push data into xterm as if it came from the PTY */
       feedData(id: string, data: string) {
@@ -36,8 +33,6 @@ export async function installTestMocks(page: Page) {
       creates,
       /** Set sessions returned by conductordGetSessions */
       setSessions(sessions: any[]) { mockSessions = sessions },
-      /** Access scrollback store for assertions */
-      scrollbackStore,
     }
 
     ;(window as any).__testTerminal__ = testTerminal
@@ -97,18 +92,6 @@ export async function installTestMocks(page: Page) {
       offTerminalData: (cb: Function) => { dataListeners.delete(cb) },
       onTerminalExit: (cb: Function) => { exitListeners.add(cb) },
       offTerminalExit: (cb: Function) => { exitListeners.delete(cb) },
-
-      // Scrollback
-      scrollbackSave: async (sessionId: string, index: number, data: string) => {
-        if (!scrollbackStore.has(sessionId)) scrollbackStore.set(sessionId, new Map())
-        scrollbackStore.get(sessionId)!.set(index, data)
-      },
-      scrollbackLoad: async (sessionId: string, index: number) => {
-        return scrollbackStore.get(sessionId)?.get(index) ?? null
-      },
-      scrollbackCleanup: async (sessionId: string) => {
-        scrollbackStore.delete(sessionId)
-      },
 
       // Git
       gitShortstat: async () => ({ insertions: 0, deletions: 0 }),

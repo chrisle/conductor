@@ -73,11 +73,6 @@ interface ElectronAPI {
   onTerminalExit: (callback: (event: IpcRendererEvent, id: string) => void) => void
   offTerminalExit: (callback: (event: IpcRendererEvent, id: string) => void) => void
 
-  // Scrollback disk persistence
-  scrollbackSave: (sessionId: string, chunkIndex: number, data: string) => Promise<void>
-  scrollbackLoad: (sessionId: string, chunkIndex: number) => Promise<string | null>
-  scrollbackCleanup: (sessionId: string) => Promise<void>
-
   // Git
   worktreeList: (repoPath: string) => Promise<Array<{ path: string; branch: string; bare: boolean; head: string }>>
   worktreeAdd: (repoPath: string, branchName: string, basePath?: string) => Promise<{ success: boolean; path?: string; error?: string }>
