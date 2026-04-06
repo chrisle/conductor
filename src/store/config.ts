@@ -62,6 +62,8 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
             keyboardShortcuts: (loaded as any).customization?.keyboardShortcuts ?? [...DEFAULT_KEYBOARD_SHORTCUTS],
           },
         }
+        // Persist merged defaults so newly-added fields are on disk for future patchConfig calls
+        await window.electronAPI.saveConfig(merged)
         set({ config: merged, ready: true })
         return
       }

@@ -26,6 +26,7 @@ export const useCodexSettings = create<CodexSettingsStore>((set) => ({
 // Hydrate from config store once ready
 useConfigStore.subscribe((state) => {
   if (state.ready) {
-    useCodexSettings.setState(state.config.aiCli.codex)
+    const codex = state.config.aiCli?.codex
+    if (codex) useCodexSettings.setState(codex)
   }
 })
