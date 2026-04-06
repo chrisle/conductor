@@ -7,13 +7,15 @@ interface SplitPaneProps {
   node: LayoutNode
 }
 
-export default function SplitPane({ node }: SplitPaneProps): React.ReactElement {
+function SplitPane({ node }: SplitPaneProps): React.ReactElement {
   if (node.type === 'leaf') {
     return <TabGroup groupId={node.groupId} />
   }
 
   return <ContainerNode node={node} />
 }
+
+export default React.memo(SplitPane)
 
 // ---------------------------------------------------------------------------
 // N-ary container renderer
@@ -114,51 +116,54 @@ function ResizeHandle({ node, index, isRow }: ResizeHandleProps): React.ReactEle
     const startSizes = node.children.map(c => c.size)
     const totalSize = startSizes.reduce((s, v) => s + v, 0)
 
+    // rAF handle for throttling layout updates to once per frame
+    let rafId: number | null = null
+
     const handleMouseMove = (ev: MouseEvent) => {
       if (!isResizing.current || !container) return
-      const rect = container.getBoundingClientRect()
-      const pos = isRow ? ev.clientX - rect.left : ev.clientY - rect.top
-      const containerSize = isRow ? rect.width : rect.height
 
-      // Calculate cumulative size up to and including child[index] based on mouse pos
-      // Minimum 10% of total per panel
-      const minSize = totalSize * 0.05
+      // Throttle store updates to one per animation frame to avoid
+      // expensive layout recalculations on every mouse event
+      if (rafId !== null) return
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        if (!isResizing.current) return
 
-      // pos / containerSize tells us what fraction of the container the mouse is at
-      const fraction = Math.max(0, Math.min(1, pos / containerSize))
+        const rect = container.getBoundingClientRect()
+        const pos = isRow ? ev.clientX - rect.left : ev.clientY - rect.top
+        const containerSize = isRow ? rect.width : rect.height
 
-      // The fraction represents the split point between child[index] and child[index+1]
-      // Calculate size before split point and after
-      const sizeBefore = fraction * totalSize
-      const sizeAfter = totalSize - sizeBefore
+        const minSize = totalSize * 0.05
+        const fraction = Math.max(0, Math.min(1, pos / containerSize))
 
-      // Distribute sizeBefore among children 0..index, sizeAfter among index+1..end
-      // Keep proportions within each group
-      const beforeGroup = startSizes.slice(0, index + 1)
-      const afterGroup = startSizes.slice(index + 1)
-      const beforeTotal = beforeGroup.reduce((s, v) => s + v, 0)
-      const afterTotal = afterGroup.reduce((s, v) => s + v, 0)
+        const sizeBefore = fraction * totalSize
+        const sizeAfter = totalSize - sizeBefore
 
-      const newSizes = [...startSizes]
+        const beforeGroup = startSizes.slice(0, index + 1)
+        const afterGroup = startSizes.slice(index + 1)
+        const beforeTotal = beforeGroup.reduce((s, v) => s + v, 0)
+        const afterTotal = afterGroup.reduce((s, v) => s + v, 0)
 
-      // Scale the before group
-      if (beforeTotal > 0) {
-        for (let i = 0; i <= index; i++) {
-          newSizes[i] = Math.max(minSize, (beforeGroup[i] / beforeTotal) * sizeBefore)
+        const newSizes = [...startSizes]
+
+        if (beforeTotal > 0) {
+          for (let i = 0; i <= index; i++) {
+            newSizes[i] = Math.max(minSize, (beforeGroup[i] / beforeTotal) * sizeBefore)
+          }
         }
-      }
-      // Scale the after group
-      if (afterTotal > 0) {
-        for (let i = index + 1; i < startSizes.length; i++) {
-          newSizes[i] = Math.max(minSize, (afterGroup[i - index - 1] / afterTotal) * sizeAfter)
+        if (afterTotal > 0) {
+          for (let i = index + 1; i < startSizes.length; i++) {
+            newSizes[i] = Math.max(minSize, (afterGroup[i - index - 1] / afterTotal) * sizeAfter)
+          }
         }
-      }
 
-      setSizes(anchorGroupId, newSizes)
+        setSizes(anchorGroupId, newSizes)
+      })
     }
 
     const handleMouseUp = () => {
       isResizing.current = false
+      if (rafId !== null) cancelAnimationFrame(rafId)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
       document.removeEventListener('mousemove', handleMouseMove)

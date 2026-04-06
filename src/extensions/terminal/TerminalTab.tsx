@@ -12,7 +12,7 @@ import { ScrollbackManager, PREPEND_CHUNK_LINES } from "@/lib/scrollback-manager
 
 export type { TerminalWatcher, TerminalTabExtraProps } from "./types";
 
-export default function TerminalTab({
+function TerminalTabInner({
   tabId,
   groupId,
   isActive,
@@ -598,3 +598,6 @@ export default function TerminalTab({
 </div>
   );
 }
+
+const TerminalTab = React.memo(TerminalTabInner)
+export default TerminalTab
