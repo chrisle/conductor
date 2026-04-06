@@ -102,6 +102,7 @@ const electronAPI = {
   // Jira
   jiraFetch: (url: string, headers: Record<string, string>) => ipcRenderer.invoke('jira:fetch', url, headers),
   jiraPost: (url: string, headers: Record<string, string>, body: string) => ipcRenderer.invoke('jira:post', url, headers, body),
+  jiraPut: (url: string, headers: Record<string, string>, body: string) => ipcRenderer.invoke('jira:put', url, headers, body),
 
   // Extensions
   getExtensionsDir: () => ipcRenderer.invoke('extensions:getDir'),

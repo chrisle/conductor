@@ -178,6 +178,7 @@ const mock: typeof window.electronAPI = {
   // Jira
   jiraFetch: async () => ({ ok: false, status: 0, body: null, error: 'Not available in web mode' }),
   jiraPost: async () => ({ ok: false, status: 0, body: null, error: 'Not available in web mode' }),
+  jiraPut: async () => ({ ok: false, status: 0, body: null, error: 'Not available in web mode' }),
 
   // Extensions
   getExtensionsDir: async () => '/tmp/extensions',
