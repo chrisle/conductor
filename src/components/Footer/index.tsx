@@ -88,7 +88,10 @@ function ClaudeUsageIndicator() {
 
   if (!usage && !scraping && !error) return null
 
-  // Detect if user has exceeded normal usage and is on extra/overage billing
+  // Detect if user has exceeded normal usage and is on extra/overage billing.
+  // Only treat as overage when the all-models tier is fully exhausted (>=100%)
+  // AND an extra-usage tier is actively accruing. Having an extra-usage tier
+  // alone (e.g. leftover from a previous cycle) should not override the label.
   const hasExtraUsage = usage?.tiers?.some(t => t.label === 'Extra usage' && t.percent > 0) ?? false
   const allModelsAt100 = (usage?.percentUsed ?? 0) >= 100
 
@@ -102,7 +105,7 @@ function ClaudeUsageIndicator() {
     ? 'Checking...'
     : error
       ? 'Usage: error'
-      : (allModelsAt100 || hasExtraUsage)
+      : (allModelsAt100 && hasExtraUsage)
         ? 'Extra usage'
         : displayPercent != null
           ? `Usage: ${displayPercent}%`
@@ -114,7 +117,7 @@ function ClaudeUsageIndicator() {
 
   // Color based on all-models percentage (the weekly cap)
   const colorPercent = usage?.percentUsed
-  const isOverage = allModelsAt100 || hasExtraUsage
+  const isOverage = allModelsAt100 && hasExtraUsage
   const dotColor = isOverage
     ? 'bg-red-400'
     : colorPercent != null
