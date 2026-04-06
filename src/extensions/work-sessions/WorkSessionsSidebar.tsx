@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Bot, ChevronDown, ChevronRight, Copy, Folder, FolderOpen, FolderPlus, GitBranch, Hash, Info, Key, LayoutGrid, Pencil, Search, Square, Terminal, Trash2 } from 'lucide-react'
+import { Bot, ChevronDown, ChevronRight, Copy, Eye, Folder, FolderOpen, FolderPlus, GitBranch, Hash, Info, Key, LayoutGrid, Pencil, Search, Square, Terminal, Trash2 } from 'lucide-react'
 import {
   Tooltip,
   TooltipContent,
@@ -26,6 +26,7 @@ import { useLayoutStore, type LayoutNode } from '@/store/layout'
 import { useProjectStore, type SessionFolder } from '@/store/project'
 import type { WorkSession } from '@/types/work-session'
 import { useSessionInfoRegistry, type SessionInfoContext } from './session-info-registry'
+import TerminalPreview from './TerminalPreview'
 
 // ── Types ──────────────────────────────────────────────
 
@@ -414,6 +415,17 @@ function SessionTreeNode({
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
+          {/* Terminal preview: opens a sub-panel showing the last few lines of output */}
+          <ContextMenuSub>
+            <ContextMenuSubTrigger className="gap-2 text-xs cursor-pointer">
+              <Eye className="w-3.5 h-3.5" />
+              Preview
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="bg-zinc-900 border-zinc-700 w-[340px]">
+              <TerminalPreview sessionId={session.session.name} />
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+          <ContextMenuSeparator className="bg-zinc-700" />
           <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={startRename}>
             <Pencil className="w-3.5 h-3.5" />
             Rename
