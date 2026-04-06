@@ -143,18 +143,18 @@ function App(): React.ReactElement {
       return
     }
 
-    // Panel switching: Meta+1 through Meta+9 toggle sidebar panels by position
-    for (let i = 1; i <= 9; i++) {
-      if (matchesShortcut(`panel${i}`)) {
+    // Panel switching: Meta+1 through Meta+9 toggle sidebar panels by position.
+    // Works dynamically for any number of registered sidebar extensions.
+    if (e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.key >= '1' && e.key <= '9') {
+      const i = parseInt(e.key, 10)
+      const sidebarExtensions = extensionRegistry.getSidebarExtensions()
+      // Exclude settings since it opens a dialog, not a sidebar
+      const panels = sidebarExtensions.filter(ext => ext.id !== 'settings')
+      if (i <= panels.length) {
         e.preventDefault()
-        const sidebarExtensions = extensionRegistry.getSidebarExtensions()
-        // Exclude settings since it opens a dialog, not a sidebar
-        const panels = sidebarExtensions.filter(ext => ext.id !== 'settings')
-        if (i <= panels.length) {
-          useActivityBarStore.getState().toggleExtension(panels[i - 1].id)
-        }
-        return
+        useActivityBarStore.getState().toggleExtension(panels[i - 1].id)
       }
+      return
     }
   }, [])
 
