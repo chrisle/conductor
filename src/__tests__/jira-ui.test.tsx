@@ -139,7 +139,7 @@ describe('TicketCard', () => {
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
       const lozenge = container.querySelector('.uppercase.tracking-wide')
-      expect(lozenge!.className).toContain('text-blue-200')
+      expect(lozenge!.className).toContain('text-blue-400')
     })
 
     it('uses emerald styling for done status', () => {
@@ -148,7 +148,7 @@ describe('TicketCard', () => {
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
       const lozenge = container.querySelector('.uppercase.tracking-wide')
-      expect(lozenge!.className).toContain('text-emerald-200')
+      expect(lozenge!.className).toContain('text-emerald-400')
     })
 
     it('uses zinc styling for backlog status', () => {
@@ -157,7 +157,7 @@ describe('TicketCard', () => {
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
       const lozenge = container.querySelector('.uppercase.tracking-wide')
-      expect(lozenge!.className).toContain('text-zinc-100')
+      expect(lozenge!.className).toContain('text-zinc-300')
     })
   })
 
@@ -241,13 +241,13 @@ describe('TicketCard', () => {
       expect(summary!.textContent).toBe('Fix the login bug')
     })
 
-    it('uses bright text color for summary readability', () => {
+    it('uses near-white text for summary readability', () => {
       const ticket = makeTicket({ summary: 'Readable summary' })
       const { container } = render(
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
       const summary = container.querySelector('p')
-      expect(summary!.className).toContain('text-zinc-100')
+      expect(summary!.className).toContain('text-zinc-50')
     })
   })
 
@@ -541,8 +541,8 @@ describe('TicketCard', () => {
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
       const startButton = screen.getByText('Start').closest('button')
-      expect(startButton!.className).toContain('text-blue-300')
-      expect(startButton!.className).toContain('border-blue-500/30')
+      expect(startButton!.className).toContain('text-blue-400')
+      expect(startButton!.className).toContain('border-blue-700/30')
     })
   })
 })
