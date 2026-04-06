@@ -44,9 +44,9 @@ function contextColor(percent: number): string {
   return 'text-emerald-400'
 }
 
-// Format token speed for compact display: 1234 → "1.2k t/s", 42 → "42 t/s"
-function formatSpeed(speed: number | null): string {
-  if (speed == null) return '— t/s'
+// Format token speed for compact display: 1234 → "1.2k t/s", 42 → "42 t/s", null/0 → "∞"
+export function formatSpeed(speed: number | null): string {
+  if (speed == null || speed === 0) return '∞'
   if (speed >= 1000) return `${(speed / 1000).toFixed(1)}k t/s`
   return `${speed} t/s`
 }
@@ -192,16 +192,19 @@ export default function ClaudeCodeTab({
               </span>
             </>
           )}
-          {metrics.outputSpeed != null && (
+          <div className="w-px h-3 bg-zinc-700" />
+          {metrics.outputSpeed != null ? (
             <>
-              <div className="w-px h-3 bg-zinc-700" />
+              {/* ↓ = input (tokens coming in), ↑ = output (tokens going out) */}
               <span className="text-ui-xs font-mono text-zinc-500">
-                {formatSpeed(metrics.inputSpeed)} in
+                ↓ {formatSpeed(metrics.inputSpeed)}
               </span>
               <span className="text-ui-xs font-mono text-zinc-500">
-                {formatSpeed(metrics.outputSpeed)} out
+                ↑ {formatSpeed(metrics.outputSpeed)}
               </span>
             </>
+          ) : (
+            <span className="text-ui-xs font-mono text-zinc-500">∞</span>
           )}
         </>
       )}
