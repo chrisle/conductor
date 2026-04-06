@@ -4,6 +4,8 @@ export interface UsageTier {
   label: string
   percent: number
   resets: string | null
+  /** ISO timestamp of when this tier resets (parsed from resets string) */
+  resetsAt: string | null
   spent: string | null
 }
 

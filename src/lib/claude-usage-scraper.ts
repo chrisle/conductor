@@ -28,6 +28,84 @@ let scrapeCounter = 0
 let lastScrapeTime = 0
 
 /**
+ * Parse a reset string like "Resets Apr 10 at 7am" into an ISO timestamp.
+ * Assumes the reset is in the near future (within ~30 days).
+ */
+export function parseResetToISO(resetStr: string): string | null {
+  // Match patterns: "Resets Apr 10 at 7am", "Resets May 1", "Resets 9:00pm"
+  const dateTimeMatch = resetStr.match(/Resets\s+([A-Z][a-z]+)\s+(\d+)\s+at\s+(\d+)(?::(\d+))?\s*(am|pm)/i)
+  const dateOnlyMatch = resetStr.match(/Resets\s+([A-Z][a-z]+)\s+(\d+)/i)
+  const timeOnlyMatch = resetStr.match(/Resets\s+(?:at\s+)?(\d+)(?::(\d+))?\s*(am|pm)/i)
+
+  const now = new Date()
+
+  if (dateTimeMatch) {
+    const [, monthStr, dayStr, hourStr, minStr, ampm] = dateTimeMatch
+    return buildResetDate(now, monthStr, parseInt(dayStr, 10), hourStr, minStr || '0', ampm)
+  }
+
+  if (dateOnlyMatch && !dateTimeMatch) {
+    const [, monthStr, dayStr] = dateOnlyMatch
+    // Default to midnight when no time specified
+    return buildResetDate(now, monthStr, parseInt(dayStr, 10), '12', '0', 'am')
+  }
+
+  if (timeOnlyMatch && !dateOnlyMatch) {
+    const [, hourStr, minStr, ampm] = timeOnlyMatch
+    // Time-only means today or tomorrow
+    let hour = parseInt(hourStr, 10)
+    if (ampm.toLowerCase() === 'pm' && hour !== 12) hour += 12
+    if (ampm.toLowerCase() === 'am' && hour === 12) hour = 0
+    const candidate = new Date(now)
+    candidate.setHours(hour, parseInt(minStr || '0', 10), 0, 0)
+    // If the time already passed today, it means tomorrow
+    if (candidate <= now) candidate.setDate(candidate.getDate() + 1)
+    return candidate.toISOString()
+  }
+
+  return null
+}
+
+const MONTH_MAP: Record<string, number> = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+}
+
+function buildResetDate(now: Date, monthStr: string, day: number, hourStr: string, minStr: string, ampm: string): string {
+  const month = MONTH_MAP[monthStr.toLowerCase().slice(0, 3)]
+  if (month === undefined) return now.toISOString()
+
+  let hour = parseInt(hourStr, 10)
+  if (ampm.toLowerCase() === 'pm' && hour !== 12) hour += 12
+  if (ampm.toLowerCase() === 'am' && hour === 12) hour = 0
+
+  const candidate = new Date(now.getFullYear(), month, day, hour, parseInt(minStr, 10), 0, 0)
+  // If date is in the past, assume next year
+  if (candidate < now) candidate.setFullYear(candidate.getFullYear() + 1)
+  return candidate.toISOString()
+}
+
+/**
+ * Format a reset ISO timestamp as a relative countdown string.
+ * Returns e.g. "Resets in 2h", "Resets in 3d", or the original string as fallback.
+ */
+export function formatResetCountdown(resetsAt: string | null, fallback: string | null): string | null {
+  if (!resetsAt) return fallback
+  const now = Date.now()
+  const target = new Date(resetsAt).getTime()
+  const diffMs = target - now
+  if (diffMs <= 0) return fallback
+
+  const diffMin = Math.floor(diffMs / 60_000)
+  if (diffMin < 1) return 'Resets in <1m'
+  if (diffMin < 60) return `Resets in ${diffMin}m`
+  const diffHrs = Math.floor(diffMin / 60)
+  if (diffHrs < 24) return `Resets in ${diffHrs}h`
+  const diffDays = Math.floor(diffHrs / 24)
+  return `Resets in ${diffDays}d`
+}
+
+/**
  * Parse the raw output from `claude "/usage"`.
  *
  * Example output:
@@ -75,12 +153,13 @@ export function parseUsageOutput(raw: string): Pick<ClaudeUsageData, 'percentUse
     const resetMatch = content.match(/Resets\s+([A-Z][a-z]+\s+\d+(?:\s+at\s+\d+(?::\d+)?(?:am|pm)?)?)/i)
       || content.match(/Resets\s+(?:at\s+)?(\d+(?::\d+)?\s*(?:am|pm))/i)
     const resets = resetMatch ? `Resets ${resetMatch[1]}` : null
+    const resetsAt = resets ? parseResetToISO(resets) : null
 
     // Extract dollar amounts for extra usage: "$1.96 / $100.00 spent"
     const spentMatch = content.match(/(\$[\d.]+\s*\/\s*\$[\d.]+)\s*spent/i)
     const spent = spentMatch ? spentMatch[1] + ' spent' : null
 
-    tiers.push({ label, percent, resets, spent })
+    tiers.push({ label, percent, resets, resetsAt, spent })
   }
 
   return { percentUsed, sessionPercent, tiers }

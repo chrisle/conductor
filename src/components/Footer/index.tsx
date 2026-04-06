@@ -9,7 +9,7 @@ import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useUIStore } from '@/store/ui'
 import { useClaudeUsageStore } from '@/store/claude-usage'
-import { scrapeNow } from '@/lib/claude-usage-scraper'
+import { scrapeNow, formatResetCountdown } from '@/lib/claude-usage-scraper'
 
 
 function Item({ children }: { children: React.ReactNode }) {
@@ -65,6 +65,12 @@ function ClaudeUsageIndicator() {
   const { usage, scraping, error } = useClaudeUsageStore()
   const [open, setOpen] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
+  // Tick every 60s so relative reset countdowns stay fresh
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   // Close on outside click
   useEffect(() => {
@@ -80,15 +86,21 @@ function ClaudeUsageIndicator() {
 
   if (!usage && !scraping && !error) return null
 
+  // Detect if user has exceeded normal usage and is on extra/overage billing
+  const hasExtraUsage = usage?.tiers?.some(t => t.label === 'Extra usage' && t.percent > 0) ?? false
+  const allModelsAt100 = (usage?.percentUsed ?? 0) >= 100
+
   // Show session % in the label, fall back to all-models %
   const displayPercent = usage?.sessionPercent ?? usage?.percentUsed
   const label = scraping
     ? 'Checking...'
     : error
       ? 'Usage: error'
-      : displayPercent != null
-        ? `Usage: ${displayPercent}%`
-        : 'Usage: --'
+      : (allModelsAt100 || hasExtraUsage)
+        ? 'Extra usage'
+        : displayPercent != null
+          ? `Usage: ${displayPercent}%`
+          : 'Usage: --'
 
   const timeAgo = usage?.lastUpdated
     ? formatTimeAgo(usage.lastUpdated)
@@ -96,12 +108,17 @@ function ClaudeUsageIndicator() {
 
   // Color based on all-models percentage (the weekly cap)
   const colorPercent = usage?.percentUsed
-  const dotColor = colorPercent != null
-    ? colorPercent >= 90 ? 'bg-red-400' : colorPercent >= 70 ? 'bg-amber-400' : 'bg-emerald-400'
-    : error ? 'bg-red-400' : 'bg-zinc-500'
-  const textColor = colorPercent != null
-    ? colorPercent >= 90 ? 'text-red-400' : colorPercent >= 70 ? 'text-amber-400' : 'text-emerald-400'
-    : 'text-zinc-500'
+  const isOverage = allModelsAt100 || hasExtraUsage
+  const dotColor = isOverage
+    ? 'bg-red-400'
+    : colorPercent != null
+      ? colorPercent >= 90 ? 'bg-red-400' : colorPercent >= 70 ? 'bg-amber-400' : 'bg-emerald-400'
+      : error ? 'bg-red-400' : 'bg-zinc-500'
+  const textColor = isOverage
+    ? 'text-red-400'
+    : colorPercent != null
+      ? colorPercent >= 90 ? 'text-red-400' : colorPercent >= 70 ? 'text-amber-400' : 'text-emerald-400'
+      : 'text-zinc-500'
 
   return (
     <div className="relative" ref={panelRef}>
@@ -133,7 +150,11 @@ function ClaudeUsageIndicator() {
                     </div>
                     {(tier.resets || tier.spent) && (
                       <div className="flex items-center justify-between gap-2 mt-1">
-                        {tier.resets && <span className="text-zinc-500">{tier.resets}</span>}
+                        {tier.resets && (
+                          <span className="text-zinc-500">
+                            {formatResetCountdown(tier.resetsAt, tier.resets)}
+                          </span>
+                        )}
                         {tier.spent && <span className="text-zinc-500">{tier.spent}</span>}
                       </div>
                     )}
