@@ -10,6 +10,7 @@ import { useLayoutStore } from '@/store/layout'
 import { useUIStore } from '@/store/ui'
 import { useClaudeUsageStore } from '@/store/claude-usage'
 import { useAggregateMetricsStore, selectAggregateSpeeds } from '@/store/aggregate-metrics'
+import { useShallow } from 'zustand/react/shallow'
 import { scrapeNow, formatResetCountdown, getPrimaryResetCountdown } from '@/lib/claude-usage-scraper'
 
 
@@ -199,7 +200,7 @@ export function formatSpeed(speed: number | null): string {
 }
 
 function AggregateTokenSpeed() {
-  const { inputSpeed, outputSpeed } = useAggregateMetricsStore(selectAggregateSpeeds)
+  const { inputSpeed, outputSpeed } = useAggregateMetricsStore(useShallow(selectAggregateSpeeds))
   // Only render when at least one direction has data
   if (inputSpeed == null && outputSpeed == null) return null
   return (
