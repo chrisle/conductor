@@ -120,7 +120,7 @@ export default function ClaudeCodeTab({
       <Toggle
         on={autoPilot}
         onToggle={() => setAutoPilot(!autoPilot)}
-        label="Fuck it"
+        label="Auto Pilot"
       />
       {sessionId && (
         <>
