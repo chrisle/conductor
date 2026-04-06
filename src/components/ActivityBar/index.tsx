@@ -5,6 +5,7 @@ import { extensionRegistry } from '@/extensions'
 import { useActivityBarStore } from '@/store/activityBar'
 import { useSettingsDialogStore } from '@/store/settingsDialog'
 import { useNotificationsStore } from '@/store/notifications'
+import { useConfigStore } from '@/store/config'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 export default function ActivityBar(): React.ReactElement {
@@ -24,10 +25,29 @@ export default function ActivityBar(): React.ReactElement {
 
   const unreadCount = useNotificationsStore(s => s.notifications.filter(n => !n.read).length)
 
+  // Build a map from extension id to its keyboard shortcut display string.
+  // All sidebar extensions (excluding settings) are numbered 1-9 in toolbar order.
+  const allPanels = allSidebarExtensions.filter(ext => ext.id !== 'settings')
+  const shortcuts = useConfigStore(s => s.config.customization.keyboardShortcuts)
+  const panelShortcutMap = new Map<string, string>()
+  allPanels.forEach((ext, i) => {
+    const shortcutDef = shortcuts.find(s => s.id === `panel${i + 1}`)
+    if (shortcutDef?.keys) {
+      // Convert "Meta+1" to "⌘1" for display
+      const display = shortcutDef.keys
+        .replace(/Meta\+/i, '⌘')
+        .replace(/Ctrl\+/i, '⌃')
+        .replace(/Shift\+/i, '⇧')
+        .replace(/Alt\+/i, '⌥')
+      panelShortcutMap.set(ext.id, display)
+    }
+  })
+
   const renderIcon = (ext: typeof allSidebarExtensions[0]) => {
     const Icon = ext.icon!
     const isActive = activeExtensionId === ext.id
     const showBadge = ext.id === 'notifications' && unreadCount > 0
+    const shortcut = panelShortcutMap.get(ext.id)
     return (
       <Tooltip key={ext.id}>
         <TooltipTrigger asChild>
@@ -48,7 +68,10 @@ export default function ActivityBar(): React.ReactElement {
             )}
           </button>
         </TooltipTrigger>
-        <TooltipContent side="right">{ext.name}</TooltipContent>
+        <TooltipContent side="right">
+          {ext.name}
+          {shortcut && <span className="ml-2 text-zinc-500">{shortcut}</span>}
+        </TooltipContent>
       </Tooltip>
     )
   }
