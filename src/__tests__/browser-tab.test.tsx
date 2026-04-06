@@ -39,6 +39,19 @@ function emitWebviewEvent(el: HTMLElement, name: string, props: Record<string, a
   act(() => { el.dispatchEvent(event) })
 }
 
+// JSDOM doesn't provide DataTransfer — create a minimal mock for drag tests
+class MockDataTransfer {
+  private data: Record<string, string> = {}
+  get types() { return Object.keys(this.data) }
+  setData(type: string, value: string) { this.data[type] = value }
+  getData(type: string) { return this.data[type] ?? '' }
+  clearData() { this.data = {} }
+  dropEffect = 'none' as DataTransfer['dropEffect']
+  effectAllowed = 'all' as DataTransfer['effectAllowed']
+  files = [] as unknown as FileList
+  items = [] as unknown as DataTransferItemList
+}
+
 describe('BrowserTab', () => {
   const defaultProps = {
     tabId: 'tab-1',
@@ -50,7 +63,7 @@ describe('BrowserTab', () => {
   beforeEach(() => {
     useTabsStore.setState({
       groups: {
-        'group-1': { id: 'group-1', tabs: [{ id: 'tab-1', type: 'browser', title: 'Browser' }], activeTabId: 'tab-1' },
+        'group-1': { id: 'group-1', tabs: [{ id: 'tab-1', type: 'browser', title: 'Browser' }], activeTabId: 'tab-1', tabHistory: ['tab-1'] },
       },
     })
   })
@@ -148,5 +161,92 @@ describe('BrowserTab', () => {
     expect(input).toHaveValue('https://jira.example.com/board')
     // src must still be the original — the key fix for the double-navigation bug
     expect(wv.getAttribute('src')).toBe('https://jira.example.com')
+  })
+
+  describe('drag overlay for webview tabs', () => {
+    // Helper: create a DragEvent with a mock dataTransfer (JSDOM lacks DataTransfer)
+    function makeDragEvent(type: string, dt?: MockDataTransfer): DragEvent {
+      const event = new Event(type, { bubbles: true }) as DragEvent
+      if (dt) {
+        Object.defineProperty(event, 'dataTransfer', { value: dt })
+      }
+      return event
+    }
+
+    function startTabDrag(): MockDataTransfer {
+      const dt = new MockDataTransfer()
+      dt.setData('__dragging_tab__', 'some-tab-id')
+      act(() => { window.dispatchEvent(makeDragEvent('dragstart', dt)) })
+      return dt
+    }
+
+    it('shows a drag overlay when a tab drag starts', () => {
+      const { container } = render(<BrowserTab {...defaultProps} />)
+      const webviewContainer = container.querySelector('.flex-1.overflow-hidden.relative')!
+
+      // No overlay initially
+      expect(webviewContainer.querySelector('.absolute.inset-0.z-10')).toBeNull()
+
+      startTabDrag()
+
+      // Overlay should now be visible on top of the webview
+      expect(webviewContainer.querySelector('.absolute.inset-0.z-10')).not.toBeNull()
+    })
+
+    it('hides the drag overlay on dragend', () => {
+      const { container } = render(<BrowserTab {...defaultProps} />)
+      const webviewContainer = container.querySelector('.flex-1.overflow-hidden.relative')!
+
+      startTabDrag()
+      expect(webviewContainer.querySelector('.absolute.inset-0.z-10')).not.toBeNull()
+
+      act(() => { window.dispatchEvent(makeDragEvent('dragend')) })
+      expect(webviewContainer.querySelector('.absolute.inset-0.z-10')).toBeNull()
+    })
+
+    it('hides the drag overlay on drop', () => {
+      const { container } = render(<BrowserTab {...defaultProps} />)
+      const webviewContainer = container.querySelector('.flex-1.overflow-hidden.relative')!
+
+      startTabDrag()
+      expect(webviewContainer.querySelector('.absolute.inset-0.z-10')).not.toBeNull()
+
+      act(() => { window.dispatchEvent(makeDragEvent('drop')) })
+      expect(webviewContainer.querySelector('.absolute.inset-0.z-10')).toBeNull()
+    })
+
+    it('does not show overlay for non-tab drags', () => {
+      const { container } = render(<BrowserTab {...defaultProps} />)
+      const webviewContainer = container.querySelector('.flex-1.overflow-hidden.relative')!
+
+      // Simulate a generic drag (e.g. file from OS) without the __dragging_tab__ type
+      const dt = new MockDataTransfer()
+      dt.setData('text/plain', 'hello')
+      act(() => { window.dispatchEvent(makeDragEvent('dragstart', dt)) })
+
+      // Overlay should NOT appear for non-tab drags
+      expect(webviewContainer.querySelector('.absolute.inset-0.z-10')).toBeNull()
+    })
+
+    it('cleans up window event listeners on unmount', () => {
+      const addSpy = vi.spyOn(window, 'addEventListener')
+      const removeSpy = vi.spyOn(window, 'removeEventListener')
+
+      const { unmount } = render(<BrowserTab {...defaultProps} />)
+
+      const dragEvents = ['dragstart', 'dragend', 'drop']
+      for (const event of dragEvents) {
+        expect(addSpy).toHaveBeenCalledWith(event, expect.any(Function))
+      }
+
+      unmount()
+
+      for (const event of dragEvents) {
+        expect(removeSpy).toHaveBeenCalledWith(event, expect.any(Function))
+      }
+
+      addSpy.mockRestore()
+      removeSpy.mockRestore()
+    })
   })
 })

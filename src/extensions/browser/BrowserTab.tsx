@@ -58,6 +58,9 @@ type WebviewElement = HTMLElement & {
   executeJavaScript: (js: string) => Promise<unknown>
 }
 
+// Custom data type set during tab drags — must match the key in TabGroup.tsx
+const DRAGGING_TAB_KEY = '__dragging_tab__'
+
 export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
   const initialUrl = tab.url
   // inputUrl drives the address bar display; it updates on navigation events
@@ -76,6 +79,31 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
   const getConfig = useConfigStore.getState
   const getRootPath = () => useSidebarStore.getState().rootPath
   const getFocusedGroupId = () => useLayoutStore.getState().focusedGroupId
+
+  // Track whether a tab drag is in progress so we can show a transparent overlay
+  // on top of the webview. Electron's <webview> is a native element that swallows
+  // all drag events, preventing the NESW drop zone logic in TabGroup from firing.
+  const [isTabDragging, setIsTabDragging] = useState(false)
+
+  useEffect(() => {
+    const handleDragStart = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes(DRAGGING_TAB_KEY)) {
+        setIsTabDragging(true)
+      }
+    }
+    const handleDragEnd = () => setIsTabDragging(false)
+    const handleDrop = () => setIsTabDragging(false)
+
+    window.addEventListener('dragstart', handleDragStart)
+    window.addEventListener('dragend', handleDragEnd)
+    window.addEventListener('drop', handleDrop)
+
+    return () => {
+      window.removeEventListener('dragstart', handleDragStart)
+      window.removeEventListener('dragend', handleDragEnd)
+      window.removeEventListener('drop', handleDrop)
+    }
+  }, [])
 
   // Sync nav state (back/forward buttons, URL bar, tab title) from the webview
   // without touching the src attribute.
@@ -324,7 +352,10 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
       webview.removeEventListener('new-window', handleNewWindow)
       webview.removeEventListener('console-message', handleConsoleMessage)
     }
-  }, [webviewRef.current, syncNavState, addTab, groupId, tabId, updateTab, handleConductorAction])
+  // webviewRef.current is read inside the effect body (not as a dependency) —
+  // the ref is always set by the time this effect runs because React assigns
+  // refs during commit, before effects fire.
+  }, [syncNavState, addTab, groupId, tabId, updateTab, handleConductorAction])
 
   function normalizeUrl(raw: string): string {
     const trimmed = raw.trim()
@@ -422,7 +453,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
       </div>
 
       {/* Webview */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden relative">
         {React.createElement('webview', {
           ref: webviewRef,
           src: initialSrc,
@@ -433,6 +464,12 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
           allowpopups: 'true',
           style: { display: 'flex', width: '100%', height: '100%' }
         })}
+        {/* Transparent overlay shown during tab drags to intercept drag events
+            that the native <webview> element would otherwise swallow, allowing
+            TabGroup's NESW drop zone logic to receive them. */}
+        {isTabDragging && (
+          <div className="absolute inset-0 z-10" />
+        )}
       </div>
     </div>
   )
