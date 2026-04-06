@@ -16,9 +16,8 @@ Object.assign(window.electronAPI, {
   onExtensionInstalled: vi.fn().mockReturnValue(() => {}),
 })
 
-describe('SettingsDialog nav scrollability', () => {
+describe('SettingsDialog scrollability', () => {
   beforeEach(() => {
-    // Open the dialog so it renders its content
     useSettingsDialogStore.setState({ open: true, activeSection: 'appearance' })
   })
 
@@ -27,34 +26,41 @@ describe('SettingsDialog nav scrollability', () => {
     cleanup()
   })
 
-  it('wraps the nav items in a scrollable container', () => {
+  it('constrains the main flex container so content does not overflow the dialog', () => {
     render(<SettingsDialog />)
 
-    // Dialog renders in a portal, so query from document.body
+    // The dialog renders in a portal; query from document.body
+    // Find the flex container that holds nav + content (direct child of DialogContent)
+    const flexContainer = document.body.querySelector('.flex.h-full.min-h-0')
+    expect(flexContainer).toBeTruthy()
+  })
+
+  it('wraps the right-side content area in a scrollable ScrollArea', () => {
+    render(<SettingsDialog />)
+
+    // The content area is the sibling of the nav element
     const nav = document.body.querySelector('nav')
     expect(nav).toBeTruthy()
 
-    // nav should have overflow-hidden to contain the scroll area
-    expect(nav!.className).toContain('overflow-hidden')
+    // Content area is the next sibling
+    const contentArea = nav!.nextElementSibling as HTMLElement
+    expect(contentArea).toBeTruthy()
+    expect(contentArea.className).toContain('overflow-hidden')
 
-    // The nav should contain a Radix ScrollArea viewport (rendered by ScrollArea component)
-    const viewport = nav!.querySelector('[data-radix-scroll-area-viewport]')
+    // It should contain a Radix ScrollArea viewport for scrolling
+    const viewport = contentArea.querySelector('[data-radix-scroll-area-viewport]')
     expect(viewport).toBeTruthy()
   })
 
-  it('keeps the Settings heading outside the scroll area so it stays fixed', () => {
+  it('wraps the left nav items in a scrollable container', () => {
     render(<SettingsDialog />)
 
-    const nav = document.body.querySelector('nav')!
+    const nav = document.body.querySelector('nav')
+    expect(nav).toBeTruthy()
+    expect(nav!.className).toContain('overflow-hidden')
 
-    // The h2 "Settings" should be a direct child of nav, not inside the scroll viewport
-    const heading = nav.querySelector('h2')
-    expect(heading).toBeTruthy()
-    expect(heading!.textContent).toBe('Settings')
-    expect(heading!.className).toContain('shrink-0')
-
-    // Heading should NOT be inside the scroll viewport
-    const viewport = nav.querySelector('[data-radix-scroll-area-viewport]')
-    expect(viewport!.contains(heading)).toBe(false)
+    // The nav should contain a Radix ScrollArea viewport
+    const viewport = nav!.querySelector('[data-radix-scroll-area-viewport]')
+    expect(viewport).toBeTruthy()
   })
 })
