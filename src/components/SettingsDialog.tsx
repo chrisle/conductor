@@ -61,7 +61,8 @@ export default function SettingsDialog(): React.ReactElement {
         className="max-w-5xl w-[90vw] h-[70vh] p-0 gap-0 bg-zinc-900 border-zinc-700 overflow-hidden"
       >
         <VisuallyHidden><DialogTitle>Settings</DialogTitle></VisuallyHidden>
-        <div className="flex h-full">
+        {/* min-h-0 prevents the grid child from growing past the dialog's h-[70vh] */}
+        <div className="flex h-full min-h-0">
           {/* Side nav */}
           {/* Settings nav — ScrollArea ensures all items are reachable when the list exceeds dialog height */}
           <nav className="w-48 shrink-0 border-r border-zinc-800 bg-zinc-900/80 py-3 flex flex-col overflow-hidden">
