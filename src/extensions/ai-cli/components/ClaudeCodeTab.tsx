@@ -19,6 +19,7 @@ import { useTabsStore } from '@/store/tabs';
 import { useWorkSessionsStore } from '@/store/work-sessions';
 import { useConfigStore } from '@/store/config'
 import { useSessionMetrics } from '../hooks/useSessionMetrics';
+import { useAggregateMetricsStore } from '@/store/aggregate-metrics';
 
 // Extract a Jira ticket key (e.g. "PROJ-123") from the tab title.
 function extractTicketKey(title: string): string | null {
@@ -82,6 +83,23 @@ export default function ClaudeCodeTab({
   const sessionId = useSessionDetect(tab.initialCommand, projectPath);
   const metrics = useSessionMetrics(sessionId, projectPath);
   const onPtyData = usePtyHandlers(tabId, groupId);
+
+  // Push per-tab token speeds into the aggregate store for the Footer's summed t/s display
+  useEffect(() => {
+    if (metrics) {
+      useAggregateMetricsStore.getState().setTabMetrics(tabId, {
+        inputSpeed: metrics.inputSpeed,
+        outputSpeed: metrics.outputSpeed,
+      });
+    } else {
+      useAggregateMetricsStore.getState().removeTab(tabId);
+    }
+  }, [tabId, metrics?.inputSpeed, metrics?.outputSpeed]);
+
+  // Clean up aggregate store entry when tab unmounts
+  useEffect(() => {
+    return () => { useAggregateMetricsStore.getState().removeTab(tabId); };
+  }, [tabId]);
 
   // Persist the detected session ID back to the work session so
   // "Open in Claude" can resume the same session next time.

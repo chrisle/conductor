@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Activity, GitBranch, Minus, Plus, RefreshCw } from 'lucide-react'
+import { Activity, ArrowDownToLine, ArrowUpFromLine, GitBranch, Minus, Plus, RefreshCw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -9,6 +9,7 @@ import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useUIStore } from '@/store/ui'
 import { useClaudeUsageStore } from '@/store/claude-usage'
+import { useAggregateMetricsStore, selectAggregateSpeeds } from '@/store/aggregate-metrics'
 import { scrapeNow, formatResetCountdown, getPrimaryResetCountdown } from '@/lib/claude-usage-scraper'
 
 
@@ -190,6 +191,27 @@ function ClaudeUsageIndicator() {
   )
 }
 
+// Format token speed for compact display: 1234 → "1.2k t/s", 42 → "42 t/s"
+export function formatSpeed(speed: number | null): string {
+  if (speed == null) return '— t/s'
+  if (speed >= 1000) return `${(speed / 1000).toFixed(1)}k t/s`
+  return `${speed} t/s`
+}
+
+function AggregateTokenSpeed() {
+  const { inputSpeed, outputSpeed } = useAggregateMetricsStore(selectAggregateSpeeds)
+  // Only render when at least one direction has data
+  if (inputSpeed == null && outputSpeed == null) return null
+  return (
+    <Item>
+      <ArrowDownToLine className="w-2.5 h-2.5" />
+      <span className="tabular-nums">{formatSpeed(inputSpeed)} in</span>
+      <ArrowUpFromLine className="w-2.5 h-2.5 ml-1" />
+      <span className="tabular-nums">{formatSpeed(outputSpeed)} out</span>
+    </Item>
+  )
+}
+
 function formatTimeAgo(ts: number): string {
   const diff = Math.floor((Date.now() - ts) / 1000)
   if (diff < 60) return 'just now'
@@ -304,6 +326,9 @@ export default function Footer(): React.ReactElement {
           {conductord.ok ? `${conductord.sessions} sessions` : 'conductord offline'}
         </span>
       </Item>
+      <Separator orientation="vertical" className="h-3 bg-zinc-800" />
+
+      <AggregateTokenSpeed />
       <Separator orientation="vertical" className="h-3 bg-zinc-800" />
 
       <ZoomControl />
