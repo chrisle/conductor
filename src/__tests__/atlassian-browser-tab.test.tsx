@@ -226,6 +226,29 @@ describe('BrowserTab Atlassian integration', () => {
     expect(window.electronAPI.setAutoPilot).toHaveBeenCalledWith('t-CON-41', true)
   })
 
+  it('uses custom prompt template from config store (CON-55)', async () => {
+    const { container } = render(<BrowserTab {...atlassianProps} />)
+    const wv = patchWebview(container)
+
+    emitWebviewEvent(wv, 'dom-ready')
+
+    const message = CONDUCTOR_MSG_PREFIX + JSON.stringify({
+      action: 'start-coding-in-background',
+      ticketKey: 'CON-41',
+    })
+
+    await act(async () => {
+      emitWebviewEvent(wv, 'console-message', { message })
+      await new Promise(r => setTimeout(r, 50))
+    })
+
+    // The mock config has template: 'Work on {{ticketKey}} in {{projectKey}} at {{domain}}'
+    // Verify the command contains the interpolated custom template, not the default
+    const cmd = (window.electronAPI.createTerminal as any).mock.calls[0][2] as string
+    expect(cmd).toContain('Work on CON-41 in CON at')
+    expect(cmd).not.toContain('Work autonomously on this ticket end to end')
+  })
+
   it('ignores non-Conductor console messages', () => {
     const { container } = render(<BrowserTab {...atlassianProps} />)
     const wv = patchWebview(container)
