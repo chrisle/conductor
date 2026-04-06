@@ -585,6 +585,40 @@ export async function createNewProject(projectName: string, directory: string): 
   return true
 }
 
+/** Create a fresh in-memory project without requiring a name or directory */
+export function createDefaultProject(): void {
+  // Clear existing tabs and kill running sessions
+  const tabsStore = useTabsStore.getState()
+  const layoutStore = useLayoutStore.getState()
+
+  for (const groupId of Object.keys(tabsStore.groups)) {
+    for (const tab of tabsStore.groups[groupId].tabs) {
+      if (tab.type === 'terminal' || tab.type === 'claude-code' || tab.type === 'codex') {
+        killTerminal(tab.id)
+      }
+    }
+    tabsStore.removeGroup(groupId)
+  }
+
+  // Create a fresh empty group
+  const groupId = tabsStore.createGroup()
+  layoutStore.setRoot({ type: 'leaf', groupId })
+  layoutStore.setFocusedGroup(groupId)
+
+  // Reset project state to a blank slate
+  useProjectStore.getState().clearProject()
+  useSidebarStore.setState({ rootPath: null, expandedPaths: new Set() })
+  useActivityBarStore.getState().setActiveExtension(null)
+
+  // Set up the default project
+  const wsName = 'default'
+  useProjectStore.setState({
+    name: 'Untitled Project',
+    activeWorkspace: wsName,
+    workspaceNames: [wsName],
+  })
+}
+
 // --- Auto-save layout to localStorage (for unsaved projects) ---
 const AUTOSAVE_KEY = 'conductor:autosave-layout'
 

@@ -1,16 +1,14 @@
-import React, { useState, useRef, useEffect } from 'react'
-import { X, Plus, FileText, FolderOpen, FilePlus2, Folder, RotateCw, Pencil, Skull, LayoutGrid } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { X, Plus, FileText, FolderOpen, FilePlus2, RotateCw, Pencil, Skull, LayoutGrid } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator as CtxMenuSeparator, ContextMenuTrigger, ContextMenuSub, ContextMenuSubTrigger, ContextMenuSubContent, ContextMenuLabel } from '@/components/ui/context-menu'
 import { useTabsStore, type Tab } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useSidebarStore } from '@/store/sidebar'
 import { extensionRegistry } from '@/extensions'
-import { openProjectDialog, openProject, createNewProject } from '@/lib/project-io'
+import { openProjectDialog, openProject, createDefaultProject } from '@/lib/project-io'
 import { useProjectStore } from '@/store/project'
 import { useConfigStore } from '@/store/config'
 import { resolveTerminalCwd, saveTerminalCwd } from '@/lib/terminal-cwd'
@@ -62,110 +60,34 @@ function RecentProjects() {
 }
 
 function EmptyState({ groupId, renderContextMenuItems }: { groupId: string, renderContextMenuItems: () => React.ReactNode }) {
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [projectName, setProjectName] = useState('')
-  const [directory, setDirectory] = useState('')
-  const [error, setError] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  function openDialog() {
-    setProjectName('')
-    setDirectory('')
-    setError('')
-    setDialogOpen(true)
-    setTimeout(() => inputRef.current?.focus(), 50)
-  }
-
-  async function handleBrowse() {
-    const dir = await window.electronAPI.selectDirectory()
-    if (dir) setDirectory(dir)
-  }
-
-  async function handleCreate() {
-    const trimmed = projectName.trim()
-    if (!trimmed) { setError('Name is required'); return }
-    if (/[/\\:*?"<>|]/.test(trimmed)) { setError('Invalid characters in name'); return }
-    if (!directory) { setError('Select a directory'); return }
-
-    const success = await createNewProject(trimmed, directory)
-    if (!success) { setError('Failed to create project'); return }
-    setDialogOpen(false)
-  }
-
-  const friendly = (p: string) => p.replace(/^\/Users\/[^/]+/, '~')
-
   return (
-    <>
-      <ContextMenu>
+    <ContextMenu>
       <ContextMenuTrigger asChild>
-      <div
-        className="flex flex-col items-center justify-center h-full gap-6"
-      >
-        <div className="text-ui-xl font-light text-zinc-300 tracking-wide">Conductor</div>
-        <div className="flex gap-4">
-          <button
-            onClick={() => openProjectDialog()}
-            className="flex flex-col items-center gap-3 w-40 py-6 rounded-lg border border-zinc-700/60 bg-zinc-900/50 hover:bg-zinc-800/60 hover:border-zinc-600 transition-colors group"
-          >
-            <FolderOpen className="w-8 h-8 text-zinc-500 group-hover:text-blue-400 transition-colors" />
-            <span className="text-ui-base text-zinc-400 group-hover:text-zinc-200 transition-colors">Open Project</span>
-          </button>
-          <button
-            onClick={openDialog}
-            className="flex flex-col items-center gap-3 w-40 py-6 rounded-lg border border-zinc-700/60 bg-zinc-900/50 hover:bg-zinc-800/60 hover:border-zinc-600 transition-colors group"
-          >
-            <FilePlus2 className="w-8 h-8 text-zinc-500 group-hover:text-blue-400 transition-colors" />
-            <span className="text-ui-base text-zinc-400 group-hover:text-zinc-200 transition-colors">New Project</span>
-          </button>
+        <div className="flex flex-col items-center justify-center h-full gap-6">
+          <div className="text-ui-xl font-light text-zinc-300 tracking-wide">Conductor</div>
+          <div className="flex gap-4">
+            <button
+              onClick={() => openProjectDialog()}
+              className="flex flex-col items-center gap-3 w-40 py-6 rounded-lg border border-zinc-700/60 bg-zinc-900/50 hover:bg-zinc-800/60 hover:border-zinc-600 transition-colors group"
+            >
+              <FolderOpen className="w-8 h-8 text-zinc-500 group-hover:text-blue-400 transition-colors" />
+              <span className="text-ui-base text-zinc-400 group-hover:text-zinc-200 transition-colors">Open Project</span>
+            </button>
+            <button
+              onClick={() => createDefaultProject()}
+              className="flex flex-col items-center gap-3 w-40 py-6 rounded-lg border border-zinc-700/60 bg-zinc-900/50 hover:bg-zinc-800/60 hover:border-zinc-600 transition-colors group"
+            >
+              <FilePlus2 className="w-8 h-8 text-zinc-500 group-hover:text-blue-400 transition-colors" />
+              <span className="text-ui-base text-zinc-400 group-hover:text-zinc-200 transition-colors">New Project</span>
+            </button>
+          </div>
+          <RecentProjects />
         </div>
-        <RecentProjects />
-      </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
         {renderContextMenuItems()}
       </ContextMenuContent>
-      </ContextMenu>
-
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="bg-zinc-900 border-zinc-700 max-w-sm" hideClose>
-          <VisuallyHidden><DialogTitle>New Project</DialogTitle></VisuallyHidden>
-          <div className="space-y-4">
-            <div className="text-ui-base text-zinc-300 font-medium">New Project</div>
-            <div className="space-y-1.5">
-              <label className="text-ui-sm text-zinc-500 uppercase tracking-wider">Name</label>
-              <input ref={inputRef}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-ui-base text-zinc-200 outline-none focus:border-zinc-500 placeholder-zinc-500"
-                placeholder="my-project" value={projectName}
-                onChange={e => { setProjectName(e.target.value); setError('') }}
-                onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setDialogOpen(false) }}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-ui-sm text-zinc-500 uppercase tracking-wider">Directory</label>
-              <div className="flex gap-2">
-                <div className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-ui-base text-zinc-400 truncate min-w-0">
-                  {directory ? friendly(directory) : 'Select a directory...'}
-                </div>
-                <Button variant="ghost" className="shrink-0 text-ui-base text-zinc-400 hover:text-zinc-200 border border-zinc-700" onClick={handleBrowse}>
-                  <Folder className="w-3.5 h-3.5 mr-1.5" />
-                  Browse
-                </Button>
-              </div>
-            </div>
-            {error && <div className="text-ui-base text-red-400">{error}</div>}
-            {projectName.trim() && directory && (
-              <div className="text-ui-sm text-zinc-500">
-                Creates <span className="text-zinc-300">{friendly(directory)}/{projectName.trim()}.conductor</span>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" className="text-ui-base text-zinc-400 hover:text-zinc-200" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button className="text-ui-base bg-zinc-700 hover:bg-zinc-600 text-zinc-200" onClick={handleCreate}>Create</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+    </ContextMenu>
   )
 }
 
