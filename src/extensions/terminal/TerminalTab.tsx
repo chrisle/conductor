@@ -22,6 +22,7 @@ function TerminalTabInner({
   onTerminalReady,
   onSessionReady,
   interceptKeys,
+  footerLeft,
   footer,
   footerPosition = 'bottom',
 }: TabProps & TerminalTabExtraProps): React.ReactElement {
@@ -451,7 +452,7 @@ function TerminalTabInner({
 
   const toolbar = (
     <div className={`flex items-center gap-3 px-2 h-5 shrink-0 ${footerPosition === 'bottom' ? 'border-t border-zinc-800' : 'border-b border-zinc-800'}`}>
-      {footerPosition !== 'bottom' && footer}
+      {footerLeft}
       <div className="flex-1" />
       <button
         onClick={handleRefresh}
@@ -467,7 +468,7 @@ function TerminalTabInner({
       >
         Terminal ID: {tabId}
       </span>
-      {footerPosition === 'bottom' && footer}
+      {footer}
     </div>
   )
 

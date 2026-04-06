@@ -142,13 +142,18 @@ export default function ClaudeCodeTab({
     [],
   );
 
+  // Auto Pilot toggle pinned to the left side of the toolbar
+  const footerLeft = (
+    <Toggle
+      on={autoPilot}
+      onToggle={() => setAutoPilot(!autoPilot)}
+      label="Auto Pilot"
+    />
+  );
+
+  // All stats pinned to the right side of the toolbar
   const footer = (
     <>
-      <Toggle
-        on={autoPilot}
-        onToggle={() => setAutoPilot(!autoPilot)}
-        label="Auto Pilot"
-      />
       {sessionId && (
         <>
           <div className="w-px h-3 bg-zinc-700" />
@@ -224,6 +229,7 @@ export default function ClaudeCodeTab({
         handleSessionReady(isNew, opts);
       }}
       interceptKeys={interceptKeys}
+      footerLeft={footerLeft}
       footer={footer}
       footerPosition="bottom"
     />

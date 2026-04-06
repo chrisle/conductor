@@ -42,10 +42,9 @@ export default function CodexTab({ tabId, groupId, isActive, tab }: TabProps): R
     return false
   }, [])
 
-  const footer = (
-    <>
-      <Toggle on={autoPilot} onToggle={() => setAutoPilot(!autoPilot)} label="Auto-pilot" />
-    </>
+  // Auto-pilot toggle pinned to the left side of the toolbar
+  const footerLeft = (
+    <Toggle on={autoPilot} onToggle={() => setAutoPilot(!autoPilot)} label="Auto-pilot" />
   )
 
   return (
@@ -63,7 +62,7 @@ export default function CodexTab({ tabId, groupId, isActive, tab }: TabProps): R
       onTerminalReady={handleTerminalReady}
       onSessionReady={() => updateTab(groupId, tabId, { hasSession: true })}
       interceptKeys={interceptKeys}
-      footer={footer}
+      footerLeft={footerLeft}
       footerPosition="bottom"
     />
   )
