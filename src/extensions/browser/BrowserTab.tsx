@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react'
+import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { ArrowLeft, ArrowRight, RotateCw, X, Globe } from 'lucide-react'
 import { useTabsStore } from '@/store/tabs'
 import type { TabProps } from '@/extensions/types'
@@ -49,13 +49,31 @@ type WebviewElement = HTMLElement & {
 
 export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
   const initialUrl = tab.url
-  const [url, setUrl] = useState(initialUrl || '')
+  // inputUrl drives the address bar display; it updates on navigation events
+  // without feeding back into the webview's src attribute.
   const [inputUrl, setInputUrl] = useState(initialUrl || '')
   const [isLoading, setIsLoading] = useState(false)
   const [canGoBack, setCanGoBack] = useState(false)
   const [canGoForward, setCanGoForward] = useState(false)
-  const webviewRef = useRef<any>(null)
-  const { updateTab } = useTabsStore()
+  const webviewRef = useRef<WebviewElement | null>(null)
+  // initialSrc is set once and never changes — prevents React re-renders
+  // from resetting the webview's src and causing full-page reloads.
+  const [initialSrc] = useState(initialUrl || 'about:blank')
+  const { updateTab, addTab } = useTabsStore()
+
+  // Sync nav state (back/forward buttons, URL bar, tab title) from the webview
+  // without touching the src attribute.
+  const syncNavState = useCallback(() => {
+    const wv = webviewRef.current
+    if (!wv) return
+    setCanGoBack(wv.canGoBack())
+    setCanGoForward(wv.canGoForward())
+    setInputUrl(wv.getURL())
+    const title = wv.getTitle()
+    if (title) {
+      updateTab(groupId, tabId, { title: title.slice(0, 40) })
+    }
+  }, [groupId, tabId, updateTab])
 
   useEffect(() => {
     const webview = webviewRef.current
@@ -64,19 +82,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
     const handleLoadStart = () => setIsLoading(true)
     const handleLoadStop = () => {
       setIsLoading(false)
-      const wv = webviewRef.current
-      if (wv) {
-        setCanGoBack(wv.canGoBack())
-        setCanGoForward(wv.canGoForward())
-        const currentUrl = wv.getURL()
-        setInputUrl(currentUrl)
-        setUrl(currentUrl)
-        // Update tab title
-        const title = wv.getTitle()
-        if (title) {
-          updateTab(groupId, tabId, { title: title.slice(0, 40) })
-        }
-      }
+      syncNavState()
     }
 
     const handleDomReady = () => {
@@ -92,18 +98,46 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
       updateTab(groupId, tabId, { title: (e.title || 'Browser').slice(0, 40) })
     }
 
+    // Handles SPA navigations (pushState / replaceState) so the URL bar
+    // stays in sync without triggering a full page reload.
+    const handleInPageNavigation = (e: any) => {
+      setInputUrl(e.url)
+      const wv = webviewRef.current
+      if (wv) {
+        setCanGoBack(wv.canGoBack())
+        setCanGoForward(wv.canGoForward())
+      }
+    }
+
+    // Handles target="_blank" links and window.open() calls by opening
+    // a new browser tab within Conductor instead of silently blocking them.
+    const handleNewWindow = (e: any) => {
+      const targetUrl = e.url
+      if (targetUrl && targetUrl !== 'about:blank') {
+        addTab(groupId, {
+          type: 'browser',
+          title: targetUrl.replace(/^https?:\/\//, '').slice(0, 40),
+          url: targetUrl,
+        })
+      }
+    }
+
     webview.addEventListener('did-start-loading', handleLoadStart)
     webview.addEventListener('did-stop-loading', handleLoadStop)
     webview.addEventListener('dom-ready', handleDomReady)
     webview.addEventListener('page-title-updated', handleTitleUpdated)
+    webview.addEventListener('did-navigate-in-page', handleInPageNavigation)
+    webview.addEventListener('new-window', handleNewWindow)
 
     return () => {
       webview.removeEventListener('did-start-loading', handleLoadStart)
       webview.removeEventListener('did-stop-loading', handleLoadStop)
       webview.removeEventListener('dom-ready', handleDomReady)
       webview.removeEventListener('page-title-updated', handleTitleUpdated)
+      webview.removeEventListener('did-navigate-in-page', handleInPageNavigation)
+      webview.removeEventListener('new-window', handleNewWindow)
     }
-  }, [webviewRef.current])
+  }, [webviewRef.current, syncNavState, addTab, groupId, tabId, updateTab])
 
   function normalizeUrl(raw: string): string {
     const trimmed = raw.trim()
@@ -121,10 +155,10 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
 
   function navigate(rawUrl: string) {
     const normalized = normalizeUrl(rawUrl)
-    setUrl(normalized)
     setInputUrl(normalized)
+    // Use loadURL only — do NOT set the src attribute, which would cause
+    // React to re-render the webview element and trigger a second navigation.
     if (webviewRef.current) {
-      webviewRef.current.src = normalized
       webviewRef.current.loadURL(normalized).catch(() => {})
     }
   }
@@ -204,12 +238,12 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
       <div className="flex-1 overflow-hidden">
         {React.createElement('webview', {
           ref: webviewRef,
-          src: url || 'about:blank',
+          src: initialSrc,
           className: 'w-full h-full',
           partition: 'persist:browser',
           nodeintegration: 'false',
           webpreferences: 'contextIsolation=yes',
-          allowpopups: 'false',
+          allowpopups: 'true',
           style: { display: 'flex', width: '100%', height: '100%' }
         })}
       </div>
