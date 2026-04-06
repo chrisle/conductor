@@ -2,6 +2,7 @@ import { app, BrowserWindow, Menu, shell, screen } from 'electron'
 import { join } from 'path'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { spawn } from 'child_process'
+import { autoUpdater } from 'electron-updater'
 import { registerIpcHandlers } from './ipc'
 import { conductordHealthCheck, CONDUCTORD_SOCKET } from './conductord-client'
 import { initLogger } from './logger'
@@ -215,6 +216,13 @@ app.whenReady().then(async () => {
   registerIpcHandlers()
   buildAppMenu()
   createWindow()
+
+  // Check for updates in production only (dev builds have no publish config).
+  if (!process.env['ELECTRON_RENDERER_URL']) {
+    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+      console.error('[updater] update check failed:', err)
+    })
+  }
 
   app.on('activate', async function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
