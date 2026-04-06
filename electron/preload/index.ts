@@ -13,6 +13,10 @@ const electronAPI = {
     ipcRenderer.on('window:closeRequested', callback),
   offCloseRequested: (callback: () => void) =>
     ipcRenderer.removeListener('window:closeRequested', callback),
+  onCloseTabRequested: (callback: () => void) =>
+    ipcRenderer.on('tab:closeRequested', callback),
+  offCloseTabRequested: (callback: () => void) =>
+    ipcRenderer.removeListener('tab:closeRequested', callback),
 
   // File system
   readDir: (path: string) => ipcRenderer.invoke('fs:readDir', path),

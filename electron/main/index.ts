@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, screen } from 'electron'
+import { app, BrowserWindow, Menu, shell, screen } from 'electron'
 import { join } from 'path'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { spawn } from 'child_process'
@@ -172,6 +172,40 @@ function createWindow(): void {
   }
 }
 
+// Build a custom application menu so Cmd+W closes the active tab
+// instead of the entire window (Electron's default "Close Window" behavior).
+function buildAppMenu(): void {
+  const isMac = process.platform === 'darwin'
+
+  const template: Electron.MenuItemConstructorOptions[] = [
+    ...(isMac ? [{
+      role: 'appMenu' as const
+    }] : []),
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'Close Tab',
+          accelerator: 'CmdOrCtrl+W',
+          click: () => {
+            const win = BrowserWindow.getFocusedWindow()
+            win?.webContents.send('tab:closeRequested')
+          }
+        },
+        { type: 'separator' as const },
+        isMac
+          ? { role: 'close' as const, accelerator: '' }  // Remove default Cmd+W from Close Window
+          : { role: 'quit' as const }
+      ]
+    },
+    { role: 'editMenu' as const },
+    { role: 'viewMenu' as const },
+    { role: 'windowMenu' as const },
+  ]
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
 app.whenReady().then(async () => {
   initLogger()
   console.log('[main] app ready, electron version:', process.versions.electron, 'node:', process.versions.node)
@@ -179,6 +213,7 @@ app.whenReady().then(async () => {
     await ensureConductord()
   }
   registerIpcHandlers()
+  buildAppMenu()
   createWindow()
 
   app.on('activate', async function () {

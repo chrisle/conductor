@@ -48,6 +48,11 @@ Object.defineProperty(window, 'electronAPI', {
     setAutoPilot: vi.fn(),
     captureScrollback: vi.fn().mockResolvedValue(null),
     openExternal: vi.fn().mockResolvedValue(undefined),
+    forceClose: vi.fn(),
+    onCloseRequested: vi.fn(),
+    offCloseRequested: vi.fn(),
+    onCloseTabRequested: vi.fn(),
+    offCloseTabRequested: vi.fn(),
   },
   writable: true
 })
