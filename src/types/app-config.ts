@@ -93,15 +93,6 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcut[] = [
   { id: 'zoomIn', label: 'Zoom In', keys: 'Meta+=' },
   { id: 'zoomOut', label: 'Zoom Out', keys: 'Meta+-' },
   { id: 'zoomReset', label: 'Reset Zoom', keys: 'Meta+0' },
-  { id: 'panel1', label: 'Panel 1', keys: 'Meta+1' },
-  { id: 'panel2', label: 'Panel 2', keys: 'Meta+2' },
-  { id: 'panel3', label: 'Panel 3', keys: 'Meta+3' },
-  { id: 'panel4', label: 'Panel 4', keys: 'Meta+4' },
-  { id: 'panel5', label: 'Panel 5', keys: 'Meta+5' },
-  { id: 'panel6', label: 'Panel 6', keys: 'Meta+6' },
-  { id: 'panel7', label: 'Panel 7', keys: 'Meta+7' },
-  { id: 'panel8', label: 'Panel 8', keys: 'Meta+8' },
-  { id: 'panel9', label: 'Panel 9', keys: 'Meta+9' },
 ]
 
 export const DEFAULT_APP_CONFIG: AppConfig = {

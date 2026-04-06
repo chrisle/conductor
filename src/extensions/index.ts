@@ -9,14 +9,17 @@ import { workSessionsExtension } from './work-sessions'
 import { notificationsExtension } from './notifications'
 
 export function initializeExtensions(): void {
-  // Registration order determines menu item order and activity bar icon order
-  extensionRegistry.register(projectExtension)
+  // Registration order determines activity bar icon order and Cmd+N shortcuts.
+  // Sidebar extensions (icon + sidebar panel) appear in the activity bar:
+  //   1. Sessions  2. Explorer  3. Notifications
+  // Tab-only extensions follow (no sidebar, no activity bar icon).
   extensionRegistry.register(workSessionsExtension)
-  extensionRegistry.register(aiCliExtension)
   extensionRegistry.register(fileExplorerExtension)
+  extensionRegistry.register(notificationsExtension)
+  extensionRegistry.register(aiCliExtension)
   extensionRegistry.register(terminalExtension)
   extensionRegistry.register(browserExtension)
-  extensionRegistry.register(notificationsExtension)
+  extensionRegistry.register(projectExtension)
   extensionRegistry.register(settingsExtension)
 }
 
