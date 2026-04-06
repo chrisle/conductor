@@ -72,6 +72,14 @@ export async function createXtermTerminal(container: HTMLElement): Promise<{ ter
     cursorWidth: terminalConfig.cursorWidth,
     scrollback: terminalConfig.scrollback,
     allowTransparency: true,
+    // Override xterm's default link handler which uses window.open() (incompatible
+    // with Electron — it opens a blank window that gets denied by setWindowOpenHandler).
+    // Instead, open URLs directly via the Electron shell IPC bridge.
+    linkHandler: {
+      activate: (_event: MouseEvent, text: string) => {
+        window.electronAPI.openExternal(text)
+      },
+    },
   })
 
   const fitAddon = new FitAddon()

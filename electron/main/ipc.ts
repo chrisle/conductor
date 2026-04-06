@@ -70,7 +70,11 @@ export function registerIpcHandlers(): void {
       newWin.webContents.send('window:closeRequested')
     })
     newWin.webContents.setWindowOpenHandler((details) => {
-      shell.openExternal(details.url)
+      // Open URLs in the system browser; catch errors to prevent unhandled rejections
+      // (e.g. when the URL scheme has no registered handler)
+      shell.openExternal(details.url).catch((err) => {
+        console.error('[ipc] Failed to open external URL:', details.url, err)
+      })
       return { action: 'deny' }
     })
     if (process.env['ELECTRON_RENDERER_URL']) {
@@ -969,7 +973,11 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
 
   // Shell
   ipcMain.handle('shell:openExternal', async (_event, url: string) => {
-    await shell.openExternal(url)
+    try {
+      await shell.openExternal(url)
+    } catch (err) {
+      console.error('[ipc] Failed to open external URL:', url, err)
+    }
   })
 
   // ── Scrollback disk persistence ──────────────────────────
