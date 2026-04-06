@@ -139,7 +139,7 @@ describe('TicketCard', () => {
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
       const lozenge = container.querySelector('.uppercase.tracking-wide')
-      expect(lozenge!.className).toContain('text-blue-300')
+      expect(lozenge!.className).toContain('text-blue-200')
     })
 
     it('uses emerald styling for done status', () => {
@@ -148,7 +148,7 @@ describe('TicketCard', () => {
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
       const lozenge = container.querySelector('.uppercase.tracking-wide')
-      expect(lozenge!.className).toContain('text-emerald-300')
+      expect(lozenge!.className).toContain('text-emerald-200')
     })
 
     it('uses zinc styling for backlog status', () => {
@@ -157,7 +157,7 @@ describe('TicketCard', () => {
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
       const lozenge = container.querySelector('.uppercase.tracking-wide')
-      expect(lozenge!.className).toContain('text-zinc-200')
+      expect(lozenge!.className).toContain('text-zinc-100')
     })
   })
 
@@ -239,6 +239,15 @@ describe('TicketCard', () => {
       const summary = container.querySelector('p')
       expect(summary).toBeTruthy()
       expect(summary!.textContent).toBe('Fix the login bug')
+    })
+
+    it('uses bright text color for summary readability', () => {
+      const ticket = makeTicket({ summary: 'Readable summary' })
+      const { container } = render(
+        <TicketCard ticket={ticket} {...defaultCardProps} />
+      )
+      const summary = container.querySelector('p')
+      expect(summary!.className).toContain('text-zinc-100')
     })
   })
 
@@ -524,6 +533,16 @@ describe('TicketCard', () => {
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
       expect(screen.getByText('Move')).toBeTruthy()
+    })
+
+    it('Start button uses blue accent styling as primary CTA', () => {
+      const ticket = makeTicket()
+      render(
+        <TicketCard ticket={ticket} {...defaultCardProps} />
+      )
+      const startButton = screen.getByText('Start').closest('button')
+      expect(startButton!.className).toContain('text-blue-300')
+      expect(startButton!.className).toContain('border-blue-500/30')
     })
   })
 })
