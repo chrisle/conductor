@@ -63,29 +63,32 @@ export default function SettingsDialog(): React.ReactElement {
         <VisuallyHidden><DialogTitle>Settings</DialogTitle></VisuallyHidden>
         <div className="flex h-full">
           {/* Side nav */}
-          <nav className="w-48 shrink-0 border-r border-zinc-800 bg-zinc-900/80 py-3 flex flex-col">
-            <h2 className="px-4 mb-3 text-ui-base font-semibold text-zinc-200">Settings</h2>
-            <div className="flex flex-col gap-0.5 px-2">
-              {navItems.map(item => {
-                const Icon = item.icon
-                const isActive = currentSection === item.id
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setActiveSection(item.id)}
-                    className={cn(
-                      'flex items-center gap-2 px-2 py-1.5 rounded text-left transition-colors text-ui-sm',
-                      isActive
-                        ? 'bg-zinc-700/60 text-zinc-100'
-                        : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
-                    )}
-                  >
-                    <Icon className="w-4 h-4 shrink-0" />
-                    <span className="truncate">{item.label}</span>
-                  </button>
-                )
-              })}
-            </div>
+          {/* Settings nav — ScrollArea ensures all items are reachable when the list exceeds dialog height */}
+          <nav className="w-48 shrink-0 border-r border-zinc-800 bg-zinc-900/80 py-3 flex flex-col overflow-hidden">
+            <h2 className="px-4 mb-3 text-ui-base font-semibold text-zinc-200 shrink-0">Settings</h2>
+            <ScrollArea className="flex-1">
+              <div className="flex flex-col gap-0.5 px-2">
+                {navItems.map(item => {
+                  const Icon = item.icon
+                  const isActive = currentSection === item.id
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveSection(item.id)}
+                      className={cn(
+                        'flex items-center gap-2 px-2 py-1.5 rounded text-left transition-colors text-ui-sm',
+                        isActive
+                          ? 'bg-zinc-700/60 text-zinc-100'
+                          : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+                      )}
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span className="truncate">{item.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </ScrollArea>
           </nav>
 
           {/* Content area */}
