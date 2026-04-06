@@ -52,7 +52,7 @@ import { useSessionInfoRegistry } from '@/extensions/work-sessions'
 
 // ── Libraries ───────────────────────────────────────────────────────────────
 import { cn } from '@/lib/utils'
-import { killTerminal } from '@/lib/terminal-api'
+import { createTerminal, killTerminal, setAutoPilot } from '@/lib/terminal-api'
 import {
   getThinkingState, stripAnsi, type ThinkingState,
 } from '@/lib/terminal-detection'
@@ -97,7 +97,9 @@ export const conductorAPI = {
 
   // Utilities
   cn,
+  createTerminal,
   killTerminal,
+  setAutoPilot,
   getThinkingState,
   stripAnsi,
   interpolatePromptTemplate,

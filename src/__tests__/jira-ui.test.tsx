@@ -64,6 +64,7 @@ const defaultCardProps = {
   onNewSession: noop,
   onContinueSession: noop,
   onStartWork: noop,
+  onStartWorkInBackground: noop,
   onRefresh: noop,
 }
 
@@ -330,6 +331,39 @@ describe('TicketCard', () => {
     })
   })
 
+  describe('start work in background menu item', () => {
+    it('renders a "Start work in background" dropdown item', () => {
+      const ticket = makeTicket()
+      render(
+        <TicketCard ticket={ticket} {...defaultCardProps} />
+      )
+      expect(screen.getByText('Start work in background')).toBeTruthy()
+    })
+
+    it('calls onStartWorkInBackground when clicked', () => {
+      const onStartWorkInBackground = vi.fn()
+      const ticket = makeTicket({ key: 'CON-99' })
+      render(
+        <TicketCard
+          ticket={ticket}
+          {...defaultCardProps}
+          onStartWorkInBackground={onStartWorkInBackground}
+        />
+      )
+      fireEvent.click(screen.getByText('Start work in background'))
+      expect(onStartWorkInBackground).toHaveBeenCalledWith(ticket)
+    })
+
+    it('renders alongside the "Start work" menu item', () => {
+      const ticket = makeTicket()
+      render(
+        <TicketCard ticket={ticket} {...defaultCardProps} />
+      )
+      expect(screen.getByText('Start work')).toBeTruthy()
+      expect(screen.getByText('Start work in background')).toBeTruthy()
+    })
+  })
+
   describe('active session indicator', () => {
     it('shows green pulse dot when session is active', () => {
       const ticket = makeTicket()
@@ -361,6 +395,7 @@ describe('KanbanColumn', () => {
     onNewSession: noop,
     onContinueSession: noop,
     onStartWork: noop,
+    onStartWorkInBackground: noop,
     onRefresh: noop,
     workSessions: [],
   }
