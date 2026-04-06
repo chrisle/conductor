@@ -55,8 +55,12 @@ export default function FileExplorerSidebar({ groupId }: FileExplorerSidebarProp
       {rootPath && (
         <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-zinc-700/50 shrink-0 min-w-0">
           <FolderOpen className="w-3 h-3 text-zinc-500 shrink-0" />
-          <span className="text-ui-xs text-zinc-400 truncate" title={rootPath}>
-            {displayPath}
+          <span
+            className="text-ui-xs text-zinc-400 truncate block"
+            dir="rtl"
+            title={rootPath}
+          >
+            <bdi>{displayPath}</bdi>
           </span>
         </div>
       )}
