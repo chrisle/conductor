@@ -52,6 +52,24 @@ describe('parseUsageOutput', () => {
     const result = parseUsageOutput(raw)
     expect(result.tiers[0].resetsAt).toBeNull()
   })
+
+  it('loses reset info when output is truncated before "Resets" line', () => {
+    // This simulates what happens when the scraper resolves too early —
+    // if only partial output was captured, reset info is lost.
+    const partial = 'Current week (all models) ██████▌ 13% used'
+    const result = parseUsageOutput(partial)
+    expect(result.percentUsed).toBe(13)
+    expect(result.tiers[0].resets).toBeNull()
+    expect(result.tiers[0].resetsAt).toBeNull()
+  })
+
+  it('captures reset info when full output is present', () => {
+    const full = 'Current week (all models) ██████▌ 13% used Resets Apr 10 at 7am (America/Los_Angeles)'
+    const result = parseUsageOutput(full)
+    expect(result.percentUsed).toBe(13)
+    expect(result.tiers[0].resets).toBe('Resets Apr 10 at 7am')
+    expect(result.tiers[0].resetsAt).not.toBeNull()
+  })
 })
 
 describe('parseResetToISO', () => {
