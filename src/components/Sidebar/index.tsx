@@ -23,12 +23,21 @@ export default function Sidebar({ defaultGroupId }: SidebarProps): React.ReactEl
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
 
+    // rAF handle for throttling width updates to once per frame
+    let rafId: number | null = null
+
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing.current) return
-      setWidth(startWidth.current + (e.clientX - startX.current))
+      if (rafId !== null) return
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        if (!isResizing.current) return
+        setWidth(startWidth.current + (e.clientX - startX.current))
+      })
     }
     const handleMouseUp = () => {
       isResizing.current = false
+      if (rafId !== null) cancelAnimationFrame(rafId)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
       document.removeEventListener('mousemove', handleMouseMove)
