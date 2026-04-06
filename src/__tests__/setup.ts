@@ -47,6 +47,7 @@ Object.defineProperty(window, 'electronAPI', {
     listClaudeSessions: vi.fn().mockResolvedValue([]),
     setAutoPilot: vi.fn(),
     captureScrollback: vi.fn().mockResolvedValue(null),
+    openExternal: vi.fn().mockResolvedValue(undefined),
   },
   writable: true
 })

@@ -157,7 +157,11 @@ function createWindow(): void {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    // Open URLs in the system browser; catch errors to prevent unhandled rejections
+    // (e.g. when the URL scheme has no registered handler)
+    shell.openExternal(details.url).catch((err) => {
+      console.error('[main] Failed to open external URL:', details.url, err)
+    })
     return { action: 'deny' }
   })
 
