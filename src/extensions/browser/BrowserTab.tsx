@@ -1,7 +1,18 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { ArrowLeft, ArrowRight, RotateCw, X, Globe } from 'lucide-react'
 import { useTabsStore } from '@/store/tabs'
+import { useConfigStore } from '@/store/config'
+import { useSidebarStore } from '@/store/sidebar'
+import { useLayoutStore } from '@/store/layout'
+import { useWorkSessionsStore } from '@/store/work-sessions'
+import { useProjectStore } from '@/store/project'
 import type { TabProps } from '@/extensions/types'
+import {
+  isAtlassianUrl,
+  buildAtlassianInjectScript,
+  CONDUCTOR_MSG_PREFIX,
+  type ConductorMessage,
+} from './atlassian-inject'
 
 // Injected CSS to add claude code bridge
 const INJECT_CSS = `
@@ -61,6 +72,11 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
   const [initialSrc] = useState(initialUrl || 'about:blank')
   const { updateTab, addTab } = useTabsStore()
 
+  // Stores needed for Conductor actions on Atlassian pages
+  const getConfig = useConfigStore.getState
+  const getRootPath = () => useSidebarStore.getState().rootPath
+  const getFocusedGroupId = () => useLayoutStore.getState().focusedGroupId
+
   // Sync nav state (back/forward buttons, URL bar, tab title) from the webview
   // without touching the src attribute.
   const syncNavState = useCallback(() => {
@@ -74,6 +90,156 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
       updateTab(groupId, tabId, { title: title.slice(0, 40) })
     }
   }, [groupId, tabId, updateTab])
+
+  /**
+   * Resolves (or creates) a git worktree for the given ticket key,
+   * mirroring the logic in the Jira board extension.
+   */
+  const resolveWorktree = useCallback(async (ticketKey: string): Promise<{ cwd: string }> => {
+    const sessionsStore = useWorkSessionsStore.getState()
+    const session = sessionsStore.getActiveSessionForTicket(ticketKey)
+    if (session?.worktree?.path) return { cwd: session.worktree.path }
+
+    const repoPath = getRootPath()
+    if (!repoPath) throw new Error('No project root path available to create worktree')
+
+    const worktrees = await window.electronAPI.worktreeList(repoPath)
+    const branchLower = ticketKey.toLowerCase()
+    const existing = worktrees.find(wt => wt.branch.toLowerCase().includes(branchLower))
+
+    const tmuxName = `t-${ticketKey}`
+    if (existing) {
+      const worktree = { path: existing.path, branch: existing.branch, baseBranch: 'main' }
+      if (session) {
+        await sessionsStore.updateSession(session.id, { worktree })
+      } else {
+        await sessionsStore.createSession({
+          projectPath: useProjectStore.getState().filePath || '',
+          ticketKey,
+          jiraConnectionId: '',
+          worktree,
+          tmuxSessionId: tmuxName,
+          claudeSessionId: null,
+          prUrl: null,
+          status: 'active',
+        })
+      }
+      return { cwd: existing.path }
+    }
+
+    const result = await window.electronAPI.worktreeAdd(repoPath, branchLower)
+    if (result.success && result.path) {
+      const worktree = { path: result.path, branch: branchLower, baseBranch: 'main' }
+      if (session) {
+        await sessionsStore.updateSession(session.id, { worktree })
+      } else {
+        await sessionsStore.createSession({
+          projectPath: useProjectStore.getState().filePath || '',
+          ticketKey,
+          jiraConnectionId: '',
+          worktree,
+          tmuxSessionId: tmuxName,
+          claudeSessionId: null,
+          prUrl: null,
+          status: 'active',
+        })
+      }
+      return { cwd: result.path }
+    }
+
+    throw new Error(`Failed to create worktree for ${ticketKey}: ${result.error || 'unknown error'}`)
+  }, [])
+
+  /** Build the Claude prompt from the configured template */
+  const buildPrompt = useCallback((ticketKey: string, domain: string) => {
+    const config = getConfig()
+    const template = config.config.aiCli.claudeCode.startWorkPromptTemplate
+    const projectKey = ticketKey.replace(/-\d+$/, '')
+    return template
+      .replace(/\{\{ticketKey\}\}/g, ticketKey)
+      .replace(/\{\{projectKey\}\}/g, projectKey)
+      .replace(/\{\{domain\}\}/g, domain)
+  }, [getConfig])
+
+  /**
+   * Handles messages from the injected Atlassian script.
+   * Dispatches to the appropriate action based on the message type.
+   */
+  const handleConductorAction = useCallback(async (msg: ConductorMessage) => {
+    const { action, ticketKey } = msg
+    const targetGroup = getFocusedGroupId() || groupId
+    const tmuxName = `t-${ticketKey}`
+
+    // Extract the Atlassian domain from the current webview URL
+    const currentUrl = webviewRef.current?.getURL() || ''
+    let domain = 'atlassian.net'
+    try {
+      domain = new URL(currentUrl).hostname
+    } catch { /* use fallback */ }
+
+    try {
+      switch (action) {
+        case 'start-coding-in-tab': {
+          // Kill stale sessions before starting fresh
+          try { await window.electronAPI.conductordKillTmuxSession(tmuxName) } catch { /* ok */ }
+          await window.electronAPI.killTerminal(tmuxName)
+
+          const { cwd } = await resolveWorktree(ticketKey)
+          const prompt = buildPrompt(ticketKey, domain)
+          const escaped = prompt.replace(/'/g, "'\\''")
+          const skipPerms = getConfig().config.aiCli.claudeCode.skipDangerousPermissions
+          const flag = skipPerms ? ' --dangerously-skip-permissions' : ''
+          const initialCommand = `cd ${JSON.stringify(cwd)} && claude${flag} '${escaped}'\n`
+
+          addTab(targetGroup, {
+            id: tmuxName,
+            type: 'claude-code',
+            title: `Claude · ${ticketKey}`,
+            filePath: cwd,
+            initialCommand,
+            autoPilot: true,
+          })
+          break
+        }
+
+        case 'start-coding-in-background': {
+          try { await window.electronAPI.conductordKillTmuxSession(tmuxName) } catch { /* ok */ }
+          await window.electronAPI.killTerminal(tmuxName)
+
+          const { cwd } = await resolveWorktree(ticketKey)
+          const prompt = buildPrompt(ticketKey, domain)
+          const escaped = prompt.replace(/'/g, "'\\''")
+          const skipPerms = getConfig().config.aiCli.claudeCode.skipDangerousPermissions
+          const flag = skipPerms ? ' --dangerously-skip-permissions' : ''
+          const command = `cd ${JSON.stringify(cwd)} && claude${flag} '${escaped}'\n`
+
+          await window.electronAPI.createTerminal(tmuxName, cwd, command)
+          await window.electronAPI.setAutoPilot(tmuxName, true)
+          break
+        }
+
+        case 'open-in-claude': {
+          const { cwd } = await resolveWorktree(ticketKey)
+          addTab(targetGroup, {
+            id: tmuxName,
+            type: 'claude-code',
+            title: `Claude · ${ticketKey}`,
+            filePath: cwd,
+            initialCommand: `cd ${JSON.stringify(cwd)} && claude\n`,
+          })
+          break
+        }
+
+        case 'open-in-vscode': {
+          const { cwd } = await resolveWorktree(ticketKey)
+          await window.electronAPI.openExternal(`vscode://file/${cwd}`)
+          break
+        }
+      }
+    } catch (err) {
+      console.error(`[Conductor] Action "${action}" failed for ${ticketKey}:`, err)
+    }
+  }, [groupId, addTab, resolveWorktree, buildPrompt, getConfig, getFocusedGroupId])
 
   useEffect(() => {
     const webview = webviewRef.current
@@ -92,6 +258,25 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
       wv.insertCSS(INJECT_CSS).catch(() => {})
       // Inject JS bridge
       wv.executeJavaScript(INJECT_JS).catch(() => {})
+
+      // Inject Atlassian-specific script when on an atlassian.net page
+      const currentUrl = wv.getURL()
+      if (isAtlassianUrl(currentUrl)) {
+        wv.executeJavaScript(buildAtlassianInjectScript()).catch(() => {})
+      }
+    }
+
+    // Listen for console messages from the webview to receive Conductor
+    // actions from the injected Atlassian script.
+    const handleConsoleMessage = (e: any) => {
+      const message: string = e.message
+      if (!message || !message.startsWith(CONDUCTOR_MSG_PREFIX)) return
+      try {
+        const payload = JSON.parse(message.slice(CONDUCTOR_MSG_PREFIX.length)) as ConductorMessage
+        if (payload.action && payload.ticketKey) {
+          handleConductorAction(payload)
+        }
+      } catch { /* ignore non-JSON console messages */ }
     }
 
     const handleTitleUpdated = (e: any) => {
@@ -128,6 +313,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
     webview.addEventListener('page-title-updated', handleTitleUpdated)
     webview.addEventListener('did-navigate-in-page', handleInPageNavigation)
     webview.addEventListener('new-window', handleNewWindow)
+    webview.addEventListener('console-message', handleConsoleMessage)
 
     return () => {
       webview.removeEventListener('did-start-loading', handleLoadStart)
@@ -136,8 +322,9 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
       webview.removeEventListener('page-title-updated', handleTitleUpdated)
       webview.removeEventListener('did-navigate-in-page', handleInPageNavigation)
       webview.removeEventListener('new-window', handleNewWindow)
+      webview.removeEventListener('console-message', handleConsoleMessage)
     }
-  }, [webviewRef.current, syncNavState, addTab, groupId, tabId, updateTab])
+  }, [webviewRef.current, syncNavState, addTab, groupId, tabId, updateTab, handleConductorAction])
 
   function normalizeUrl(raw: string): string {
     const trimmed = raw.trim()
