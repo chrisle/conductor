@@ -13,6 +13,7 @@ export interface SidebarState {
   rootPath: string | null
   expandedPaths: Set<string>
   favorites: string[]
+  selectedPath: string | null
   setWidth: (width: number) => void
   toggleVisibility: () => void
   setRootPath: (path: string) => void
@@ -22,6 +23,7 @@ export interface SidebarState {
   addFavorite: (path: string) => void
   removeFavorite: (path: string) => void
   isFavorite: (path: string) => boolean
+  setSelectedPath: (path: string | null) => void
 }
 
 export const useSidebarStore = create<SidebarState>((set, get) => ({
@@ -30,6 +32,7 @@ export const useSidebarStore = create<SidebarState>((set, get) => ({
   rootPath: null,
   expandedPaths: new Set<string>(),
   favorites: [],
+  selectedPath: null,
 
   setWidth: (width) => set({ width: Math.max(220, Math.min(600, width)) }),
 
@@ -66,5 +69,7 @@ export const useSidebarStore = create<SidebarState>((set, get) => ({
     return { favorites: next }
   }),
 
-  isFavorite: (path) => get().favorites.includes(path)
+  isFavorite: (path) => get().favorites.includes(path),
+
+  setSelectedPath: (path) => set({ selectedPath: path }),
 }))

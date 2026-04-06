@@ -7,7 +7,8 @@ function resetStore() {
     isVisible: true,
     rootPath: null,
     expandedPaths: new Set(),
-    favorites: []
+    favorites: [],
+    selectedPath: null,
   })
 }
 
@@ -98,6 +99,29 @@ describe('useSidebarStore', () => {
 
     it('isFavorite returns false for non-favorite', () => {
       expect(useSidebarStore.getState().isFavorite('/nope')).toBe(false)
+    })
+  })
+
+  describe('selectedPath', () => {
+    it('starts as null', () => {
+      expect(useSidebarStore.getState().selectedPath).toBeNull()
+    })
+
+    it('setSelectedPath sets the selected path', () => {
+      useSidebarStore.getState().setSelectedPath('/src/main.ts')
+      expect(useSidebarStore.getState().selectedPath).toBe('/src/main.ts')
+    })
+
+    it('setSelectedPath can clear the selection', () => {
+      useSidebarStore.getState().setSelectedPath('/src/main.ts')
+      useSidebarStore.getState().setSelectedPath(null)
+      expect(useSidebarStore.getState().selectedPath).toBeNull()
+    })
+
+    it('setSelectedPath replaces the previous selection', () => {
+      useSidebarStore.getState().setSelectedPath('/src/a.ts')
+      useSidebarStore.getState().setSelectedPath('/src/b.ts')
+      expect(useSidebarStore.getState().selectedPath).toBe('/src/b.ts')
     })
   })
 })

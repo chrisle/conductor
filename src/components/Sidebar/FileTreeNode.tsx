@@ -21,6 +21,7 @@ import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { extensionRegistry } from '@/extensions'
 import { nextSessionId } from '@/lib/session-id'
+import { saveTerminalCwd } from '@/lib/terminal-cwd'
 
 interface FileTreeNodeProps {
   entry: FileEntry
@@ -172,11 +173,19 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
   const [newName, setNewName] = useState('')
   const createInputRef = useRef<HTMLInputElement>(null)
 
-  const { isExpanded, toggleExpanded } = useSidebarStore()
+  const { isExpanded, toggleExpanded, selectedPath, setSelectedPath } = useSidebarStore()
   const { addTab } = useTabsStore()
   const { focusedGroupId, setFocusedGroup } = useLayoutStore()
 
   const expanded = isExpanded(entry.path)
+  const isSelected = selectedPath === entry.path
+  const renameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (renameTimerRef.current) clearTimeout(renameTimerRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (expanded && entry.isDirectory && children.length === 0) {
@@ -204,14 +213,30 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
     if (entry.isDirectory) {
       toggleExpanded(entry.path)
       if (!expanded && children.length === 0) loadChildren()
+      setSelectedPath(entry.path)
     } else {
-      openFile()
+      // If already selected, start a delayed rename
+      if (isSelected && !isRenaming) {
+        if (renameTimerRef.current) clearTimeout(renameTimerRef.current)
+        renameTimerRef.current = setTimeout(() => {
+          setIsRenaming(true)
+          setRenameValue(entry.name)
+        }, 400)
+      }
+      setSelectedPath(entry.path)
     }
   }
 
   function handleDoubleClick() {
+    // Cancel any pending rename from single-click
+    if (renameTimerRef.current) {
+      clearTimeout(renameTimerRef.current)
+      renameTimerRef.current = null
+    }
     if (entry.isDirectory) {
       useSidebarStore.getState().setRootPath(entry.path)
+    } else {
+      openFile()
     }
   }
 
@@ -304,6 +329,16 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
     })
   }
 
+  function openTerminalHere() {
+    const cwd = entry.isDirectory ? entry.path : entry.path.substring(0, entry.path.lastIndexOf('/'))
+    saveTerminalCwd(cwd)
+    const layoutGroupIds = useLayoutStore.getState().getAllGroupIds()
+    const targetGroupId = (focusedGroupId && layoutGroupIds.includes(focusedGroupId))
+      ? focusedGroupId
+      : groupId
+    addTab(targetGroupId, { type: 'terminal', title: 'Terminal', filePath: cwd })
+  }
+
   useEffect(() => {
     if (creating) setTimeout(() => createInputRef.current?.focus(), 0)
   }, [creating])
@@ -317,7 +352,8 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
           <div
             className={cn(
               'flex items-center gap-1 px-2 py-[3px] cursor-pointer select-none text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100 transition-colors group',
-              'text-ui-base'
+              'text-ui-base',
+              isSelected && 'bg-zinc-800 text-zinc-100'
             )}
             style={{ paddingLeft: `${8 + indent}px` }}
             onClick={handleClick}
@@ -402,6 +438,10 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
           <ContextMenuItem className="text-ui-base text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={openClaudeHere}>
             <Bot className="w-3.5 h-3.5 mr-2" />
             Open Claude here
+          </ContextMenuItem>
+          <ContextMenuItem className="text-ui-base text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={openTerminalHere}>
+            <Terminal className="w-3.5 h-3.5 mr-2" />
+            Open Terminal here
           </ContextMenuItem>
           <ContextMenuSeparator className="bg-zinc-700" />
           <ContextMenuItem className="text-ui-base text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => { setIsRenaming(true); setRenameValue(entry.name) }}>
