@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Bot, ChevronDown, ChevronRight, Copy, Eye, Folder, FolderOpen, FolderPlus, GitBranch, Hash, Info, Key, LayoutGrid, Pencil, Search, Square, Terminal, Trash2 } from 'lucide-react'
+import { Bot, ChevronDown, ChevronRight, Columns3, Copy, Eye, Folder, FolderOpen, FolderPlus, GitBranch, Hash, Info, Key, LayoutGrid, Pencil, Rows3, Search, Square, Terminal, Trash2 } from 'lucide-react'
 import {
   Tooltip,
   TooltipContent,
@@ -23,6 +23,7 @@ import { useWorkSessionsStore } from '@/store/work-sessions'
 import { useTabsStore } from '@/store/tabs'
 import { useConfigStore } from '@/store/config'
 import { useLayoutStore, type LayoutNode } from '@/store/layout'
+import { buildTileLayout, type TileMode } from '@/lib/tile-layout'
 import { useProjectStore, type SessionFolder } from '@/store/project'
 import type { WorkSession } from '@/types/work-session'
 import { useSessionInfoRegistry, type SessionInfoContext } from './session-info-registry'
@@ -158,7 +159,7 @@ function useConductorSessions(intervalMs = 5_000) {
 
 // ── Tile helper ───────────────────────────────────────
 
-export function tileSessions(sessions: EnrichedSession[]) {
+export function tileSessions(sessions: EnrichedSession[], mode: TileMode = 'grid') {
   if (sessions.length === 0) return
 
   const tabsStore = useTabsStore.getState()
@@ -179,7 +180,7 @@ export function tileSessions(sessions: EnrichedSession[]) {
   }
   if (newGroupIds.length === 0) return
 
-  const tileTree = buildTileTree(newGroupIds, 0)
+  const tileTree = buildTileLayout(newGroupIds, mode)
   layoutStore.setRoot({
     type: 'row',
     children: [
@@ -459,10 +460,26 @@ function SessionTreeNode({
               .filter((s): s is EnrichedSession => s != null && s.hasOpenTab)
             if (tileTargets.length < 2) return null
             return (
-              <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={() => tileSessions(tileTargets)}>
-                <LayoutGrid className="w-3.5 h-3.5" />
-                Tile {tileTargets.length} sessions
-              </ContextMenuItem>
+              <ContextMenuSub>
+                <ContextMenuSubTrigger className="gap-2 text-xs cursor-pointer">
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  Tile {tileTargets.length} sessions
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent className="bg-zinc-900 border-zinc-700">
+                  <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={() => tileSessions(tileTargets, 'columns')}>
+                    <Columns3 className="w-3.5 h-3.5" />
+                    Columns
+                  </ContextMenuItem>
+                  <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={() => tileSessions(tileTargets, 'rows')}>
+                    <Rows3 className="w-3.5 h-3.5" />
+                    Rows
+                  </ContextMenuItem>
+                  <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={() => tileSessions(tileTargets, 'grid')}>
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    Grid
+                  </ContextMenuItem>
+                </ContextMenuSubContent>
+              </ContextMenuSub>
             )
           })()}
           <ContextMenuSeparator className="bg-zinc-700" />
@@ -768,10 +785,26 @@ function FolderTreeNode({
             Rename
           </ContextMenuItem>
           {canTile && (
-            <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={() => tileSessions(attachedInFolder)}>
-              <LayoutGrid className="w-3.5 h-3.5" />
-              Tile sessions
-            </ContextMenuItem>
+            <ContextMenuSub>
+              <ContextMenuSubTrigger className="gap-2 text-xs cursor-pointer">
+                <LayoutGrid className="w-3.5 h-3.5" />
+                Tile sessions
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent className="bg-zinc-900 border-zinc-700">
+                <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={() => tileSessions(attachedInFolder, 'columns')}>
+                  <Columns3 className="w-3.5 h-3.5" />
+                  Columns
+                </ContextMenuItem>
+                <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={() => tileSessions(attachedInFolder, 'rows')}>
+                  <Rows3 className="w-3.5 h-3.5" />
+                  Rows
+                </ContextMenuItem>
+                <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={() => tileSessions(attachedInFolder, 'grid')}>
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  Grid
+                </ContextMenuItem>
+              </ContextMenuSubContent>
+            </ContextMenuSub>
           )}
           <ContextMenuSeparator className="bg-zinc-700" />
           <ContextMenuItem className="gap-2 text-xs cursor-pointer text-red-400 focus:text-red-300" onSelect={handleDelete}>

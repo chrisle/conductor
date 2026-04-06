@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { X, Plus, FileText, FolderOpen, FilePlus2, RotateCw, Pencil, Skull, LayoutGrid } from 'lucide-react'
+import { X, Plus, FileText, FolderOpen, FilePlus2, RotateCw, Pencil, Skull, LayoutGrid, Columns3, Rows3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
@@ -14,6 +14,7 @@ import { useConfigStore } from '@/store/config'
 import { resolveTerminalCwd, saveTerminalCwd } from '@/lib/terminal-cwd'
 import { useSettingsDialogStore } from '@/store/settingsDialog'
 import { killTerminal } from '@/lib/terminal-api'
+import { buildTileLayout, type TileMode } from '@/lib/tile-layout'
 import { nextSessionId } from '@/lib/session-id'
 import { setSessionTitle } from '@/lib/session-titles'
 import ClaudeIcon from '@/components/ui/ClaudeIcon'
@@ -410,19 +411,21 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     }
   }
 
-  // Tile selected tabs: each selected tab gets its own panel split to the east
-  function tileSelectedTabs(contextTabId: string) {
+  // Tile selected tabs into columns, rows, or a grid layout
+  function tileSelectedTabs(contextTabId: string, mode: TileMode) {
     const ids = getEffectiveSelection(contextTabId)
     if (ids.length < 2) return
     useTabsStore.getState().clearSelection(groupId)
     // First tab stays in current group; remaining tabs each get a new group
+    const allGroupIds = [groupId]
     for (let i = 1; i < ids.length; i++) {
       const newGroupId = useTabsStore.getState().createGroup()
-      // Alternate east/south for a grid-like arrangement
-      const position = i % 2 === 1 ? 'east' : 'south'
-      insertPanel(groupId, position as any, newGroupId)
       moveTab(groupId, ids[i], newGroupId)
+      allGroupIds.push(newGroupId)
     }
+    // Build layout tree for the chosen mode and replace this group's leaf
+    const tree = buildTileLayout(allGroupIds, mode)
+    useLayoutStore.getState().replaceLeaf(groupId, tree)
   }
 
   function handleContentClick() {
@@ -858,13 +861,35 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                           {sel.length} tabs selected
                         </ContextMenuLabel>
                         <CtxMenuSeparator className="bg-zinc-700" />
-                        <ContextMenuItem
-                          className="gap-2 text-ui-base cursor-pointer"
-                          onClick={() => tileSelectedTabs(tab.id)}
-                        >
-                          <LayoutGrid className="w-3.5 h-3.5" />
-                          Tile Selected
-                        </ContextMenuItem>
+                        <ContextMenuSub>
+                          <ContextMenuSubTrigger className="gap-2 text-ui-base cursor-pointer">
+                            <LayoutGrid className="w-3.5 h-3.5" />
+                            Tile Selected
+                          </ContextMenuSubTrigger>
+                          <ContextMenuSubContent className="bg-zinc-900 border-zinc-700">
+                            <ContextMenuItem
+                              className="gap-2 text-ui-base cursor-pointer"
+                              onClick={() => tileSelectedTabs(tab.id, 'columns')}
+                            >
+                              <Columns3 className="w-3.5 h-3.5" />
+                              Columns
+                            </ContextMenuItem>
+                            <ContextMenuItem
+                              className="gap-2 text-ui-base cursor-pointer"
+                              onClick={() => tileSelectedTabs(tab.id, 'rows')}
+                            >
+                              <Rows3 className="w-3.5 h-3.5" />
+                              Rows
+                            </ContextMenuItem>
+                            <ContextMenuItem
+                              className="gap-2 text-ui-base cursor-pointer"
+                              onClick={() => tileSelectedTabs(tab.id, 'grid')}
+                            >
+                              <LayoutGrid className="w-3.5 h-3.5" />
+                              Grid
+                            </ContextMenuItem>
+                          </ContextMenuSubContent>
+                        </ContextMenuSub>
                         <CtxMenuSeparator className="bg-zinc-700" />
                         <ContextMenuItem
                           className="gap-2 text-ui-base cursor-pointer"

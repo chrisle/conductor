@@ -37,6 +37,8 @@ export interface LayoutState {
   /** Update the sizes array for the container that holds groupId */
   setSizes: (groupId: string, sizes: number[]) => void
   getAllGroupIds: () => string[]
+  /** Replace a leaf node (by groupId) with an arbitrary subtree */
+  replaceLeaf: (targetGroupId: string, replacement: LayoutNode) => void
 
   // Legacy compat – used by project-io save/restore
   splitGroup: (groupId: string, direction: 'horizontal' | 'vertical', newGroupId: string) => void
@@ -176,6 +178,22 @@ function removeFromTree(node: LayoutNode, targetGroupId: string): LayoutNode | n
   if (newChildren.length === 1) return newChildren[0].node
 
   return simplify({ ...node, children: newChildren })
+}
+
+/**
+ * Replace a leaf node with an arbitrary subtree.
+ */
+function replaceLeafInTree(node: LayoutNode, targetGroupId: string, replacement: LayoutNode): LayoutNode {
+  if (node.type === 'leaf') {
+    return node.groupId === targetGroupId ? replacement : node
+  }
+  return simplify({
+    ...node,
+    children: node.children.map(c => ({
+      ...c,
+      node: replaceLeafInTree(c.node, targetGroupId, replacement),
+    })),
+  })
 }
 
 /**
@@ -321,6 +339,13 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     const { root } = get()
     if (!root) return []
     return collectGroupIds(root)
+  },
+
+  replaceLeaf: (targetGroupId, replacement) => {
+    set(state => {
+      if (!state.root) return state
+      return { root: simplify(replaceLeafInTree(state.root, targetGroupId, replacement)) }
+    })
   },
 
   // Legacy compat
