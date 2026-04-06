@@ -87,6 +87,20 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
   const [isTabDragging, setIsTabDragging] = useState(false)
   const [isPaneResizing, setIsPaneResizing] = useState(false)
 
+  // Safety timeout: if a drag/resize end event is lost (e.g. window loses
+  // focus, Electron edge case), auto-reset after 3 seconds so the overlay
+  // doesn't permanently block clicks on the webview.
+  const OVERLAY_SAFETY_TIMEOUT_MS = 3000
+
+  useEffect(() => {
+    if (!isTabDragging && !isPaneResizing) return
+    const timer = setTimeout(() => {
+      setIsTabDragging(false)
+      setIsPaneResizing(false)
+    }, OVERLAY_SAFETY_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [isTabDragging, isPaneResizing])
+
   useEffect(() => {
     const handleDragStart = (e: DragEvent) => {
       if (e.dataTransfer?.types.includes(DRAGGING_TAB_KEY)) {
@@ -99,11 +113,19 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
     const handleResizeStart = () => setIsPaneResizing(true)
     const handleResizeEnd = () => setIsPaneResizing(false)
 
+    // Additional safety: reset drag state if window loses focus, since
+    // drag/resize operations can't continue without the window.
+    const handleWindowBlur = () => {
+      setIsTabDragging(false)
+      setIsPaneResizing(false)
+    }
+
     window.addEventListener('dragstart', handleDragStart)
     window.addEventListener('dragend', handleDragEnd)
     window.addEventListener('drop', handleDrop)
     window.addEventListener('pane-resize-start', handleResizeStart)
     window.addEventListener('pane-resize-end', handleResizeEnd)
+    window.addEventListener('blur', handleWindowBlur)
 
     return () => {
       window.removeEventListener('dragstart', handleDragStart)
@@ -111,6 +133,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
       window.removeEventListener('drop', handleDrop)
       window.removeEventListener('pane-resize-start', handleResizeStart)
       window.removeEventListener('pane-resize-end', handleResizeEnd)
+      window.removeEventListener('blur', handleWindowBlur)
     }
   }, [])
 
@@ -478,7 +501,15 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
             otherwise swallow, allowing TabGroup's NESW drop zone logic and
             SplitPane/Sidebar resize handlers to receive them. */}
         {(isTabDragging || isPaneResizing) && (
-          <div className="absolute inset-0 z-10" />
+          <div
+            className="absolute inset-0 z-10"
+            onMouseDown={() => {
+              // Safety valve: if the overlay is stuck (end event was lost),
+              // a click dismisses it so the user can interact with the webview.
+              setIsTabDragging(false)
+              setIsPaneResizing(false)
+            }}
+          />
         )}
       </div>
     </div>
