@@ -13,7 +13,7 @@ import { useActivityBarStore } from './store/activityBar'
 import { useUIStore } from './store/ui'
 import { useConfigStore } from './store/config'
 import { useWorkSessionsStore } from './store/work-sessions'
-import { initializeDefaultProject, saveProject, autosaveLayout } from './lib/project-io'
+import { initializeDefaultProject, createDefaultProject, saveProject, autosaveLayout } from './lib/project-io'
 import { startUsageScraper, stopUsageScraper } from './lib/claude-usage-scraper'
 import { initHomeDir } from './lib/terminal-cwd'
 
@@ -44,9 +44,14 @@ function App(): React.ReactElement {
     })
   }, [])
 
-  // Initialize default project if none is loaded
+  // Initialize project: new windows get a fresh project, otherwise restore last session
   useEffect(() => {
-    initializeDefaultProject()
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('newWindow') === '1') {
+      createDefaultProject()
+    } else {
+      initializeDefaultProject()
+    }
   }, [])
 
   // Auto-save when tabs or layout change (debounced)

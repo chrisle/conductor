@@ -78,10 +78,16 @@ export function registerIpcHandlers(): void {
       })
       return { action: 'deny' }
     })
+    // Pass newWindow flag so the renderer creates a fresh project instead of
+    // restoring the autosaved layout from the first window.
     if (process.env['ELECTRON_RENDERER_URL']) {
-      newWin.loadURL(process.env['ELECTRON_RENDERER_URL'])
+      const url = new URL(process.env['ELECTRON_RENDERER_URL'])
+      url.searchParams.set('newWindow', '1')
+      newWin.loadURL(url.toString())
     } else {
-      newWin.loadFile(path.join(__dirname, '../renderer/index.html'))
+      newWin.loadFile(path.join(__dirname, '../renderer/index.html'), {
+        query: { newWindow: '1' },
+      })
     }
   })
 
