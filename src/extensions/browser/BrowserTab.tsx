@@ -80,10 +80,12 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
   const getRootPath = () => useSidebarStore.getState().rootPath
   const getFocusedGroupId = () => useLayoutStore.getState().focusedGroupId
 
-  // Track whether a tab drag is in progress so we can show a transparent overlay
-  // on top of the webview. Electron's <webview> is a native element that swallows
-  // all drag events, preventing the NESW drop zone logic in TabGroup from firing.
+  // Track whether a tab drag or pane resize is in progress so we can show a
+  // transparent overlay on top of the webview. Electron's <webview> is a native
+  // element that swallows all mouse/drag events, preventing TabGroup's NESW
+  // drop zone logic and SplitPane/Sidebar resize handlers from receiving them.
   const [isTabDragging, setIsTabDragging] = useState(false)
+  const [isPaneResizing, setIsPaneResizing] = useState(false)
 
   useEffect(() => {
     const handleDragStart = (e: DragEvent) => {
@@ -94,14 +96,21 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
     const handleDragEnd = () => setIsTabDragging(false)
     const handleDrop = () => setIsTabDragging(false)
 
+    const handleResizeStart = () => setIsPaneResizing(true)
+    const handleResizeEnd = () => setIsPaneResizing(false)
+
     window.addEventListener('dragstart', handleDragStart)
     window.addEventListener('dragend', handleDragEnd)
     window.addEventListener('drop', handleDrop)
+    window.addEventListener('pane-resize-start', handleResizeStart)
+    window.addEventListener('pane-resize-end', handleResizeEnd)
 
     return () => {
       window.removeEventListener('dragstart', handleDragStart)
       window.removeEventListener('dragend', handleDragEnd)
       window.removeEventListener('drop', handleDrop)
+      window.removeEventListener('pane-resize-start', handleResizeStart)
+      window.removeEventListener('pane-resize-end', handleResizeEnd)
     }
   }, [])
 
@@ -464,10 +473,11 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
           allowpopups: 'true',
           style: { display: 'flex', width: '100%', height: '100%' }
         })}
-        {/* Transparent overlay shown during tab drags to intercept drag events
-            that the native <webview> element would otherwise swallow, allowing
-            TabGroup's NESW drop zone logic to receive them. */}
-        {isTabDragging && (
+        {/* Transparent overlay shown during tab drags and pane resizes to
+            intercept mouse/drag events that the native <webview> element would
+            otherwise swallow, allowing TabGroup's NESW drop zone logic and
+            SplitPane/Sidebar resize handlers to receive them. */}
+        {(isTabDragging || isPaneResizing) && (
           <div className="absolute inset-0 z-10" />
         )}
       </div>
