@@ -34,6 +34,7 @@ import {
 import {
   ContextMenu, ContextMenuTrigger, ContextMenuContent,
   ContextMenuItem, ContextMenuSeparator,
+  ContextMenuSub, ContextMenuSubTrigger, ContextMenuSubContent,
 } from '@/components/ui/context-menu'
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
@@ -83,6 +84,7 @@ export const conductorAPI = {
     DialogFooter, DialogDescription,
     ContextMenu, ContextMenuTrigger, ContextMenuContent,
     ContextMenuItem, ContextMenuSeparator,
+    ContextMenuSub, ContextMenuSubTrigger, ContextMenuSubContent,
     DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
     DropdownMenuItem, DropdownMenuSeparator,
     Collapsible, CollapsibleTrigger, CollapsibleContent,

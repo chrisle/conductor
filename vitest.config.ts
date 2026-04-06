@@ -16,6 +16,7 @@ export default defineConfig({
       '@np3/jira/TicketCard': resolve(__dirname, '../np3-jira/src/TicketCard.tsx'),
       '@np3/jira/KanbanColumn': resolve(__dirname, '../np3-jira/src/KanbanColumn.tsx'),
       '@np3/jira/KanbanBoard': resolve(__dirname, '../np3-jira/src/KanbanBoard.tsx'),
+      '@np3/jira/EditTicketDialog': resolve(__dirname, '../np3-jira/src/EditTicketDialog.tsx'),
       '@np3/jira': resolve(__dirname, '../np3-jira/src/index.ts')
     }
   },

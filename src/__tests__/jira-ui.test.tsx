@@ -28,6 +28,16 @@ vi.mock('@conductor/extension-api', () => ({
       <div data-testid="dropdown-item" onClick={onSelect}>{children}</div>
     ),
     DropdownMenuSeparator: () => <hr />,
+    ContextMenu: ({ children }: any) => <div data-testid="context-menu">{children}</div>,
+    ContextMenuTrigger: ({ children }: any) => <div data-testid="context-trigger">{children}</div>,
+    ContextMenuContent: ({ children }: any) => <div data-testid="context-content">{children}</div>,
+    ContextMenuItem: ({ children, onSelect, className }: any) => (
+      <div data-testid="context-item" className={className} onClick={onSelect}>{children}</div>
+    ),
+    ContextMenuSeparator: () => <hr data-testid="context-separator" />,
+    ContextMenuSub: ({ children }: any) => <div data-testid="context-sub">{children}</div>,
+    ContextMenuSubTrigger: ({ children }: any) => <div data-testid="context-sub-trigger">{children}</div>,
+    ContextMenuSubContent: ({ children }: any) => <div data-testid="context-sub-content">{children}</div>,
     LinkContextMenu: ({ children }: any) => <>{children}</>,
     Skeleton: ({ className }: any) => <div data-testid="skeleton" className={className} />,
   },
@@ -65,6 +75,9 @@ const defaultCardProps = {
   onContinueSession: noop,
   onStartWork: noop,
   onStartWorkInBackground: noop,
+  onEditTicket: noop,
+  onOpenInTerminal: noop,
+  onOpenInVSCode: noop,
   onRefresh: noop,
 }
 
@@ -77,8 +90,8 @@ describe('TicketCard', () => {
       const { container } = render(
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
-      const card = container.firstElementChild as HTMLElement
-      expect(card.className).toContain('border-l-red-500')
+      const card = container.querySelector('.border-l-red-500')
+      expect(card).toBeTruthy()
     })
 
     it('renders emerald left border for stories', () => {
@@ -86,8 +99,8 @@ describe('TicketCard', () => {
       const { container } = render(
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
-      const card = container.firstElementChild as HTMLElement
-      expect(card.className).toContain('border-l-emerald-500')
+      const card = container.querySelector('.border-l-emerald-500')
+      expect(card).toBeTruthy()
     })
 
     it('renders blue left border for tasks', () => {
@@ -95,8 +108,8 @@ describe('TicketCard', () => {
       const { container } = render(
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
-      const card = container.firstElementChild as HTMLElement
-      expect(card.className).toContain('border-l-blue-500')
+      const card = container.querySelector('.border-l-blue-500')
+      expect(card).toBeTruthy()
     })
 
     it('defaults to blue border for unknown types', () => {
@@ -104,8 +117,8 @@ describe('TicketCard', () => {
       const { container } = render(
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
-      const card = container.firstElementChild as HTMLElement
-      expect(card.className).toContain('border-l-blue-500')
+      const card = container.querySelector('.border-l-blue-500')
+      expect(card).toBeTruthy()
     })
   })
 
@@ -115,7 +128,6 @@ describe('TicketCard', () => {
       const { container } = render(
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
-      // The lozenge should display the jiraStatus text
       const lozenge = container.querySelector('.uppercase.tracking-wide')
       expect(lozenge).toBeTruthy()
       expect(lozenge!.textContent).toBe('In Progress')
@@ -155,7 +167,6 @@ describe('TicketCard', () => {
       const { container } = render(
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
-      // ArrowUp icon should be present with red color for highest
       const arrowUp = container.querySelector('.text-red-500')
       expect(arrowUp).toBeTruthy()
     })
@@ -192,9 +203,7 @@ describe('TicketCard', () => {
       const { container } = render(
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
-      // No priority icons should exist
       const priorityIcons = container.querySelectorAll('.text-red-500, .text-orange-500, .text-yellow-500')
-      // Only the issue type icon (blue-500) should be present, not priority
       expect(priorityIcons.length).toBe(0)
     })
   })
@@ -205,7 +214,6 @@ describe('TicketCard', () => {
       const { container } = render(
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
-      // The action container should have opacity-0 class
       const actionContainer = container.querySelector('.opacity-0.group-hover\\:opacity-100')
       expect(actionContainer).toBeTruthy()
     })
@@ -217,7 +225,6 @@ describe('TicketCard', () => {
       const { container } = render(
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
-      // Summary should be in a paragraph element at the top of the card body
       const summary = container.querySelector('p')
       expect(summary).toBeTruthy()
       expect(summary!.textContent).toBe('Fix the login bug')
@@ -277,8 +284,8 @@ describe('TicketCard', () => {
       const { container } = render(
         <TicketCard ticket={ticket} {...defaultCardProps} isThinking={true} />
       )
-      const card = container.firstElementChild as HTMLElement
-      expect(card.className).toContain('thinking-halo')
+      const card = container.querySelector('.thinking-halo')
+      expect(card).toBeTruthy()
     })
 
     it('does not apply thinking-halo when isThinking is false', () => {
@@ -286,8 +293,8 @@ describe('TicketCard', () => {
       const { container } = render(
         <TicketCard ticket={ticket} {...defaultCardProps} isThinking={false} />
       )
-      const card = container.firstElementChild as HTMLElement
-      expect(card.className).not.toContain('thinking-halo')
+      const card = container.querySelector('.thinking-halo')
+      expect(card).toBeNull()
     })
   })
 
@@ -310,7 +317,7 @@ describe('TicketCard', () => {
           { id: '1', url: 'https://github.com/org/repo/pull/99', name: 'PR', status: 'MERGED' },
         ],
       })
-      const { container } = render(
+      render(
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
       const prBadge = screen.getByText('PR#99')
@@ -331,13 +338,13 @@ describe('TicketCard', () => {
     })
   })
 
-  describe('start work in background menu item', () => {
-    it('renders a "Start work in background" dropdown item', () => {
+  describe('start work in background context menu item', () => {
+    it('renders a "Start coding in background" context menu item', () => {
       const ticket = makeTicket()
       render(
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
-      expect(screen.getByText('Start work in background')).toBeTruthy()
+      expect(screen.getByText('Start coding in background')).toBeTruthy()
     })
 
     it('calls onStartWorkInBackground when clicked', () => {
@@ -350,17 +357,17 @@ describe('TicketCard', () => {
           onStartWorkInBackground={onStartWorkInBackground}
         />
       )
-      fireEvent.click(screen.getByText('Start work in background'))
+      fireEvent.click(screen.getByText('Start coding in background'))
       expect(onStartWorkInBackground).toHaveBeenCalledWith(ticket)
     })
 
-    it('renders alongside the "Start work" menu item', () => {
+    it('renders alongside the "Start coding in tab" menu item', () => {
       const ticket = makeTicket()
       render(
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
-      expect(screen.getByText('Start work')).toBeTruthy()
-      expect(screen.getByText('Start work in background')).toBeTruthy()
+      expect(screen.getByText('Start coding in tab')).toBeTruthy()
+      expect(screen.getByText('Start coding in background')).toBeTruthy()
     })
   })
 
@@ -384,6 +391,130 @@ describe('TicketCard', () => {
       expect(dot).toBeNull()
     })
   })
+
+  describe('context menu', () => {
+    it('renders context menu with coding actions', () => {
+      const ticket = makeTicket()
+      render(
+        <TicketCard ticket={ticket} {...defaultCardProps} />
+      )
+      // Context menu items should include the new actions
+      expect(screen.getByText('Open in Claude')).toBeTruthy()
+      expect(screen.getByText('Start coding in tab')).toBeTruthy()
+      expect(screen.getByText('Start coding in background')).toBeTruthy()
+    })
+
+    it('renders Terminal and VSCode actions in context menu', () => {
+      const ticket = makeTicket()
+      render(
+        <TicketCard ticket={ticket} {...defaultCardProps} />
+      )
+      expect(screen.getByText('Open in Terminal')).toBeTruthy()
+      expect(screen.getByText('Open in VSCode')).toBeTruthy()
+    })
+
+    it('renders Edit ticket in context menu', () => {
+      const ticket = makeTicket()
+      render(
+        <TicketCard ticket={ticket} {...defaultCardProps} />
+      )
+      expect(screen.getByText('Edit ticket')).toBeTruthy()
+    })
+
+    it('renders Open in Jira in context menu', () => {
+      const ticket = makeTicket()
+      render(
+        <TicketCard ticket={ticket} {...defaultCardProps} />
+      )
+      expect(screen.getByText('Open in Jira')).toBeTruthy()
+    })
+
+    it('renders Move to submenu in context menu', () => {
+      const ticket = makeTicket()
+      render(
+        <TicketCard ticket={ticket} {...defaultCardProps} />
+      )
+      expect(screen.getByText('Move to')).toBeTruthy()
+    })
+
+    it('calls onEditTicket when Edit ticket is clicked', () => {
+      const onEditTicket = vi.fn()
+      const ticket = makeTicket()
+      render(
+        <TicketCard ticket={ticket} {...defaultCardProps} onEditTicket={onEditTicket} />
+      )
+      fireEvent.click(screen.getByText('Edit ticket'))
+      expect(onEditTicket).toHaveBeenCalledWith(ticket)
+    })
+
+    it('calls onOpenInTerminal when Open in Terminal is clicked', () => {
+      const onOpenInTerminal = vi.fn()
+      const ticket = makeTicket()
+      render(
+        <TicketCard ticket={ticket} {...defaultCardProps} onOpenInTerminal={onOpenInTerminal} />
+      )
+      fireEvent.click(screen.getByText('Open in Terminal'))
+      expect(onOpenInTerminal).toHaveBeenCalledWith(ticket)
+    })
+
+    it('calls onOpenInVSCode when Open in VSCode is clicked', () => {
+      const onOpenInVSCode = vi.fn()
+      const ticket = makeTicket()
+      render(
+        <TicketCard ticket={ticket} {...defaultCardProps} onOpenInVSCode={onOpenInVSCode} />
+      )
+      fireEvent.click(screen.getByText('Open in VSCode'))
+      expect(onOpenInVSCode).toHaveBeenCalledWith(ticket)
+    })
+
+    it('shows Continue session when session is active', () => {
+      const ticket = makeTicket()
+      const workSession = { id: '1', ticketKey: 'CON-1', status: 'active' }
+      render(
+        <TicketCard ticket={ticket} {...defaultCardProps} workSession={workSession} />
+      )
+      expect(screen.getByText('Continue session')).toBeTruthy()
+    })
+
+    it('shows open PR links in context menu', () => {
+      const ticket = makeTicket({
+        pullRequests: [
+          { id: '1', url: 'https://github.com/org/repo/pull/42', name: 'fix-bug', status: 'OPEN' },
+        ],
+      })
+      render(
+        <TicketCard ticket={ticket} {...defaultCardProps} />
+      )
+      expect(screen.getByText('Open PR #42')).toBeTruthy()
+    })
+  })
+
+  describe('quick action buttons', () => {
+    it('shows Start button when no active session', () => {
+      const ticket = makeTicket()
+      render(
+        <TicketCard ticket={ticket} {...defaultCardProps} />
+      )
+      expect(screen.getByText('Start')).toBeTruthy()
+    })
+
+    it('shows Continue button when session is active', () => {
+      const ticket = makeTicket()
+      const workSession = { id: '1', ticketKey: 'CON-1', status: 'active' }
+      render(
+        <TicketCard ticket={ticket} {...defaultCardProps} workSession={workSession} />
+      )
+      expect(screen.getByText('Continue')).toBeTruthy()
+    })
+
+    it('shows Move button for status transitions', () => {
+      const ticket = makeTicket()
+      render(
+        <TicketCard ticket={ticket} {...defaultCardProps} />
+      )
+      expect(screen.getByText('Move')).toBeTruthy()
+    })
+  })
 })
 
 describe('KanbanColumn', () => {
@@ -396,6 +527,9 @@ describe('KanbanColumn', () => {
     onContinueSession: noop,
     onStartWork: noop,
     onStartWorkInBackground: noop,
+    onEditTicket: noop,
+    onOpenInTerminal: noop,
+    onOpenInVSCode: noop,
     onRefresh: noop,
     workSessions: [],
   }

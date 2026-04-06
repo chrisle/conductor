@@ -672,6 +672,17 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
     }
   })
 
+  ipcMain.handle('jira:put', async (_event, url: string, headers: Record<string, string>, body: string) => {
+    try {
+      const res = await fetch(url, { method: 'PUT', headers, body })
+      const contentType = res.headers.get('content-type') || ''
+      const resBody = contentType.includes('json') ? await res.json() : null
+      return { ok: res.ok, status: res.status, body: resBody }
+    } catch (err) {
+      return { ok: false, status: 0, body: null, error: String(err) }
+    }
+  })
+
   // Extensions
   const extensionsDir = path.join(app.getPath('userData'), 'extensions')
 

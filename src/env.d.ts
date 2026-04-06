@@ -109,6 +109,7 @@ interface ElectronAPI {
   // Jira
   jiraFetch: (url: string, headers: Record<string, string>) => Promise<{ ok: boolean; status: number; body: unknown; error?: string }>
   jiraPost: (url: string, headers: Record<string, string>, body: string) => Promise<{ ok: boolean; status: number; body: unknown; error?: string }>
+  jiraPut: (url: string, headers: Record<string, string>, body: string) => Promise<{ ok: boolean; status: number; body: unknown; error?: string }>
 
   // Extensions
   getExtensionsDir: () => Promise<string>
