@@ -257,6 +257,9 @@ function AppearanceSection(): React.ReactElement {
               ]}
             />
           </SettingRow>
+          <SettingRow label="Scrollback Lines" description="Max lines kept in terminal history (applies to new terminals)">
+            <NumberInput value={termConfig.scrollback} onChange={v => setTerminal({ scrollback: v })} min={1000} max={100000} step={1000} />
+          </SettingRow>
         </div>
       </div>
 

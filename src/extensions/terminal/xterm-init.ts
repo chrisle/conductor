@@ -70,7 +70,7 @@ export async function createXtermTerminal(container: HTMLElement): Promise<{ ter
     cursorBlink: custom.cursorBlink ?? terminalConfig.cursorBlink,
     cursorStyle: custom.cursorStyle || terminalConfig.cursorStyle,
     cursorWidth: terminalConfig.cursorWidth,
-    scrollback: terminalConfig.scrollback,
+    scrollback: custom.scrollback || terminalConfig.scrollback,
     allowTransparency: true,
   })
 

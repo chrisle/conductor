@@ -47,47 +47,4 @@ test.describe('Terminal Scrollback Buffer', () => {
       expect(text).toContain('AFTER_LARGE_OUTPUT_MARKER')
     }).toPass({ timeout: 5000, intervals: [300] })
   })
-
-  test('scrollback mock APIs are available', async ({ page }) => {
-    // Verify the scrollback mock APIs exist on electronAPI
-    const hasAPIs = await page.evaluate(() => {
-      return typeof window.electronAPI.scrollbackSave === 'function' &&
-             typeof window.electronAPI.scrollbackLoad === 'function' &&
-             typeof window.electronAPI.scrollbackCleanup === 'function'
-    })
-    expect(hasAPIs).toBe(true)
-  })
-
-  test('scrollback save and load round-trips data', async ({ page }) => {
-    // Test the mock scrollback IPC directly
-    const result = await page.evaluate(async () => {
-      await window.electronAPI.scrollbackSave('test-session', 0, 'chunk-0-data')
-      await window.electronAPI.scrollbackSave('test-session', 1, 'chunk-1-data')
-
-      const chunk0 = await window.electronAPI.scrollbackLoad('test-session', 0)
-      const chunk1 = await window.electronAPI.scrollbackLoad('test-session', 1)
-      const chunkMissing = await window.electronAPI.scrollbackLoad('test-session', 99)
-
-      return { chunk0, chunk1, chunkMissing }
-    })
-
-    expect(result.chunk0).toBe('chunk-0-data')
-    expect(result.chunk1).toBe('chunk-1-data')
-    expect(result.chunkMissing).toBeNull()
-  })
-
-  test('scrollback cleanup removes session data', async ({ page }) => {
-    const result = await page.evaluate(async () => {
-      await window.electronAPI.scrollbackSave('cleanup-test', 0, 'data')
-      const before = await window.electronAPI.scrollbackLoad('cleanup-test', 0)
-
-      await window.electronAPI.scrollbackCleanup('cleanup-test')
-      const after = await window.electronAPI.scrollbackLoad('cleanup-test', 0)
-
-      return { before, after }
-    })
-
-    expect(result.before).toBe('data')
-    expect(result.after).toBeNull()
-  })
 })

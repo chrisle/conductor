@@ -130,6 +130,6 @@ export const terminalConfig = {
   cursorBlink: true,
   cursorStyle: "bar" as const,
   cursorWidth: 2,
-  scrollback: 100000,
+  scrollback: 10000,
   devicePixelRatio: window.devicePixelRatio || 2,
 };

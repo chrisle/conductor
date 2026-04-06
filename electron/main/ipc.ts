@@ -972,36 +972,6 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
     await shell.openExternal(url)
   })
 
-  // ── Scrollback disk persistence ──────────────────────────
-  const scrollbackDir = path.join(app.getPath('userData'), 'scrollback')
-
-  ipcMain.handle('scrollback:save', async (_event, sessionId: string, chunkIndex: number, data: string) => {
-    const dir = path.join(scrollbackDir, sessionId)
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true })
-    }
-    const filePath = path.join(dir, `${chunkIndex}.txt`)
-    await fs.promises.writeFile(filePath, data, 'utf-8')
-  })
-
-  ipcMain.handle('scrollback:load', async (_event, sessionId: string, chunkIndex: number) => {
-    const filePath = path.join(scrollbackDir, sessionId, `${chunkIndex}.txt`)
-    try {
-      return await fs.promises.readFile(filePath, 'utf-8')
-    } catch {
-      return null
-    }
-  })
-
-  ipcMain.handle('scrollback:cleanup', async (_event, sessionId: string) => {
-    const dir = path.join(scrollbackDir, sessionId)
-    try {
-      await fs.promises.rm(dir, { recursive: true, force: true })
-    } catch {
-      // Ignore — directory may not exist
-    }
-  })
-
   // Terminal WebSocket bridge (renderer <-> conductord via Unix socket)
   registerTerminalBridge()
 }
