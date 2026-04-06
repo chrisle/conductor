@@ -139,7 +139,7 @@ describe('TicketCard', () => {
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
       const lozenge = container.querySelector('.uppercase.tracking-wide')
-      expect(lozenge!.className).toContain('text-blue-400')
+      expect(lozenge!.className).toContain('text-blue-300')
     })
 
     it('uses emerald styling for done status', () => {
@@ -148,7 +148,7 @@ describe('TicketCard', () => {
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
       const lozenge = container.querySelector('.uppercase.tracking-wide')
-      expect(lozenge!.className).toContain('text-emerald-400')
+      expect(lozenge!.className).toContain('text-emerald-300')
     })
 
     it('uses zinc styling for backlog status', () => {
@@ -157,7 +157,7 @@ describe('TicketCard', () => {
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
       const lozenge = container.querySelector('.uppercase.tracking-wide')
-      expect(lozenge!.className).toContain('text-zinc-300')
+      expect(lozenge!.className).toContain('text-zinc-200')
     })
   })
 
@@ -208,14 +208,25 @@ describe('TicketCard', () => {
     })
   })
 
-  describe('hover actions', () => {
-    it('action buttons have opacity-0 by default', () => {
+  describe('action buttons visibility', () => {
+    it('action buttons are always visible (no hover-only opacity)', () => {
       const ticket = makeTicket()
       const { container } = render(
         <TicketCard ticket={ticket} {...defaultCardProps} />
       )
-      const actionContainer = container.querySelector('.opacity-0.group-hover\\:opacity-100')
-      expect(actionContainer).toBeTruthy()
+      // Buttons should NOT be hidden behind opacity-0
+      const hiddenContainer = container.querySelector('.opacity-0.group-hover\\:opacity-100')
+      expect(hiddenContainer).toBeNull()
+    })
+
+    it('action buttons container is rendered without opacity classes', () => {
+      const ticket = makeTicket()
+      const { container } = render(
+        <TicketCard ticket={ticket} {...defaultCardProps} />
+      )
+      // The Move, Start, and Edit buttons should be present and visible
+      expect(screen.getByText('Move')).toBeTruthy()
+      expect(screen.getByText('Start')).toBeTruthy()
     })
   })
 
