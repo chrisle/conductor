@@ -23,4 +23,6 @@ export interface TerminalTabExtraProps {
   footer?: React.ReactNode;
   /** Where to render the footer bar — 'top' (default) or 'bottom' */
   footerPosition?: 'top' | 'bottom';
+  /** When true, the default "Terminal ID: ..." label in the toolbar is hidden */
+  hideTerminalId?: boolean;
 }
