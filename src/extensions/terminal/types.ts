@@ -17,7 +17,9 @@ export interface TerminalTabExtraProps {
   onSessionReady?: (isNew: boolean, opts?: { autoPilot?: boolean }) => void;
   /** Intercept key events before the terminal processes them. Return true to prevent default handling. */
   interceptKeys?: (e: React.KeyboardEvent, write: (data: string) => void) => boolean;
-  /** Optional footer rendered in the toolbar */
+  /** Optional content rendered on the left side of the toolbar (before the spacer) */
+  footerLeft?: React.ReactNode;
+  /** Optional footer rendered on the right side of the toolbar (after the spacer) */
   footer?: React.ReactNode;
   /** Where to render the footer bar — 'top' (default) or 'bottom' */
   footerPosition?: 'top' | 'bottom';
