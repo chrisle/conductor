@@ -103,6 +103,9 @@ function ResizeHandle({ node, index, isRow }: ResizeHandleProps): React.ReactEle
     isResizing.current = true
     document.body.style.cursor = isRow ? 'col-resize' : 'row-resize'
     document.body.style.userSelect = 'none'
+    // Notify webview-bearing components so they can show an overlay that
+    // prevents the native <webview> from swallowing mouse events.
+    window.dispatchEvent(new Event('pane-resize-start'))
 
     // We need to find a groupId in this container to call setSizes
     const firstChild = node.children[0]
@@ -168,6 +171,7 @@ function ResizeHandle({ node, index, isRow }: ResizeHandleProps): React.ReactEle
       document.body.style.userSelect = ''
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
+      window.dispatchEvent(new Event('pane-resize-end'))
     }
 
     document.addEventListener('mousemove', handleMouseMove)

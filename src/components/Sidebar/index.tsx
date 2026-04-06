@@ -22,6 +22,9 @@ export default function Sidebar({ defaultGroupId }: SidebarProps): React.ReactEl
 
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
+    // Notify webview-bearing components so they can show an overlay that
+    // prevents the native <webview> from swallowing mouse events.
+    window.dispatchEvent(new Event('pane-resize-start'))
 
     // rAF handle for throttling width updates to once per frame
     let rafId: number | null = null
@@ -42,6 +45,7 @@ export default function Sidebar({ defaultGroupId }: SidebarProps): React.ReactEl
       document.body.style.userSelect = ''
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
+      window.dispatchEvent(new Event('pane-resize-end'))
     }
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
