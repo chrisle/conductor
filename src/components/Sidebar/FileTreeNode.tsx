@@ -4,7 +4,7 @@ import {
   FileCode, FileJson, FileText, FileImage, FileArchive,
   Terminal, Settings, Globe, Palette, Package, Database,
   Film, Music, File, Lock, GitBranch,
-  FileUp, FilePlus, FolderPlus, Star, StarOff, Pencil, Trash2
+  FileUp, FilePlus, FolderPlus, Star, StarOff, Pencil, Trash2, Bot
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -20,6 +20,7 @@ import { useSidebarStore, type FileEntry } from '@/store/sidebar'
 import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { extensionRegistry } from '@/extensions'
+import { nextSessionId } from '@/lib/session-id'
 
 interface FileTreeNodeProps {
   entry: FileEntry
@@ -286,6 +287,23 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
     window.dispatchEvent(new CustomEvent('sidebar:refresh', { detail: { path: entry.path } }))
   }
 
+  function openClaudeHere() {
+    // For files, open Claude in the parent directory; for directories, use the directory itself
+    const cwd = entry.isDirectory ? entry.path : entry.path.substring(0, entry.path.lastIndexOf('/'))
+    const layoutGroupIds = useLayoutStore.getState().getAllGroupIds()
+    const targetGroupId = (focusedGroupId && layoutGroupIds.includes(focusedGroupId))
+      ? focusedGroupId
+      : groupId
+    const id = nextSessionId('claude-code')
+    addTab(targetGroupId, {
+      id,
+      type: 'claude-code',
+      title: id,
+      filePath: cwd,
+      initialCommand: 'claude\n',
+    })
+  }
+
   useEffect(() => {
     if (creating) setTimeout(() => createInputRef.current?.focus(), 0)
   }, [creating])
@@ -381,6 +399,11 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
               </ContextMenuItem>
             </>
           )}
+          <ContextMenuItem className="text-ui-base text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={openClaudeHere}>
+            <Bot className="w-3.5 h-3.5 mr-2" />
+            Open Claude here
+          </ContextMenuItem>
+          <ContextMenuSeparator className="bg-zinc-700" />
           <ContextMenuItem className="text-ui-base text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => { setIsRenaming(true); setRenameValue(entry.name) }}>
             <Pencil className="w-3.5 h-3.5 mr-2" />
             Rename
