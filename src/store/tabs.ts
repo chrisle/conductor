@@ -24,6 +24,10 @@ export interface TabGroup {
   id: string
   tabs: Tab[]
   activeTabId: string | null
+  /** Tracks tab activation order for MRU (most-recently-used) tab switching.
+   *  Most recent tab ID is at the end of the array. When a tab is closed,
+   *  the previously active tab (second-to-last) becomes active. */
+  tabHistory: string[]
   /** The git worktree path this group is associated with */
   worktree?: string
 }
@@ -50,7 +54,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     set(state => ({
       groups: {
         ...state.groups,
-        [id]: { id, tabs: [], activeTabId: null }
+        [id]: { id, tabs: [], activeTabId: null, tabHistory: [] }
       }
     }))
     return id
@@ -70,9 +74,19 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     if (tabData.id) {
       const group = get().groups[groupId]
       if (group?.tabs.find(t => t.id === tabData.id)) {
-        set(state => ({
-          groups: { ...state.groups, [groupId]: { ...state.groups[groupId], activeTabId: tabData.id! } }
-        }))
+        set(state => {
+          const g = state.groups[groupId]
+          return {
+            groups: {
+              ...state.groups,
+              [groupId]: {
+                ...g,
+                activeTabId: tabData.id!,
+                tabHistory: [...g.tabHistory.filter(id => id !== tabData.id!), tabData.id!]
+              }
+            }
+          }
+        })
         return tabData.id
       }
     }
@@ -87,7 +101,8 @@ export const useTabsStore = create<TabsState>((set, get) => ({
           [groupId]: {
             ...group,
             tabs: [...group.tabs, tab],
-            activeTabId: id
+            activeTabId: id,
+            tabHistory: [...group.tabHistory, id]
           }
         }
       }
@@ -100,10 +115,15 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       const group = state.groups[groupId]
       if (!group) return state
       const newTabs = group.tabs.filter(t => t.id !== tabId)
+      const newHistory = group.tabHistory.filter(id => id !== tabId)
       let newActiveId = group.activeTabId
       if (newActiveId === tabId) {
-        const idx = group.tabs.findIndex(t => t.id === tabId)
-        if (newTabs.length > 0) {
+        if (newHistory.length > 0) {
+          // Activate the most recently used tab (last in history)
+          newActiveId = newHistory[newHistory.length - 1]
+        } else if (newTabs.length > 0) {
+          // Fallback: no history, pick adjacent tab
+          const idx = group.tabs.findIndex(t => t.id === tabId)
           newActiveId = newTabs[Math.max(0, idx - 1)].id
         } else {
           newActiveId = null
@@ -115,7 +135,8 @@ export const useTabsStore = create<TabsState>((set, get) => ({
           [groupId]: {
             ...group,
             tabs: newTabs,
-            activeTabId: newActiveId
+            activeTabId: newActiveId,
+            tabHistory: newHistory
           }
         }
       }
@@ -129,7 +150,11 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       return {
         groups: {
           ...state.groups,
-          [groupId]: { ...group, activeTabId: tabId }
+          [groupId]: {
+            ...group,
+            activeTabId: tabId,
+            tabHistory: [...group.tabHistory.filter(id => id !== tabId), tabId]
+          }
         }
       }
     })
@@ -145,12 +170,17 @@ export const useTabsStore = create<TabsState>((set, get) => ({
       if (!tab) return state
 
       const newFromTabs = fromGroup.tabs.filter(t => t.id !== tabId)
+      const newFromHistory = fromGroup.tabHistory.filter(id => id !== tabId)
       let newFromActiveId = fromGroup.activeTabId
       if (newFromActiveId === tabId) {
-        const idx = fromGroup.tabs.findIndex(t => t.id === tabId)
-        newFromActiveId = newFromTabs.length > 0
-          ? newFromTabs[Math.max(0, idx - 1)].id
-          : null
+        if (newFromHistory.length > 0) {
+          newFromActiveId = newFromHistory[newFromHistory.length - 1]
+        } else if (newFromTabs.length > 0) {
+          const idx = fromGroup.tabs.findIndex(t => t.id === tabId)
+          newFromActiveId = newFromTabs[Math.max(0, idx - 1)].id
+        } else {
+          newFromActiveId = null
+        }
       }
 
       const newToTabs = [...toGroup.tabs]
@@ -166,12 +196,14 @@ export const useTabsStore = create<TabsState>((set, get) => ({
           [fromGroupId]: {
             ...fromGroup,
             tabs: newFromTabs,
-            activeTabId: newFromActiveId
+            activeTabId: newFromActiveId,
+            tabHistory: newFromHistory
           },
           [toGroupId]: {
             ...toGroup,
             tabs: newToTabs,
-            activeTabId: tabId
+            activeTabId: tabId,
+            tabHistory: [...toGroup.tabHistory.filter(id => id !== tabId), tabId]
           }
         }
       }

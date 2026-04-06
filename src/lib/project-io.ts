@@ -34,6 +34,7 @@ export function serializeWorkspace(): Workspace {
     groups[groupId] = {
       id: group.id,
       activeTabId: group.activeTabId,
+      tabHistory: group.tabHistory,
       worktree: group.worktree,
       tabs: group.tabs.map(tab => {
         const serialized: SerializedTab = {
@@ -154,9 +155,15 @@ async function restoreWorkspace(workspace: Workspace): Promise<void> {
         _terminalHistory: tab.terminalHistory
       } as any))
 
+    // Restore tabHistory, filtering out any tab IDs that were removed (e.g. stale sessions)
+    const tabIdSet = new Set(tabs.map(t => t.id))
+    const restoredHistory = (group.tabHistory || []).filter(id => tabIdSet.has(id))
+    const activeTabId = tabs.find(t => t.id === group.activeTabId) ? group.activeTabId : (tabs[0]?.id ?? null)
+
     newGroups[groupId] = {
       id: group.id,
-      activeTabId: tabs.find(t => t.id === group.activeTabId) ? group.activeTabId : (tabs[0]?.id ?? null),
+      activeTabId,
+      tabHistory: restoredHistory.length > 0 ? restoredHistory : (activeTabId ? [activeTabId] : []),
       worktree: group.worktree,
       tabs,
     }

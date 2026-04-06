@@ -36,6 +36,7 @@ export interface SerializedTabGroup {
   id: string
   tabs: SerializedTab[]
   activeTabId: string | null
+  tabHistory?: string[]
   worktree?: string
 }
 
