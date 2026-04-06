@@ -97,7 +97,12 @@ export default function MainLayout(): React.ReactElement {
     if (initialized.current) return;
     initialized.current = true;
 
-    // Create initial group and set layout
+    // Only create an initial group if no layout has been restored yet.
+    // Project initialization (initializeDefaultProject) runs after this
+    // effect and will set its own layout; if a layout already exists
+    // (e.g. from a fast restore), skip to avoid creating orphan groups.
+    if (useLayoutStore.getState().root) return;
+
     const groupId = createGroup();
     setRoot({ type: "leaf", groupId });
     setFocusedGroup(groupId);
