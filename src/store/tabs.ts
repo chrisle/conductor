@@ -40,7 +40,7 @@ export interface TabsState {
   selectionAnchor: Record<string, string | null>
   createGroup: () => string
   removeGroup: (groupId: string) => void
-  addTab: (groupId: string, tab: Omit<Tab, 'id'> & { id?: string }) => string
+  addTab: (groupId: string, tab: Omit<Tab, 'id'> & { id?: string }, options?: { afterActiveTab?: boolean }) => string
   removeTab: (groupId: string, tabId: string) => void
   setActiveTab: (groupId: string, tabId: string) => void
   moveTab: (fromGroupId: string, tabId: string, toGroupId: string, atIndex?: number) => void
@@ -82,7 +82,7 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     })
   },
 
-  addTab: (groupId, tabData) => {
+  addTab: (groupId, tabData, options) => {
     const id = tabData.id || nanoid()
     // If a specific ID was requested and already exists, just focus it
     if (tabData.id) {
@@ -109,12 +109,21 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     set(state => {
       const group = state.groups[groupId]
       if (!group) return state
+      // Insert after the currently active tab when requested
+      let newTabs: Tab[]
+      if (options?.afterActiveTab && group.activeTabId) {
+        const activeIndex = group.tabs.findIndex(t => t.id === group.activeTabId)
+        newTabs = [...group.tabs]
+        newTabs.splice(activeIndex + 1, 0, tab)
+      } else {
+        newTabs = [...group.tabs, tab]
+      }
       return {
         groups: {
           ...state.groups,
           [groupId]: {
             ...group,
-            tabs: [...group.tabs, tab],
+            tabs: newTabs,
             activeTabId: id,
             tabHistory: [...group.tabHistory, id]
           }
