@@ -32,7 +32,7 @@ export interface LayoutState {
   /** Insert newGroupId next to targetGroupId in the given direction, keeping layout flat */
   insertPanel: (targetGroupId: string, position: DropPosition, newGroupId: string) => void
   /** Insert a panel at the very edge of the root layout */
-  insertAtEdge: (position: 'east' | 'west', newGroupId: string) => void
+  insertAtEdge: (position: DropPosition, newGroupId: string) => void
   removeGroup: (groupId: string) => void
   /** Update the sizes array for the container that holds groupId */
   setSizes: (groupId: string, sizes: number[]) => void
@@ -268,26 +268,32 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     set(state => {
       if (!state.root) return state
       const newLeaf: LayoutChild = { node: { type: 'leaf', groupId: newGroupId }, size: 1 }
+
+      // Determine whether this is a horizontal (row) or vertical (column) edge insert
+      const isHorizontal = position === 'east' || position === 'west'
+      const containerType = isHorizontal ? 'row' : 'column'
+      const prepend = position === 'west' || position === 'north'
+
       const existingChild: LayoutChild = {
         node: state.root,
-        size: state.root.type === 'row'
+        size: state.root.type === containerType
           ? state.root.children.reduce((s, c) => s + c.size, 0)
           : 1,
       }
 
-      if (state.root.type === 'row') {
-        // Already a row – just prepend/append
-        const newChildren = position === 'west'
+      if (state.root.type === containerType) {
+        // Root already matches the needed direction – just prepend/append
+        const newChildren = prepend
           ? [newLeaf, ...state.root.children]
           : [...state.root.children, newLeaf]
-        return { root: { type: 'row' as const, children: newChildren } }
+        return { root: { type: containerType, children: newChildren } }
       }
 
-      // Wrap in a new row
-      const children = position === 'west'
+      // Wrap in a new container of the needed direction
+      const children = prepend
         ? [newLeaf, existingChild]
         : [existingChild, newLeaf]
-      return { root: { type: 'row' as const, children } }
+      return { root: { type: containerType, children } }
     })
   },
 
