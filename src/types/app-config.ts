@@ -52,6 +52,7 @@ export interface AppConfig {
       autoPilotScanMs: number
       disableBackgroundTasks: boolean
       agentTeams: boolean
+      startWorkPromptTemplate: string
     }
     codex: {
       autoPilotScanMs: number
@@ -97,6 +98,20 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcut[] = [
   { id: 'zoomReset', label: 'Reset Zoom', keys: 'Meta+0' },
 ]
 
+export const DEFAULT_START_WORK_PROMPT_TEMPLATE = [
+  'Use the claude.ai Atlassian MCP (cloud ID 8fd881b3-a07f-4662-bad9-1a9d9e0321a3) to fetch {{ticketKey}} from the {{projectKey}} project in {{domain}}.',
+  'Work autonomously on this ticket end to end.',
+  '',
+  'Requirements:',
+  '- Pull latest from main (or dev if main doesn\'t exist) before starting.',
+  '- Write tests for any changes you make. Run the tests and fix them until they pass.',
+  '- Run the full test suite to make sure nothing is broken.',
+  '- Only commit changes related to this ticket — keep the PR clean and focused.',
+  '- When done, push your branch and open a PR (or update an existing one).',
+  '- Update the PR description with a detailed summary of what you did, why, and how to verify.',
+  '- Add clear inline comments in the code to explain non-obvious logic.',
+].join('\n')
+
 export const DEFAULT_APP_CONFIG: AppConfig = {
   version: 1,
   ui: {
@@ -111,6 +126,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
       autoPilotScanMs: 250,
       disableBackgroundTasks: true,
       agentTeams: false,
+      startWorkPromptTemplate: DEFAULT_START_WORK_PROMPT_TEMPLATE,
     },
     codex: {
       autoPilotScanMs: 250,

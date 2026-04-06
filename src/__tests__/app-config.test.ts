@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { DEFAULT_APP_CONFIG } from '../types/app-config'
+import { DEFAULT_APP_CONFIG, DEFAULT_START_WORK_PROMPT_TEMPLATE } from '../types/app-config'
 import type { AppConfig, DeepPartial } from '../types/app-config'
 
 describe('DEFAULT_APP_CONFIG', () => {
@@ -27,6 +27,14 @@ describe('DEFAULT_APP_CONFIG', () => {
     expect(DEFAULT_APP_CONFIG.aiCli.claudeCode.skipDangerousPermissions).toBe(false)
     expect(DEFAULT_APP_CONFIG.aiCli.claudeCode.autoPilotScanMs).toBe(250)
     expect(DEFAULT_APP_CONFIG.aiCli.claudeCode.disableBackgroundTasks).toBe(true)
+  })
+
+  it('has a default start work prompt template with required placeholders', () => {
+    const template = DEFAULT_APP_CONFIG.aiCli.claudeCode.startWorkPromptTemplate
+    expect(template).toBe(DEFAULT_START_WORK_PROMPT_TEMPLATE)
+    expect(template).toContain('{{ticketKey}}')
+    expect(template).toContain('{{projectKey}}')
+    expect(template).toContain('{{domain}}')
   })
 
   it('has codex default settings', () => {
