@@ -112,23 +112,9 @@ const SESSION_TAB_TYPES = new Set(['terminal', 'claude-code', 'codex'])
 
 /** Restore a workspace (tabs + layout) */
 async function restoreWorkspace(workspace: Workspace): Promise<void> {
-  const tabsStore = useTabsStore.getState()
-  const layoutStore = useLayoutStore.getState()
-
-  // Clear current state
-  for (const groupId of Object.keys(tabsStore.groups)) {
-    for (const tab of tabsStore.groups[groupId].tabs) {
-      if (SESSION_TAB_TYPES.has(tab.type)) {
-        killTerminal(tab.id)
-      }
-    }
-    tabsStore.removeGroup(groupId)
-  }
-
-  // Restore workspace-level settings
-  useProjectStore.getState().setWorkspaceSettings(workspace.settings)
-
-  // Fetch live conductord sessions to filter out stale tabs
+  // Fetch live conductord sessions BEFORE mutating any state.
+  // This avoids a race where auto-save fires during the async gap and
+  // serializes a partially-cleared workspace, corrupting the saved data.
   let liveSessionIds: Set<string> | null = null
   try {
     const sessions = await window.electronAPI.conductordGetSessions()
@@ -137,7 +123,22 @@ async function restoreWorkspace(workspace: Workspace): Promise<void> {
     // If conductord is unreachable, skip filtering
   }
 
-  // Restore groups and tabs, skipping session tabs whose session no longer exists
+  const tabsStore = useTabsStore.getState()
+  const layoutStore = useLayoutStore.getState()
+
+  // Kill terminals in current groups (without removing groups yet)
+  for (const groupId of Object.keys(tabsStore.groups)) {
+    for (const tab of tabsStore.groups[groupId].tabs) {
+      if (SESSION_TAB_TYPES.has(tab.type)) {
+        killTerminal(tab.id)
+      }
+    }
+  }
+
+  // Restore workspace-level settings
+  useProjectStore.getState().setWorkspaceSettings(workspace.settings)
+
+  // Build new groups from workspace data, filtering out stale session tabs
   const newGroups: Record<string, import('@/store/tabs').TabGroup> = {}
   for (const [groupId, group] of Object.entries(workspace.groups)) {
     const tabs = group.tabs
@@ -172,9 +173,10 @@ async function restoreWorkspace(workspace: Workspace): Promise<void> {
       tabs,
     }
   }
-  useTabsStore.setState({ groups: newGroups })
 
-  // Restore layout
+  // Apply all state changes synchronously — no async gaps between clear and
+  // restore, so auto-save cannot observe a partially-cleared state.
+  useTabsStore.setState({ groups: newGroups })
   layoutStore.setRoot(workspace.layout)
   if (workspace.focusedGroupId) {
     layoutStore.setFocusedGroup(workspace.focusedGroupId)
@@ -372,8 +374,9 @@ export async function switchWorkspace(workspaceName: string): Promise<boolean> {
     await saveProject(project.filePath)
   }
 
-  // For unsaved projects, just store current workspace in memory
-  // (we lose it on switch — this is expected for unsaved projects)
+  // Update active workspace BEFORE restoring so that any auto-save
+  // triggered by the restore serializes under the correct workspace name.
+  useProjectStore.getState().setActiveWorkspace(workspaceName)
 
   if (project.filePath) {
     // Load the project file to get the target workspace
@@ -394,23 +397,23 @@ export async function switchWorkspace(workspaceName: string): Promise<boolean> {
     const tabsStore = useTabsStore.getState()
     const layoutStore = useLayoutStore.getState()
 
-    // Clear current state
+    // Kill terminals before clearing
     for (const groupId of Object.keys(tabsStore.groups)) {
       for (const tab of tabsStore.groups[groupId].tabs) {
         if (tab.type === 'terminal' || tab.type === 'claude-code' || tab.type === 'codex') {
           killTerminal(tab.id)
         }
       }
-      tabsStore.removeGroup(groupId)
     }
 
-    // Create fresh group
+    // Create fresh group and replace all groups atomically
     const groupId = tabsStore.createGroup()
+    const freshGroup = useTabsStore.getState().groups[groupId]
+    useTabsStore.setState({ groups: { [groupId]: freshGroup } })
     layoutStore.setRoot({ type: 'leaf', groupId })
     layoutStore.setFocusedGroup(groupId)
   }
 
-  useProjectStore.getState().setActiveWorkspace(workspaceName)
   useProjectStore.getState().clearWorkspaceDirty(workspaceName)
   return true
 }
