@@ -5,6 +5,7 @@ import React, {
   useRef,
   useEffect,
 } from 'react';
+import { Info, Copy, Check } from 'lucide-react';
 import { useSidebarStore } from '@/store/sidebar';
 import type { TabProps } from '@/extensions/types';
 import TerminalTab from '../../terminal/TerminalTab';
@@ -169,21 +170,87 @@ export default function ClaudeCodeTab({
     />
   );
 
+  // Info icon dropdown — shows Terminal ID and Claude ID on click
+  const [showInfo, setShowInfo] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const infoRef = useRef<HTMLDivElement>(null);
+
+  // Close the info panel when clicking outside
+  useEffect(() => {
+    if (!showInfo) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (infoRef.current && !infoRef.current.contains(e.target as Node)) {
+        setShowInfo(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showInfo]);
+
+  const copyToClipboard = useCallback((value: string, field: string) => {
+    navigator.clipboard.writeText(value);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 1500);
+  }, []);
+
   // All stats pinned to the right side of the toolbar
   const footer = (
     <>
-      {sessionId && (
-        <>
-          <div className="w-px h-3 bg-zinc-700" />
-          <span
-            className="text-ui-xs font-mono text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors truncate max-w-[220px]"
-            title={sessionId}
-            onClick={() => navigator.clipboard.writeText(sessionId)}
-          >
-            Claude ID: {sessionId.slice(0, 8)}
-          </span>
-        </>
-      )}
+      {/* Info icon — reveals Terminal ID and Claude ID in a dropdown */}
+      <div className="w-px h-3 bg-zinc-700" />
+      <div className="relative" ref={infoRef}>
+        <button
+          onClick={() => setShowInfo((prev) => !prev)}
+          className="text-zinc-500 hover:text-zinc-300 transition-colors"
+          title="Show session IDs"
+        >
+          <Info className="w-3.5 h-3.5" />
+        </button>
+        {showInfo && (
+          <div className="absolute bottom-full mb-1 right-0 bg-zinc-900 border border-zinc-700 rounded-md shadow-lg p-2 z-50 min-w-[260px]">
+            <div className="flex items-center justify-between gap-2 py-1">
+              <span className="text-ui-xs text-zinc-400 whitespace-nowrap">Terminal ID</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-ui-xs font-mono text-zinc-300 truncate max-w-[160px]" title={tabId}>
+                  {tabId}
+                </span>
+                <button
+                  onClick={() => copyToClipboard(tabId, 'terminal')}
+                  className="text-zinc-500 hover:text-zinc-300 transition-colors shrink-0"
+                  title="Copy Terminal ID"
+                >
+                  {copiedField === 'terminal' ? (
+                    <Check className="w-3 h-3 text-emerald-400" />
+                  ) : (
+                    <Copy className="w-3 h-3" />
+                  )}
+                </button>
+              </div>
+            </div>
+            {sessionId && (
+              <div className="flex items-center justify-between gap-2 py-1 border-t border-zinc-800">
+                <span className="text-ui-xs text-zinc-400 whitespace-nowrap">Claude ID</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-ui-xs font-mono text-zinc-300 truncate max-w-[160px]" title={sessionId}>
+                    {sessionId}
+                  </span>
+                  <button
+                    onClick={() => copyToClipboard(sessionId, 'claude')}
+                    className="text-zinc-500 hover:text-zinc-300 transition-colors shrink-0"
+                    title="Copy Claude ID"
+                  >
+                    {copiedField === 'claude' ? (
+                      <Check className="w-3 h-3 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-3 h-3" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
       {apiKeyAccount && (
         <>
           <div className="w-px h-3 bg-zinc-700" />
@@ -253,6 +320,7 @@ export default function ClaudeCodeTab({
       footerLeft={footerLeft}
       footer={footer}
       footerPosition="bottom"
+      hideTerminalId
     />
   );
 }

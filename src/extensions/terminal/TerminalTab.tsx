@@ -25,6 +25,7 @@ function TerminalTabInner({
   footerLeft,
   footer,
   footerPosition = 'bottom',
+  hideTerminalId = false,
 }: TabProps & TerminalTabExtraProps): React.ReactElement {
   const cwd = tab.filePath;
   const initialCommand = tab.initialCommand;
@@ -461,13 +462,15 @@ function TerminalTabInner({
       >
         <RotateCw className="w-3 h-3" />
       </button>
-      <span
-        className="text-ui-xs font-mono text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors truncate max-w-[180px]"
-        title={tabId}
-        onClick={() => navigator.clipboard.writeText(tabId)}
-      >
-        Terminal ID: {tabId}
-      </span>
+      {!hideTerminalId && (
+        <span
+          className="text-ui-xs font-mono text-zinc-500 cursor-pointer hover:text-zinc-300 transition-colors truncate max-w-[180px]"
+          title={tabId}
+          onClick={() => navigator.clipboard.writeText(tabId)}
+        >
+          Terminal ID: {tabId}
+        </span>
+      )}
       {footer}
     </div>
   )
