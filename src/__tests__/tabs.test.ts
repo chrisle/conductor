@@ -94,11 +94,11 @@ describe('useTabsStore', () => {
       const second = useTabsStore.getState().addTab(groupId, { type: 'text', title: 'second' })
       useTabsStore.getState().addTab(groupId, { type: 'text', title: 'third' })
 
-      // Remove third (active), should activate second
+      // Remove third (active), should activate second (MRU)
       useTabsStore.getState().removeTab(groupId, useTabsStore.getState().groups[groupId].activeTabId!)
       expect(useTabsStore.getState().groups[groupId].activeTabId).toBe(second)
 
-      // Remove second (active), should activate first
+      // Remove second (active), should activate first (MRU)
       useTabsStore.getState().removeTab(groupId, second)
       expect(useTabsStore.getState().groups[groupId].activeTabId).toBe(first)
     })
@@ -117,6 +117,43 @@ describe('useTabsStore', () => {
       // second is active
       useTabsStore.getState().removeTab(groupId, first)
       expect(useTabsStore.getState().groups[groupId].activeTabId).toBe(second)
+    })
+
+    it('activates MRU tab, not adjacent tab, when closing active tab', () => {
+      const groupId = useTabsStore.getState().createGroup()
+      const tabA = useTabsStore.getState().addTab(groupId, { type: 'text', title: 'A' })
+      const tabB = useTabsStore.getState().addTab(groupId, { type: 'text', title: 'B' })
+      const tabC = useTabsStore.getState().addTab(groupId, { type: 'text', title: 'C' })
+      const tabD = useTabsStore.getState().addTab(groupId, { type: 'text', title: 'D' })
+
+      // History is now: A, B, C, D (D is active)
+      // Switch to A, then to C — history becomes: B, D, A, C
+      useTabsStore.getState().setActiveTab(groupId, tabA)
+      useTabsStore.getState().setActiveTab(groupId, tabC)
+
+      // Close C — should go back to A (the previous MRU), not B or D
+      useTabsStore.getState().removeTab(groupId, tabC)
+      expect(useTabsStore.getState().groups[groupId].activeTabId).toBe(tabA)
+
+      // Close A — should go back to D (next in MRU)
+      useTabsStore.getState().removeTab(groupId, tabA)
+      expect(useTabsStore.getState().groups[groupId].activeTabId).toBe(tabD)
+
+      // Close D — should go back to B (last remaining)
+      useTabsStore.getState().removeTab(groupId, tabD)
+      expect(useTabsStore.getState().groups[groupId].activeTabId).toBe(tabB)
+    })
+
+    it('removes closed tab from tabHistory', () => {
+      const groupId = useTabsStore.getState().createGroup()
+      const tabA = useTabsStore.getState().addTab(groupId, { type: 'text', title: 'A' })
+      const tabB = useTabsStore.getState().addTab(groupId, { type: 'text', title: 'B' })
+      useTabsStore.getState().addTab(groupId, { type: 'text', title: 'C' })
+
+      useTabsStore.getState().removeTab(groupId, tabB)
+      const history = useTabsStore.getState().groups[groupId].tabHistory
+      expect(history).not.toContain(tabB)
+      expect(history).toContain(tabA)
     })
   })
 
@@ -306,6 +343,104 @@ describe('useTabsStore', () => {
 
     it('returns undefined for non-existent group', () => {
       expect(useTabsStore.getState().getGroup('nope')).toBeUndefined()
+    })
+  })
+
+  describe('tabHistory (MRU tracking)', () => {
+    it('initializes empty history on group creation', () => {
+      const groupId = useTabsStore.getState().createGroup()
+      expect(useTabsStore.getState().groups[groupId].tabHistory).toEqual([])
+    })
+
+    it('adds tab to history when addTab is called', () => {
+      const groupId = useTabsStore.getState().createGroup()
+      const tabA = useTabsStore.getState().addTab(groupId, { type: 'text', title: 'A' })
+      const tabB = useTabsStore.getState().addTab(groupId, { type: 'text', title: 'B' })
+      expect(useTabsStore.getState().groups[groupId].tabHistory).toEqual([tabA, tabB])
+    })
+
+    it('moves tab to end of history on setActiveTab', () => {
+      const groupId = useTabsStore.getState().createGroup()
+      const tabA = useTabsStore.getState().addTab(groupId, { type: 'text', title: 'A' })
+      const tabB = useTabsStore.getState().addTab(groupId, { type: 'text', title: 'B' })
+      const tabC = useTabsStore.getState().addTab(groupId, { type: 'text', title: 'C' })
+
+      // Switch back to A
+      useTabsStore.getState().setActiveTab(groupId, tabA)
+      expect(useTabsStore.getState().groups[groupId].tabHistory).toEqual([tabB, tabC, tabA])
+    })
+
+    it('does not duplicate entries in history', () => {
+      const groupId = useTabsStore.getState().createGroup()
+      const tabA = useTabsStore.getState().addTab(groupId, { type: 'text', title: 'A' })
+      const tabB = useTabsStore.getState().addTab(groupId, { type: 'text', title: 'B' })
+
+      useTabsStore.getState().setActiveTab(groupId, tabA)
+      useTabsStore.getState().setActiveTab(groupId, tabB)
+      useTabsStore.getState().setActiveTab(groupId, tabA)
+
+      const history = useTabsStore.getState().groups[groupId].tabHistory
+      expect(history).toEqual([tabB, tabA])
+      expect(history.filter(id => id === tabA)).toHaveLength(1)
+    })
+
+    it('updates history when focusing existing tab via addTab with same id', () => {
+      const groupId = useTabsStore.getState().createGroup()
+      const tabA = useTabsStore.getState().addTab(groupId, { type: 'text', title: 'A' })
+      const tabB = useTabsStore.getState().addTab(groupId, { type: 'text', title: 'B' })
+
+      // Re-add A by explicit id — should move A to end of history
+      useTabsStore.getState().addTab(groupId, { id: tabA, type: 'text', title: 'A' })
+      expect(useTabsStore.getState().groups[groupId].tabHistory).toEqual([tabB, tabA])
+    })
+
+    it('maintains history correctly across moveTab', () => {
+      const g1 = useTabsStore.getState().createGroup()
+      const g2 = useTabsStore.getState().createGroup()
+      const tabA = useTabsStore.getState().addTab(g1, { type: 'text', title: 'A' })
+      const tabB = useTabsStore.getState().addTab(g1, { type: 'text', title: 'B' })
+      const tabC = useTabsStore.getState().addTab(g1, { type: 'text', title: 'C' })
+
+      // Move active tab (C) to g2
+      useTabsStore.getState().moveTab(g1, tabC, g2)
+
+      // g1 history should not contain C, and B should be active (MRU)
+      expect(useTabsStore.getState().groups[g1].tabHistory).toEqual([tabA, tabB])
+      expect(useTabsStore.getState().groups[g1].activeTabId).toBe(tabB)
+
+      // g2 history should contain C
+      expect(useTabsStore.getState().groups[g2].tabHistory).toEqual([tabC])
+    })
+
+    it('handles closing tabs in non-sequential MRU order', () => {
+      const groupId = useTabsStore.getState().createGroup()
+      const tab1 = useTabsStore.getState().addTab(groupId, { type: 'text', title: '1' })
+      const tab2 = useTabsStore.getState().addTab(groupId, { type: 'text', title: '2' })
+      const tab3 = useTabsStore.getState().addTab(groupId, { type: 'text', title: '3' })
+      const tab4 = useTabsStore.getState().addTab(groupId, { type: 'text', title: '4' })
+      const tab5 = useTabsStore.getState().addTab(groupId, { type: 'text', title: '5' })
+
+      // Visit tabs in order: 1, 3, 5, 2 — so MRU is: 4, 1, 3, 5, 2
+      useTabsStore.getState().setActiveTab(groupId, tab1)
+      useTabsStore.getState().setActiveTab(groupId, tab3)
+      useTabsStore.getState().setActiveTab(groupId, tab5)
+      useTabsStore.getState().setActiveTab(groupId, tab2)
+
+      // Close 2 → should go to 5
+      useTabsStore.getState().removeTab(groupId, tab2)
+      expect(useTabsStore.getState().groups[groupId].activeTabId).toBe(tab5)
+
+      // Close 5 → should go to 3
+      useTabsStore.getState().removeTab(groupId, tab5)
+      expect(useTabsStore.getState().groups[groupId].activeTabId).toBe(tab3)
+
+      // Close 3 → should go to 1
+      useTabsStore.getState().removeTab(groupId, tab3)
+      expect(useTabsStore.getState().groups[groupId].activeTabId).toBe(tab1)
+
+      // Close 1 → should go to 4 (last remaining)
+      useTabsStore.getState().removeTab(groupId, tab1)
+      expect(useTabsStore.getState().groups[groupId].activeTabId).toBe(tab4)
     })
   })
 })
