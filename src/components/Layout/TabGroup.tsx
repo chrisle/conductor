@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { X, Plus, FileText, FolderOpen, FilePlus2, Folder, RotateCw, Pencil, Skull } from 'lucide-react'
+import { X, Plus, FileText, FolderOpen, FilePlus2, Folder, RotateCw, Pencil, Skull, LayoutGrid } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -187,6 +187,7 @@ function TabBadge({ tabId }: { tabId: string }) {
 
 export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement {
   const { groups, setActiveTab, removeTab, addTab, moveTab } = useTabsStore()
+  const selectedTabIds = useTabsStore(s => s.selectedTabIds[groupId])
   const { focusedGroupId, setFocusedGroup, insertPanel, removeGroup, getAllGroupIds } = useLayoutStore()
   const group = groups[groupId]
 
@@ -457,6 +458,48 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   function handleCloseTab(e: React.MouseEvent, tabId: string) {
     e.stopPropagation()
     closeTab(tabId)
+  }
+
+  // --- Multi-select actions ---
+
+  function getEffectiveSelection(contextTabId: string): string[] {
+    // If the right-clicked tab is in the selection, use the full selection.
+    // Otherwise treat it as if only that tab was selected.
+    const sel = useTabsStore.getState().getSelectedTabIds(groupId)
+    if (sel.includes(contextTabId)) return sel
+    return [contextTabId]
+  }
+
+  function closeSelectedTabs(contextTabId: string) {
+    const ids = getEffectiveSelection(contextTabId)
+    useTabsStore.getState().clearSelection(groupId)
+    // Close in reverse order to avoid index shifting issues
+    for (const id of [...ids].reverse()) {
+      closeTab(id)
+    }
+  }
+
+  function killSelectedTabs(contextTabId: string) {
+    const ids = getEffectiveSelection(contextTabId)
+    useTabsStore.getState().clearSelection(groupId)
+    for (const id of [...ids].reverse()) {
+      killAndCloseTab(id)
+    }
+  }
+
+  // Tile selected tabs: each selected tab gets its own panel split to the east
+  function tileSelectedTabs(contextTabId: string) {
+    const ids = getEffectiveSelection(contextTabId)
+    if (ids.length < 2) return
+    useTabsStore.getState().clearSelection(groupId)
+    // First tab stays in current group; remaining tabs each get a new group
+    for (let i = 1; i < ids.length; i++) {
+      const newGroupId = useTabsStore.getState().createGroup()
+      // Alternate east/south for a grid-like arrangement
+      const position = i % 2 === 1 ? 'east' : 'south'
+      insertPanel(groupId, position as any, newGroupId)
+      moveTab(groupId, ids[i], newGroupId)
+    }
   }
 
   function handleContentClick() {
@@ -789,9 +832,27 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                 onDragOver={e => handleTabDragOver(e, index)}
                 onDragLeave={() => setDragOverTabIndex(null)}
                 onDrop={e => handleTabDrop(e, index)}
-                onClick={() => {
-                  setActiveTab(groupId, tab.id)
+                onClick={(e) => {
                   setFocusedGroup(groupId)
+                  if (e.shiftKey) {
+                    // Shift-click: select range from anchor to this tab
+                    e.preventDefault()
+                    useTabsStore.getState().selectTabRange(groupId, tab.id)
+                    return
+                  }
+                  if (e.metaKey || e.ctrlKey) {
+                    // Cmd/Ctrl-click: toggle this tab in selection
+                    e.preventDefault()
+                    useTabsStore.getState().toggleSelectTab(groupId, tab.id)
+                    return
+                  }
+                  // Plain click: clear selection, activate tab
+                  useTabsStore.getState().clearSelection(groupId)
+                  setActiveTab(groupId, tab.id)
+                  // Set anchor for future shift-clicks
+                  useTabsStore.setState(s => ({
+                    selectionAnchor: { ...s.selectionAnchor, [groupId]: tab.id },
+                  }))
                   // Clear notification badge when tab is focused
                   const badges = useNotificationsStore.getState().tabBadges
                   if (badges[tab.id]) {
@@ -808,7 +869,9 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                     ? 'bg-zinc-950 text-zinc-50 border-b-2 border-b-blue-400'
                     : 'bg-zinc-900/60 text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-200',
                   dragOverTabIndex === index && 'border-l-2 border-l-blue-400',
-                  tab.id === group.activeTabId && tab.isThinking && 'tab-thinking-bar'
+                  tab.id === group.activeTabId && tab.isThinking && 'tab-thinking-bar',
+                  // Multi-select highlight (non-active selected tabs get a subtle blue tint)
+                  selectedTabIds?.has(tab.id) && tab.id !== group.activeTabId && 'bg-blue-900/30 text-zinc-200'
                 )}
               >
                 <TabIcon type={tab.type} />
@@ -849,42 +912,90 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
               </div>
               </ContextMenuTrigger>
               <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
-                <ContextMenuItem
-                  className="gap-2 text-ui-base cursor-pointer"
-                  onClick={() => startRename(tab)}
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                  Rename
-                </ContextMenuItem>
-                {isTerminalLike(tab.type) && (
-                  <>
-                    <CtxMenuSeparator />
-                    <ContextMenuItem
-                      className="gap-2 text-ui-base cursor-pointer"
-                      onClick={() => refreshTab(tab)}
-                    >
-                      <RotateCw className="w-3.5 h-3.5" />
-                      Refresh
-                    </ContextMenuItem>
-                  </>
-                )}
-                <CtxMenuSeparator />
-                <ContextMenuItem
-                  className="gap-2 text-ui-base cursor-pointer"
-                  onClick={() => closeTab(tab.id)}
-                >
-                  <X className="w-3.5 h-3.5" />
-                  Close
-                </ContextMenuItem>
-                {isTerminalLike(tab.type) && (
-                  <ContextMenuItem
-                    className="gap-2 text-ui-base cursor-pointer text-red-400 focus:text-red-300"
-                    onClick={() => killAndCloseTab(tab.id)}
-                  >
-                    <Skull className="w-3.5 h-3.5" />
-                    Kill Session
-                  </ContextMenuItem>
-                )}
+                {(() => {
+                  const sel = getEffectiveSelection(tab.id)
+                  const multiSelected = sel.length > 1
+                  if (multiSelected) {
+                    // Multi-select context menu
+                    const hasTerminalLike = sel.some(id => {
+                      const t = group.tabs.find(t => t.id === id)
+                      return t && isTerminalLike(t.type)
+                    })
+                    return (
+                      <>
+                        <ContextMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5">
+                          {sel.length} tabs selected
+                        </ContextMenuLabel>
+                        <CtxMenuSeparator className="bg-zinc-700" />
+                        <ContextMenuItem
+                          className="gap-2 text-ui-base cursor-pointer"
+                          onClick={() => tileSelectedTabs(tab.id)}
+                        >
+                          <LayoutGrid className="w-3.5 h-3.5" />
+                          Tile Selected
+                        </ContextMenuItem>
+                        <CtxMenuSeparator className="bg-zinc-700" />
+                        <ContextMenuItem
+                          className="gap-2 text-ui-base cursor-pointer"
+                          onClick={() => closeSelectedTabs(tab.id)}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          Close Selected
+                        </ContextMenuItem>
+                        {hasTerminalLike && (
+                          <ContextMenuItem
+                            className="gap-2 text-ui-base cursor-pointer text-red-400 focus:text-red-300"
+                            onClick={() => killSelectedTabs(tab.id)}
+                          >
+                            <Skull className="w-3.5 h-3.5" />
+                            Kill Selected
+                          </ContextMenuItem>
+                        )}
+                      </>
+                    )
+                  }
+                  // Single-tab context menu (original)
+                  return (
+                    <>
+                      <ContextMenuItem
+                        className="gap-2 text-ui-base cursor-pointer"
+                        onClick={() => startRename(tab)}
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Rename
+                      </ContextMenuItem>
+                      {isTerminalLike(tab.type) && (
+                        <>
+                          <CtxMenuSeparator className="bg-zinc-700" />
+                          <ContextMenuItem
+                            className="gap-2 text-ui-base cursor-pointer"
+                            onClick={() => refreshTab(tab)}
+                          >
+                            <RotateCw className="w-3.5 h-3.5" />
+                            Refresh
+                          </ContextMenuItem>
+                        </>
+                      )}
+                      <CtxMenuSeparator className="bg-zinc-700" />
+                      <ContextMenuItem
+                        className="gap-2 text-ui-base cursor-pointer"
+                        onClick={() => closeTab(tab.id)}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        Close
+                      </ContextMenuItem>
+                      {isTerminalLike(tab.type) && (
+                        <ContextMenuItem
+                          className="gap-2 text-ui-base cursor-pointer text-red-400 focus:text-red-300"
+                          onClick={() => killAndCloseTab(tab.id)}
+                        >
+                          <Skull className="w-3.5 h-3.5" />
+                          Kill Session
+                        </ContextMenuItem>
+                      )}
+                    </>
+                  )
+                })()}
               </ContextMenuContent>
             </ContextMenu>
           ))}

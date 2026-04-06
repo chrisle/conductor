@@ -30,6 +30,10 @@ export interface TabGroup {
 
 export interface TabsState {
   groups: Record<string, TabGroup>
+  /** Per-group set of selected tab IDs for multi-select (shift/cmd-click) */
+  selectedTabIds: Record<string, Set<string>>
+  /** Per-group anchor tab ID for shift-click range selection */
+  selectionAnchor: Record<string, string | null>
   createGroup: () => string
   removeGroup: (groupId: string) => void
   addTab: (groupId: string, tab: Omit<Tab, 'id'> & { id?: string }) => string
@@ -40,10 +44,20 @@ export interface TabsState {
   updateTab: (groupId: string, tabId: string, updates: Partial<Tab>) => void
   setGroupWorktree: (groupId: string, worktree: string | undefined) => void
   getGroup: (groupId: string) => TabGroup | undefined
+  /** Toggle a single tab in the selection (cmd/ctrl-click) */
+  toggleSelectTab: (groupId: string, tabId: string) => void
+  /** Select a range of tabs from anchor to target (shift-click) */
+  selectTabRange: (groupId: string, tabId: string) => void
+  /** Clear all selected tabs for a group */
+  clearSelection: (groupId: string) => void
+  /** Get the selected tab IDs for a group as an array */
+  getSelectedTabIds: (groupId: string) => string[]
 }
 
 export const useTabsStore = create<TabsState>((set, get) => ({
   groups: {},
+  selectedTabIds: {},
+  selectionAnchor: {},
 
   createGroup: () => {
     const id = nanoid()
@@ -225,5 +239,60 @@ export const useTabsStore = create<TabsState>((set, get) => ({
 
   getGroup: (groupId) => {
     return get().groups[groupId]
-  }
+  },
+
+  toggleSelectTab: (groupId, tabId) => {
+    set(state => {
+      const current = new Set(state.selectedTabIds[groupId] || [])
+      if (current.has(tabId)) {
+        current.delete(tabId)
+      } else {
+        current.add(tabId)
+      }
+      return {
+        selectedTabIds: { ...state.selectedTabIds, [groupId]: current },
+        selectionAnchor: { ...state.selectionAnchor, [groupId]: tabId },
+      }
+    })
+  },
+
+  selectTabRange: (groupId, tabId) => {
+    const group = get().groups[groupId]
+    if (!group) return
+    const anchor = get().selectionAnchor[groupId]
+    if (!anchor) {
+      // No anchor yet — just select this one tab and set it as anchor
+      set(state => ({
+        selectedTabIds: { ...state.selectedTabIds, [groupId]: new Set([tabId]) },
+        selectionAnchor: { ...state.selectionAnchor, [groupId]: tabId },
+      }))
+      return
+    }
+    const tabIds = group.tabs.map(t => t.id)
+    const anchorIdx = tabIds.indexOf(anchor)
+    const targetIdx = tabIds.indexOf(tabId)
+    if (anchorIdx === -1 || targetIdx === -1) return
+    const start = Math.min(anchorIdx, targetIdx)
+    const end = Math.max(anchorIdx, targetIdx)
+    const rangeIds = tabIds.slice(start, end + 1)
+    set(state => ({
+      selectedTabIds: { ...state.selectedTabIds, [groupId]: new Set(rangeIds) },
+      // Keep existing anchor for subsequent shift-clicks
+    }))
+  },
+
+  clearSelection: (groupId) => {
+    set(state => ({
+      selectedTabIds: { ...state.selectedTabIds, [groupId]: new Set<string>() },
+      selectionAnchor: { ...state.selectionAnchor, [groupId]: null },
+    }))
+  },
+
+  getSelectedTabIds: (groupId) => {
+    const group = get().groups[groupId]
+    const selected = get().selectedTabIds[groupId]
+    if (!group || !selected || selected.size === 0) return []
+    // Return in tab order
+    return group.tabs.filter(t => selected.has(t.id)).map(t => t.id)
+  },
 }))
