@@ -137,6 +137,8 @@ interface ElectronAPI {
   // Conductord REST proxy
   conductordHealth: () => Promise<boolean>
   conductordGetSessions: () => Promise<Array<{ id: string; dead: boolean; cwd: string; command: string }>>
+  conductordGetTmuxSessions: () => Promise<Array<{ name: string; [key: string]: unknown }>>
+  conductordKillTmuxSession: (name: string) => Promise<void>
 
   // Debug logging
   logDebug: (msg: string) => void
