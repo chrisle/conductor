@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { X, Plus, FileText, FolderOpen, FilePlus2, RotateCw, Pencil, Skull, LayoutGrid, Columns3, Rows3 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
