@@ -10,7 +10,7 @@ import SettingsDialog from "../SettingsDialog";
 const DRAGGING_TAB_KEY = "__dragging_tab__";
 const DRAGGING_GROUP_KEY = "__dragging_group__";
 
-function EdgeDropZone({ side }: { side: "west" | "east" | "north" | "south" }) {
+function EdgeDropZone({ side, dragging }: { side: "west" | "east" | "north" | "south"; dragging: boolean }) {
   const [active, setActive] = useState(false);
   const { insertAtEdge, removeGroup } = useLayoutStore();
   const { moveTab, createGroup } = useTabsStore();
@@ -54,6 +54,8 @@ function EdgeDropZone({ side }: { side: "west" | "east" | "north" | "south" }) {
     <div
       className={cn(
         "absolute z-20 transition-all",
+        // Invisible to clicks until a tab drag begins
+        dragging ? "pointer-events-auto" : "pointer-events-none",
         // Horizontal edges span full width at top/bottom
         isHorizontal && "left-0 right-0 h-4",
         side === "north" && "top-0",
@@ -92,6 +94,7 @@ export default function MainLayout(): React.ReactElement {
   const { root, setRoot, setFocusedGroup } = useLayoutStore();
   const { createGroup } = useTabsStore();
   const initialized = useRef(false);
+  const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
     if (initialized.current) return;
@@ -101,6 +104,19 @@ export default function MainLayout(): React.ReactElement {
     const groupId = createGroup();
     setRoot({ type: "leaf", groupId });
     setFocusedGroup(groupId);
+  }, []);
+
+  // Enable edge drop zones only while a tab drag is in progress so
+  // they don't block clicks on the toolbar beneath them (CON-65).
+  useEffect(() => {
+    const onStart = () => setDragging(true);
+    const onEnd = () => setDragging(false);
+    window.addEventListener("dragstart", onStart);
+    window.addEventListener("dragend", onEnd);
+    return () => {
+      window.removeEventListener("dragstart", onStart);
+      window.removeEventListener("dragend", onEnd);
+    };
   }, []);
 
   if (!root) {
@@ -116,11 +132,11 @@ export default function MainLayout(): React.ReactElement {
       <ActivityBar />
       <Sidebar defaultGroupId={getFirstGroupId(root)} />
       <div className="flex-1 min-w-0 overflow-hidden relative">
-        <EdgeDropZone side="north" />
-        <EdgeDropZone side="west" />
+        <EdgeDropZone side="north" dragging={dragging} />
+        <EdgeDropZone side="west" dragging={dragging} />
         <SplitPane node={root} />
-        <EdgeDropZone side="east" />
-        <EdgeDropZone side="south" />
+        <EdgeDropZone side="east" dragging={dragging} />
+        <EdgeDropZone side="south" dragging={dragging} />
       </div>
       <SettingsDialog />
     </div>
