@@ -44,6 +44,8 @@ export function serializeWorkspace(): Workspace {
           filePath: tab.filePath,
           url: tab.url,
           content: tab.content,
+          // Persist auto pilot state so it survives app restarts (CON-45)
+          autoPilot: tab.autoPilot,
         }
         if ((tab.type === 'terminal' || tab.type === 'claude-code' || tab.type === 'codex') && terminalBuffers.has(tab.id)) {
           try {
@@ -152,6 +154,8 @@ async function restoreWorkspace(workspace: Workspace): Promise<void> {
         filePath: tab.filePath,
         url: tab.url,
         content: tab.content,
+        // Restore auto pilot state from persisted data (CON-45)
+        autoPilot: tab.autoPilot,
         _terminalHistory: tab.terminalHistory
       } as any))
 
