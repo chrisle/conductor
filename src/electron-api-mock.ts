@@ -210,6 +210,16 @@ const mock: typeof window.electronAPI = {
       return res.ok ? await res.json() : []
     } catch { return [] }
   },
+  conductordGetTmuxSessions: async () => [],
+  conductordKillTmuxSession: noopAsync,
+
+  // Close tab
+  onCloseTabRequested: noop,
+  offCloseTabRequested: noop,
+
+  // Session metrics
+  getSessionMetrics: async () => null,
+
   // Debug / shell
   logDebug: noop,
   openExternal: noopAsync,
