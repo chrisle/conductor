@@ -9,7 +9,7 @@ import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useUIStore } from '@/store/ui'
 import { useClaudeUsageStore } from '@/store/claude-usage'
-import { scrapeNow, formatResetCountdown } from '@/lib/claude-usage-scraper'
+import { scrapeNow, formatResetCountdown, getPrimaryResetCountdown } from '@/lib/claude-usage-scraper'
 
 
 function Item({ children }: { children: React.ReactNode }) {
@@ -92,6 +92,10 @@ function ClaudeUsageIndicator() {
 
   // Show session % in the label, fall back to all-models %
   const displayPercent = usage?.sessionPercent ?? usage?.percentUsed
+
+  // Show reset countdown in the footer label so users see it at a glance (CON-51)
+  const resetCountdown = getPrimaryResetCountdown(usage?.tiers)
+
   const label = scraping
     ? 'Checking...'
     : error
@@ -132,6 +136,9 @@ function ClaudeUsageIndicator() {
           <span className={`inline-block w-1.5 h-1.5 rounded-full ${dotColor}`} />
         )}
         <span className={textColor}>{label}</span>
+        {resetCountdown && !scraping && !error && (
+          <span className="text-zinc-500">· {resetCountdown}</span>
+        )}
       </button>
       {open && (
         <div className="absolute bottom-full mb-2 right-0 bg-zinc-900 border border-zinc-700 rounded-md text-xs w-[280px] p-3 shadow-xl z-50">

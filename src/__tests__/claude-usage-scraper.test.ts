@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-import { parseUsageOutput, parseResetToISO, formatResetCountdown } from '@/lib/claude-usage-scraper'
+import { parseUsageOutput, parseResetToISO, formatResetCountdown, getPrimaryResetCountdown } from '@/lib/claude-usage-scraper'
 
 describe('parseUsageOutput', () => {
   it('parses a typical multi-tier output', () => {
@@ -165,5 +165,68 @@ describe('formatResetCountdown', () => {
 
   it('returns null when both resetsAt and fallback are null', () => {
     expect(formatResetCountdown(null, null)).toBeNull()
+  })
+})
+
+describe('getPrimaryResetCountdown', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-06T12:00:00Z'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('returns null for undefined tiers', () => {
+    expect(getPrimaryResetCountdown(undefined)).toBeNull()
+  })
+
+  it('returns null for empty tiers array', () => {
+    expect(getPrimaryResetCountdown([])).toBeNull()
+  })
+
+  it('returns null when no tier has resetsAt', () => {
+    const tiers = [
+      { label: 'Session', percent: 20, resets: null, resetsAt: null, spent: null },
+    ]
+    expect(getPrimaryResetCountdown(tiers)).toBeNull()
+  })
+
+  it('prefers the "All models" tier over others', () => {
+    const tiers = [
+      { label: 'Sonnet only', percent: 10, resets: 'Resets Apr 8 at 3pm', resetsAt: new Date('2026-04-08T15:00:00Z').toISOString(), spent: null },
+      { label: 'All models', percent: 30, resets: 'Resets Apr 10 at 7am', resetsAt: new Date('2026-04-10T07:00:00Z').toISOString(), spent: null },
+    ]
+    // Should pick "All models" which is ~3.8 days away → "Resets in 3d"
+    expect(getPrimaryResetCountdown(tiers)).toBe('Resets in 3d')
+  })
+
+  it('falls back to first tier with resetsAt when no "All models" tier', () => {
+    const tiers = [
+      { label: 'Session', percent: 20, resets: null, resetsAt: null, spent: null },
+      { label: 'Sonnet only', percent: 10, resets: 'Resets Apr 8 at 3pm', resetsAt: new Date('2026-04-08T15:00:00Z').toISOString(), spent: null },
+    ]
+    expect(getPrimaryResetCountdown(tiers)).toBe('Resets in 2d')
+  })
+
+  it('returns fallback string when resetsAt is in the past', () => {
+    const tiers = [
+      { label: 'All models', percent: 100, resets: 'Resets Apr 5', resetsAt: new Date('2026-04-05T00:00:00Z').toISOString(), spent: null },
+    ]
+    // resetsAt is in the past, so formatResetCountdown returns the fallback (the raw resets string)
+    expect(getPrimaryResetCountdown(tiers)).toBe('Resets Apr 5')
+  })
+
+  it('works end-to-end with parseUsageOutput', () => {
+    const raw = [
+      'Current week (all models) ██████▌ 13% used Resets Apr 10 at 7am (America/Los_Angeles)',
+      'Current week (Sonnet only) ██ 4% used Resets Apr 11 at 11:59am (America/Los_Angeles)',
+    ].join('\n')
+    const parsed = parseUsageOutput(raw)
+    const countdown = getPrimaryResetCountdown(parsed.tiers)
+    // parseResetToISO builds a local-time date, so the exact day count varies by timezone;
+    // just verify it produces a "Resets in Xd" countdown string
+    expect(countdown).toMatch(/^Resets in \d+d$/)
   })
 })
