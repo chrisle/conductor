@@ -823,7 +823,10 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
         <div
           ref={tabBarRef}
           className="flex items-end flex-1 min-w-0 overflow-x-auto"
-          onDragOver={e => { e.preventDefault() }}
+          // Empty tab bar area is also a drop zone for appending tabs to the end
+          onDragOver={e => { e.preventDefault(); setDragOverTabIndex(group.tabs.length) }}
+          onDragLeave={() => setDragOverTabIndex(null)}
+          onDrop={e => handleTabDrop(e, group.tabs.length)}
         >
         <div className="flex items-end min-w-0">
           {group.tabs.map((tab, index) => (
