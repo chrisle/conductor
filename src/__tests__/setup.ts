@@ -45,6 +45,7 @@ Object.defineProperty(window, 'electronAPI', {
     loadRecentProjects: vi.fn().mockResolvedValue([]),
     saveRecentProjects: vi.fn().mockResolvedValue(undefined),
     listClaudeSessions: vi.fn().mockResolvedValue([]),
+    getSessionMetrics: vi.fn().mockResolvedValue(null),
     setAutoPilot: vi.fn(),
     captureScrollback: vi.fn().mockResolvedValue(null),
     openExternal: vi.fn().mockResolvedValue(undefined),

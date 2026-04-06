@@ -17,12 +17,38 @@ import { setAutoPilot as setAutoPilotWs } from '@/lib/terminal-api';
 import { getSessionAutoPilot, setSessionAutoPilot } from '@/lib/session-autopilot';
 import { useTabsStore } from '@/store/tabs';
 import { useWorkSessionsStore } from '@/store/work-sessions';
-import { useConfigStore } from '@/store/config';
+import { useConfigStore } from '@/store/config'
+import { useSessionMetrics } from '../hooks/useSessionMetrics';
 
 // Extract a Jira ticket key (e.g. "PROJ-123") from the tab title.
 function extractTicketKey(title: string): string | null {
   const match = title.match(/([A-Z]+-\d+)/);
   return match ? match[1] : null;
+}
+
+// Shorten model IDs for display: "claude-opus-4-6" → "Opus 4.6"
+function formatModelName(model: string): string {
+  const match = model.match(/claude-(\w+)-(\d+)-(\d+)/)
+  if (match) {
+    const name = match[1].charAt(0).toUpperCase() + match[1].slice(1)
+    return `${name} ${match[2]}.${match[3]}`
+  }
+  // Fallback: strip "claude-" prefix
+  return model.replace(/^claude-/, '')
+}
+
+// Color-code context percentage: green < 70%, amber 70–90%, red ≥ 90%
+function contextColor(percent: number): string {
+  if (percent >= 90) return 'text-red-400'
+  if (percent >= 70) return 'text-amber-400'
+  return 'text-emerald-400'
+}
+
+// Format token speed for compact display: 1234 → "1.2k t/s", 42 → "42 t/s"
+function formatSpeed(speed: number | null): string {
+  if (speed == null) return '— t/s'
+  if (speed >= 1000) return `${(speed / 1000).toFixed(1)}k t/s`
+  return `${speed} t/s`
 }
 
 export default function ClaudeCodeTab({
@@ -54,6 +80,7 @@ export default function ClaudeCodeTab({
 
   const projectPath = tab.filePath || rootPath || undefined;
   const sessionId = useSessionDetect(tab.initialCommand, projectPath);
+  const metrics = useSessionMetrics(sessionId, projectPath);
   const onPtyData = usePtyHandlers(tabId, groupId);
 
   // Persist the detected session ID back to the work session so
@@ -140,6 +167,37 @@ export default function ClaudeCodeTab({
           <span className="text-ui-xs text-zinc-500">
             API Key: <span className="text-zinc-400">{apiKeyAccount.name}</span>
           </span>
+        </>
+      )}
+      {metrics && (
+        <>
+          {metrics.model && (
+            <>
+              <div className="w-px h-3 bg-zinc-700" />
+              <span className="text-ui-xs text-zinc-500 truncate max-w-[140px]" title={metrics.model}>
+                {formatModelName(metrics.model)}
+              </span>
+            </>
+          )}
+          {metrics.contextPercent != null && (
+            <>
+              <div className="w-px h-3 bg-zinc-700" />
+              <span className={`text-ui-xs font-mono ${contextColor(metrics.contextPercent)}`}>
+                Ctx {metrics.contextPercent.toFixed(0)}%
+              </span>
+            </>
+          )}
+          {metrics.outputSpeed != null && (
+            <>
+              <div className="w-px h-3 bg-zinc-700" />
+              <span className="text-ui-xs font-mono text-zinc-500">
+                {formatSpeed(metrics.inputSpeed)} in
+              </span>
+              <span className="text-ui-xs font-mono text-zinc-500">
+                {formatSpeed(metrics.outputSpeed)} out
+              </span>
+            </>
+          )}
         </>
       )}
     </>

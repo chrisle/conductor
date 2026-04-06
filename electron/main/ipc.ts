@@ -8,6 +8,7 @@ import { readDir, readFile, readFileBinary, writeFile, mkdirRecursive, deleteEnt
 import { conductordFetch } from './conductord-client'
 import { registerTerminalBridge } from './terminal-bridge'
 import { debugLog } from './logger'
+import { getJsonlPath, readJsonlTail, computeSessionMetrics } from './claude-session-metrics'
 
 // Conductord log watchers: watchId -> { watcher, fd }
 const logWatchers = new Map<string, { watcher: fs.FSWatcher; offset: number; logPath: string }>()
@@ -483,6 +484,18 @@ export function registerIpcHandlers(): void {
       return sessions
     } catch {
       return []
+    }
+  })
+
+  // Claude session metrics (context %, token speeds, model)
+  ipcMain.handle('claude:getSessionMetrics', async (_event, sessionId: string, projectPath: string) => {
+    try {
+      const jsonlPath = getJsonlPath(sessionId, projectPath)
+      if (!fs.existsSync(jsonlPath)) return null
+      const content = await readJsonlTail(jsonlPath)
+      return computeSessionMetrics(content)
+    } catch {
+      return null
     }
   })
 

@@ -82,6 +82,12 @@ interface ElectronAPI {
   // Claude
   getCwd: () => Promise<string>
   listClaudeSessions: (projectPath: string) => Promise<Array<{ id: string; mtime: number; summary: string }>>
+  getSessionMetrics: (sessionId: string, projectPath: string) => Promise<{
+    contextPercent: number | null
+    inputSpeed: number | null
+    outputSpeed: number | null
+    model: string | null
+  } | null>
   getTicketBinding: (ticketKey: string) => Promise<TicketBinding | null>
   setTicketBinding: (ticketKey: string, data: Partial<TicketBinding>) => Promise<void>
   getAllTicketBindings: () => Promise<Record<string, TicketBinding>>
