@@ -182,6 +182,45 @@ describe('useTabsStore', () => {
       const titles = useTabsStore.getState().groups[groupId].tabs.map(t => t.title)
       expect(titles).toEqual(['C', 'A', 'B'])
     })
+
+    it('moves first tab to end when toIndex equals tabs.length', () => {
+      const groupId = useTabsStore.getState().createGroup()
+      useTabsStore.getState().addTab(groupId, { type: 'text', title: 'A' })
+      useTabsStore.getState().addTab(groupId, { type: 'text', title: 'B' })
+      useTabsStore.getState().addTab(groupId, { type: 'text', title: 'C' })
+
+      // Drag tab A (index 0) past the last tab (toIndex = 3, i.e. tabs.length)
+      useTabsStore.getState().reorderTab(groupId, 0, 3)
+
+      const titles = useTabsStore.getState().groups[groupId].tabs.map(t => t.title)
+      expect(titles).toEqual(['B', 'C', 'A'])
+    })
+
+    it('moves middle tab to end when toIndex equals tabs.length', () => {
+      const groupId = useTabsStore.getState().createGroup()
+      useTabsStore.getState().addTab(groupId, { type: 'text', title: 'A' })
+      useTabsStore.getState().addTab(groupId, { type: 'text', title: 'B' })
+      useTabsStore.getState().addTab(groupId, { type: 'text', title: 'C' })
+
+      // Drag tab B (index 1) past the last tab (toIndex = 3)
+      useTabsStore.getState().reorderTab(groupId, 1, 3)
+
+      const titles = useTabsStore.getState().groups[groupId].tabs.map(t => t.title)
+      expect(titles).toEqual(['A', 'C', 'B'])
+    })
+
+    it('is a no-op when dragging the last tab to end zone', () => {
+      const groupId = useTabsStore.getState().createGroup()
+      useTabsStore.getState().addTab(groupId, { type: 'text', title: 'A' })
+      useTabsStore.getState().addTab(groupId, { type: 'text', title: 'B' })
+      useTabsStore.getState().addTab(groupId, { type: 'text', title: 'C' })
+
+      // Drag last tab C (index 2) to the end zone (toIndex = 3) — should be no-op
+      useTabsStore.getState().reorderTab(groupId, 2, 3)
+
+      const titles = useTabsStore.getState().groups[groupId].tabs.map(t => t.title)
+      expect(titles).toEqual(['A', 'B', 'C'])
+    })
   })
 
   describe('updateTab', () => {
