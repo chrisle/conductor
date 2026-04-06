@@ -298,9 +298,9 @@ func (s *session) readLoop() {
 					if len(tail) > 300 {
 						tail = tail[len(tail)-300:]
 					}
-					log.Printf("[autopilot %s] scanning %d bytes, tail: %q", s.id, len(stripped), tail)
 					apResponse = matchPrompt(stripped)
 					if apResponse != "" {
+						log.Printf("[autopilot %s] matched prompt, sending %q after %v (scanned %d bytes, tail: %q)", s.id, apResponse, apDelay, len(stripped), tail)
 						s.apLastMs = now
 						s.apBuf = nil
 						s.ap500Count = 0 // reset backoff on normal prompt match
@@ -349,8 +349,6 @@ func (s *session) readLoop() {
 					}
 					_ = conn.WriteJSON(payload)
 				}
-				log.Printf("[autopilot %s] matched prompt, sending %q after %v", s.id, resp, delay)
-
 				go func() {
 					time.Sleep(delay)
 					s.write([]byte(resp))
