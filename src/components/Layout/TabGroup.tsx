@@ -889,6 +889,17 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
             </ContextMenu>
           ))}
 
+          {/* Drop zone after last tab — allows dragging a tab past the end */}
+          <div
+            className={cn(
+              'flex-1 h-8 min-w-[32px]',
+              dragOverTabIndex === group.tabs.length && 'border-l-2 border-l-blue-400'
+            )}
+            onDragOver={e => handleTabDragOver(e, group.tabs.length)}
+            onDragLeave={() => setDragOverTabIndex(null)}
+            onDrop={e => handleTabDrop(e, group.tabs.length)}
+          />
+
           {/* New tab dropdown */}
           <DropdownMenu open={newTabMenuOpen} onOpenChange={setNewTabMenuOpen}>
             <DropdownMenuTrigger asChild>
