@@ -35,6 +35,7 @@ export const useClaudeCodeSettings = create<ClaudeCodeSettingsStore>((set) => ({
 // Hydrate from config store once ready
 useConfigStore.subscribe((state) => {
   if (state.ready) {
-    useClaudeCodeSettings.setState(state.config.aiCli.claudeCode)
+    const claudeCode = state.config.aiCli?.claudeCode
+    if (claudeCode) useClaudeCodeSettings.setState(claudeCode)
   }
 })
