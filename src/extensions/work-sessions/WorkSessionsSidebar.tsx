@@ -277,19 +277,35 @@ function SessionTreeNode({
     }
 
     const tabsState = useTabsStore.getState()
+    const layoutStore = useLayoutStore.getState()
     const allGroups = tabsState.groups
-    let targetGroup = focusedGroupId && allGroups[focusedGroupId] && layoutGroupIds.has(focusedGroupId)
+
+    // Find the anchor panel — the focused group, or the first visible group
+    const anchorGroup = focusedGroupId && allGroups[focusedGroupId] && layoutGroupIds.has(focusedGroupId)
       ? focusedGroupId
       : [...layoutGroupIds].find(gid => allGroups[gid]) || Object.keys(allGroups)[0]
-    if (!targetGroup) {
-      targetGroup = tabsState.createGroup()
+
+    if (anchorGroup) {
+      // Open as a new split to the right of the anchor panel
+      const newGroupId = tabsState.createGroup()
+      addTab(newGroupId, {
+        id: session.session.name,
+        type: 'claude-code',
+        title: label,
+        filePath: session.workSession?.worktree?.path || session.session.cwd,
+      })
+      layoutStore.insertPanel(anchorGroup, 'east', newGroupId)
+      layoutStore.setFocusedGroup(newGroupId)
+    } else {
+      // No panels exist yet — create the first one
+      const newGroupId = tabsState.createGroup()
+      addTab(newGroupId, {
+        id: session.session.name,
+        type: 'claude-code',
+        title: label,
+        filePath: session.workSession?.worktree?.path || session.session.cwd,
+      })
     }
-    addTab(targetGroup, {
-      id: session.session.name,
-      type: 'claude-code',
-      title: label,
-      filePath: session.workSession?.worktree?.path || session.session.cwd,
-    })
   }
 
   async function killSession() {
