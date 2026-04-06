@@ -106,6 +106,18 @@ export function formatResetCountdown(resetsAt: string | null, fallback: string |
 }
 
 /**
+ * Pick the best reset countdown string from a list of usage tiers.
+ * Prefers the "all models" tier (weekly cap), falls back to the first tier with reset info.
+ */
+export function getPrimaryResetCountdown(tiers: UsageTier[] | undefined): string | null {
+  if (!tiers || tiers.length === 0) return null
+  const primaryTier = tiers.find(t => /all models/i.test(t.label) && t.resetsAt)
+    ?? tiers.find(t => t.resetsAt)
+  if (!primaryTier) return null
+  return formatResetCountdown(primaryTier.resetsAt, primaryTier.resets)
+}
+
+/**
  * Parse the raw output from `claude "/usage"`.
  *
  * Example output:
