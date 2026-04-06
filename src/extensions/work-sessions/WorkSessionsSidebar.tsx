@@ -287,16 +287,14 @@ function SessionTreeNode({
       : [...layoutGroupIds].find(gid => allGroups[gid]) || Object.keys(allGroups)[0]
 
     if (anchorGroup) {
-      // Open as a new split to the right of the anchor panel
-      const newGroupId = tabsState.createGroup()
-      addTab(newGroupId, {
+      // Add tab after the currently active tab in the focused group
+      addTab(anchorGroup, {
         id: session.session.name,
         type: 'claude-code',
         title: label,
         filePath: session.workSession?.worktree?.path || session.session.cwd,
-      })
-      layoutStore.insertPanel(anchorGroup, 'east', newGroupId)
-      layoutStore.setFocusedGroup(newGroupId)
+      }, { afterActiveTab: true })
+      layoutStore.setFocusedGroup(anchorGroup)
     } else {
       // No panels exist yet — create the first one
       const newGroupId = tabsState.createGroup()
