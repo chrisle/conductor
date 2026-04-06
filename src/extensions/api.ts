@@ -56,6 +56,7 @@ import { killTerminal } from '@/lib/terminal-api'
 import {
   getThinkingState, stripAnsi, type ThinkingState,
 } from '@/lib/terminal-detection'
+import { interpolatePromptTemplate } from '@/lib/prompt-template'
 
 export const conductorAPI = {
   // React (shared instance so hooks work)
@@ -99,6 +100,7 @@ export const conductorAPI = {
   killTerminal,
   getThinkingState,
   stripAnsi,
+  interpolatePromptTemplate,
 }
 
 export type ConductorAPI = typeof conductorAPI

@@ -1,11 +1,13 @@
 import { create } from 'zustand'
 import { useConfigStore } from '@/store/config'
+import { DEFAULT_START_WORK_PROMPT_TEMPLATE } from '@/types/app-config'
 
 export interface ClaudeCodeSettings {
   skipDangerousPermissions: boolean
   autoPilotScanMs: number
   disableBackgroundTasks: boolean
   agentTeams: boolean
+  startWorkPromptTemplate: string
 }
 
 const defaults: ClaudeCodeSettings = {
@@ -13,6 +15,7 @@ const defaults: ClaudeCodeSettings = {
   autoPilotScanMs: 250,
   disableBackgroundTasks: true,
   agentTeams: false,
+  startWorkPromptTemplate: DEFAULT_START_WORK_PROMPT_TEMPLATE,
 }
 
 interface ClaudeCodeSettingsStore extends ClaudeCodeSettings {

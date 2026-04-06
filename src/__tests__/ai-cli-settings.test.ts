@@ -29,6 +29,7 @@ describe('useClaudeCodeSettings', () => {
     expect(state.skipDangerousPermissions).toBe(false)
     expect(state.autoPilotScanMs).toBe(250)
     expect(state.disableBackgroundTasks).toBe(true)
+    expect(state.startWorkPromptTemplate).toContain('{{ticketKey}}')
   })
 
   it('update merges partial settings', async () => {
