@@ -362,6 +362,15 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
       }
     } else {
       moveTab(sourceGroupId, tabId, groupId, targetIndex)
+
+      // Clean up the source pane if dragging away its last tab
+      setTimeout(() => {
+        const src = useTabsStore.getState().groups[sourceGroupId]
+        if (src && src.tabs.length === 0 && sourceGroupId !== groupId) {
+          removeGroup(sourceGroupId)
+          useTabsStore.getState().removeGroup(sourceGroupId)
+        }
+      }, 0)
     }
   }
 
