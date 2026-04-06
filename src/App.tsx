@@ -15,16 +15,18 @@ import { useConfigStore } from './store/config'
 import { useWorkSessionsStore } from './store/work-sessions'
 import { initializeDefaultProject, saveProject, autosaveLayout } from './lib/project-io'
 import { startUsageScraper, stopUsageScraper } from './lib/claude-usage-scraper'
+import { initHomeDir } from './lib/terminal-cwd'
 
 function App(): React.ReactElement {
   const zoom = useUIStore(s => s.zoom)
   const goToOpen = useUIStore(s => s.goToOpen)
   const setGoToOpen = useUIStore(s => s.setGoToOpen)
 
-  // Initialize config and work sessions stores
+  // Initialize config, work sessions, and home dir cache
   useEffect(() => {
     useConfigStore.getState().initialize()
     useWorkSessionsStore.getState().initialize()
+    initHomeDir()
   }, [])
 
   // Start Claude usage scraper (runs every 5 minutes)

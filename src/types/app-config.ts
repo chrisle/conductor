@@ -44,6 +44,8 @@ export interface AppConfig {
     zoom: number
     kanbanCompactColumns: string[]
   }
+  /** Last working directory used when opening a new terminal tab */
+  lastTerminalCwd?: string
   claudeAccounts: ClaudeAccount[]
   jiraConnections: JiraConnection[]
   aiCli: {

@@ -47,11 +47,15 @@ export function createTerminal(id: string, win: BrowserWindow, cwd?: string): vo
 
   ensureNodePtySpawnHelperExecutable()
   const shell = getShell()
+  // Guard: never use a macOS temp directory as working directory
+  const safeCwd = (cwd && !cwd.startsWith('/var/folders') && !cwd.startsWith('/private/var/folders'))
+    ? cwd
+    : os.homedir()
   const ptyProcess = pty.spawn(shell, ['-l'], {
     name: 'xterm-256color',
     cols: 80,
     rows: 24,
-    cwd: cwd || os.homedir(),
+    cwd: safeCwd,
     env: {
       ...process.env,
       TERM: 'xterm-256color',
