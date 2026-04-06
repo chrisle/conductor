@@ -321,10 +321,14 @@ describe('TicketCard', () => {
   // ─── Meatball menu ───────────────────────────────────────────────────────────
 
   describe('meatball menu', () => {
-    it('renders the ⋯ button with hover-only visibility', () => {
+    it('renders the ⋯ button always visible with white icon', () => {
       const { container } = render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
-      const meatball = container.querySelector('.opacity-0.group-hover\\:opacity-100')
-      expect(meatball).toBeTruthy()
+      // Menu is always visible — no opacity-0 hiding
+      const hiddenMeatball = container.querySelector('.opacity-0.group-hover\\:opacity-100')
+      expect(hiddenMeatball).toBeNull()
+      // Button uses white text
+      const btn = container.querySelector('button.text-white')
+      expect(btn).toBeTruthy()
     })
 
     it('shows "Start code" item when no active session', () => {
