@@ -82,7 +82,7 @@ export function ConductorDaemonPanel({ visible = true }: { visible?: boolean }):
  */
 export default function TerminalServiceTab({ isActive }: TabProps): React.ReactElement {
   return (
-    <div className="flex flex-col h-full w-full bg-zinc-950">
+    <div className="flex flex-col h-full w-full bg-zinc-950 overflow-y-auto">
       <div className="max-w-lg mx-auto w-full p-6">
         <ConductorDaemonPanel visible={isActive} />
       </div>
