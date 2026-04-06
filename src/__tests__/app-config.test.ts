@@ -19,6 +19,10 @@ describe('DEFAULT_APP_CONFIG', () => {
     expect(DEFAULT_APP_CONFIG.claudeAccounts).toEqual([])
   })
 
+  it('has null default claude account id', () => {
+    expect(DEFAULT_APP_CONFIG.defaultClaudeAccountId).toBeNull()
+  })
+
   it('has empty jira connections', () => {
     expect(DEFAULT_APP_CONFIG.jiraConnections).toEqual([])
   })
