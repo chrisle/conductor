@@ -4,6 +4,7 @@ import MainLayout from './components/Layout'
 import Footer from './components/Footer'
 import GoToDialog from './components/GoToDialog'
 
+import { extensionRegistry } from './extensions'
 import { useSidebarStore } from './store/sidebar'
 import { useTabsStore } from './store/tabs'
 import { useLayoutStore } from './store/layout'
@@ -140,6 +141,20 @@ function App(): React.ReactElement {
       e.preventDefault()
       useUIStore.getState().resetZoom()
       return
+    }
+
+    // Panel switching: Meta+1 through Meta+9 toggle sidebar panels by position
+    for (let i = 1; i <= 9; i++) {
+      if (matchesShortcut(`panel${i}`)) {
+        e.preventDefault()
+        const sidebarExtensions = extensionRegistry.getSidebarExtensions()
+        // Exclude settings since it opens a dialog, not a sidebar
+        const panels = sidebarExtensions.filter(ext => ext.id !== 'settings')
+        if (i <= panels.length) {
+          useActivityBarStore.getState().toggleExtension(panels[i - 1].id)
+        }
+        return
+      }
     }
   }, [])
 
