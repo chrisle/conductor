@@ -1042,7 +1042,6 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
 
   async function killSelected() {
     const sessionsStore = useWorkSessionsStore.getState()
-    const tabsState = useTabsStore.getState()
 
     for (const name of selectedIds) {
       await window.electronAPI.killTerminal(name)
@@ -1055,9 +1054,20 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
 
       useProjectStore.getState().removeSessionFromAllFolders(name)
 
-      for (const [gid, group] of Object.entries(tabsState.groups)) {
+      // Get fresh state each iteration since prior removals mutate the store
+      const freshTabs = useTabsStore.getState()
+      for (const [gid, group] of Object.entries(freshTabs.groups)) {
         if (group.tabs.some(t => t.id === name)) {
-          tabsState.removeTab(gid, name)
+          freshTabs.removeTab(gid, name)
+          // If the group is now empty and other groups exist, remove it from layout
+          const updated = useTabsStore.getState().groups[gid]
+          if (!updated || updated.tabs.length === 0) {
+            const allGroupIds = useLayoutStore.getState().getAllGroupIds()
+            if (allGroupIds.length > 1) {
+              useLayoutStore.getState().removeGroup(gid)
+              useTabsStore.getState().removeGroup(gid)
+            }
+          }
           break
         }
       }
