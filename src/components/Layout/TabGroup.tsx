@@ -759,6 +759,9 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
               <ContextMenuTrigger asChild>
               <div
                 draggable
+                // Explicitly enable drag across the entire tab surface in Electron/Chromium,
+                // where user-select:none can limit drag initiation to text nodes only.
+                style={{ WebkitUserDrag: 'element' } as React.CSSProperties}
                 onDragStart={e => handleTabDragStart(e, tab, index)}
                 onDragOver={e => handleTabDragOver(e, index)}
                 onDragLeave={() => setDragOverTabIndex(null)}
@@ -835,6 +838,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                 <Button
                   variant="ghost"
                   size="icon"
+                  draggable={false}
                   onClick={e => handleCloseTab(e, tab.id)}
                   className={cn(
                     'shrink-0 w-4 h-4 opacity-0 group-hover/tab:opacity-100 hover:bg-zinc-700 transition-all',
