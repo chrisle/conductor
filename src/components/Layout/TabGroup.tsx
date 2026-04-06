@@ -872,7 +872,10 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                 className={cn(
                   'flex items-center gap-1.5 px-3 h-8 cursor-pointer select-none border-r border-zinc-700/40 shrink-0 max-w-[180px] group/tab transition-colors',
                   tab.id === group.activeTabId
-                    ? 'bg-zinc-950 text-zinc-50 border-b-2 border-b-blue-400'
+                    // Only the focused pane's active tab gets the blue highlight
+                    ? isFocused
+                      ? 'bg-zinc-950 text-zinc-50 border-b-2 border-b-blue-400'
+                      : 'bg-zinc-950 text-zinc-400 border-b-2 border-b-zinc-600'
                     : 'bg-zinc-900/60 text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-200',
                   dragOverTabIndex === index && 'border-l-2 border-l-blue-400',
                   tab.id === group.activeTabId && tab.isThinking && 'tab-thinking-bar',
