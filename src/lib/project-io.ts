@@ -174,11 +174,33 @@ async function restoreWorkspace(workspace: Workspace): Promise<void> {
     }
   }
 
+  // Remove groups that became empty after filtering stale sessions (CON-74).
+  // The layout tree still references these groups, so we must prune them from
+  // both the groups map and the layout before applying state.
+  const emptyGroupIds = Object.keys(newGroups).filter(id => newGroups[id].tabs.length === 0)
+  for (const id of emptyGroupIds) {
+    delete newGroups[id]
+  }
+
   // Apply all state changes synchronously — no async gaps between clear and
   // restore, so auto-save cannot observe a partially-cleared state.
   useTabsStore.setState({ groups: newGroups })
   layoutStore.setRoot(workspace.layout)
-  if (workspace.focusedGroupId) {
+
+  // Prune empty groups from the layout tree after setRoot (which migrates the
+  // layout). Doing it after ensures the migration ran first.
+  for (const id of emptyGroupIds) {
+    layoutStore.removeGroup(id)
+  }
+
+  // If all groups were empty, create a fresh default group so the user isn't
+  // left with a blank window.
+  if (Object.keys(newGroups).length === 0) {
+    const tabsStore2 = useTabsStore.getState()
+    const freshGroupId = tabsStore2.createGroup()
+    layoutStore.setRoot({ type: 'leaf', groupId: freshGroupId })
+    layoutStore.setFocusedGroup(freshGroupId)
+  } else if (workspace.focusedGroupId && newGroups[workspace.focusedGroupId]) {
     layoutStore.setFocusedGroup(workspace.focusedGroupId)
   }
 }
