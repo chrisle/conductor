@@ -16,6 +16,7 @@ export interface ConfigState {
   setClaudeCodeSettings: (patch: Partial<AppConfig['aiCli']['claudeCode']>) => Promise<void>
   setCodexSettings: (patch: Partial<AppConfig['aiCli']['codex']>) => Promise<void>
   setDisabledExtensions: (disabled: string[]) => Promise<void>
+  setExtensionDevPaths: (devPaths: string[]) => Promise<void>
 
   // Claude account management
   addClaudeAccount: (account: ClaudeAccount) => Promise<void>
@@ -127,6 +128,13 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       config: { ...state.config, extensions: { ...state.config.extensions, disabled } },
     }))
     await window.electronAPI.patchConfig({ extensions: { disabled } })
+  },
+
+  setExtensionDevPaths: async (devPaths) => {
+    set(state => ({
+      config: { ...state.config, extensions: { ...state.config.extensions, devPaths } },
+    }))
+    await window.electronAPI.patchConfig({ extensions: { devPaths } } as any)
   },
 
   addClaudeAccount: async (account) => {

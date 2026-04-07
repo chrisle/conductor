@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Server, Download, Trash2,
-  Package, RefreshCw, Puzzle, Monitor, Palette, Keyboard, RotateCcw, FolderOpen,
+  Package, RefreshCw, Puzzle, Monitor, Palette, Keyboard, RotateCcw, FolderOpen, FolderCode, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -445,9 +445,12 @@ function ConductorDaemonSection(): React.ReactElement {
 }
 
 function ExtensionsSection(): React.ReactElement {
-  const [externalExtensions, setExternalExtensions] = useState<InstalledExtension[]>([])
+  const [installedExtensions, setInstalledExtensions] = useState<InstalledExtension[]>([])
   const [extLoading, setExtLoading] = useState(false)
   const [extMessage, setExtMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  const devPaths = useConfigStore(s => s.config.extensions.devPaths)
+  const setExtensionDevPaths = useConfigStore(s => s.setExtensionDevPaths)
 
   const [, forceUpdate] = useState(0)
   useEffect(() => {
@@ -457,9 +460,9 @@ function ExtensionsSection(): React.ReactElement {
   const loadExtensions = useCallback(async () => {
     try {
       const list = await window.electronAPI.listExtensions()
-      setExternalExtensions(list)
+      setInstalledExtensions(list)
     } catch {
-      setExternalExtensions([])
+      setInstalledExtensions([])
     }
   }, [])
 
@@ -467,7 +470,7 @@ function ExtensionsSection(): React.ReactElement {
     loadExtensions()
   }, [loadExtensions])
 
-  // Hot-load extensions when installed without requiring a restart
+  // Hot-load ZIP-installed extensions when installed without requiring a restart
   useEffect(() => {
     const unsubscribe = window.electronAPI.onExtensionInstalled(async (extensionId) => {
       const extensionsDir = await window.electronAPI.getExtensionsDir()
@@ -508,12 +511,14 @@ function ExtensionsSection(): React.ReactElement {
 
     try {
       const result = await window.electronAPI.installUnpackedExtension(dirPath)
-      if (result.success) {
-        setExtMessage({ type: 'success', text: `Loaded "${result.extensionId}".` })
-        await loadExtensions()
-      } else {
+      if (!result.success) {
         setExtMessage({ type: 'error', text: result.error || 'Failed to load extension' })
+        return
       }
+      await loadExtension(dirPath)
+      const updated = [...devPaths.filter(p => p !== dirPath), dirPath]
+      await setExtensionDevPaths(updated)
+      setExtMessage({ type: 'success', text: `Loaded "${result.extensionId}".` })
     } catch (err) {
       setExtMessage({ type: 'error', text: String(err) })
     } finally {
@@ -541,8 +546,26 @@ function ExtensionsSection(): React.ReactElement {
     }
   }
 
+  async function handleUnloadDev(dirPath: string) {
+    setExtLoading(true)
+    setExtMessage(null)
+    try {
+      const manifestResult = await window.electronAPI.readFile(`${dirPath}/manifest.json`)
+      if (manifestResult.success && manifestResult.content) {
+        const manifest = JSON.parse(manifestResult.content)
+        if (manifest.id) extensionRegistry.unregister(manifest.id)
+      }
+      await setExtensionDevPaths(devPaths.filter(p => p !== dirPath))
+      setExtMessage({ type: 'success', text: 'Extension unloaded.' })
+    } catch (err) {
+      setExtMessage({ type: 'error', text: String(err) })
+    } finally {
+      setExtLoading(false)
+    }
+  }
+
   const builtinExtensions = extensionRegistry.getAllExtensions().filter(
-    e => !externalExtensions.some(ext => ext.id === e.id)
+    e => extensionRegistry.isBuiltin(e.id)
   )
 
   return (
@@ -561,7 +584,7 @@ function ExtensionsSection(): React.ReactElement {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={handleLoadUnpacked} disabled={extLoading} className="h-7 w-7 text-zinc-400 hover:text-zinc-200">
+                <Button variant="ghost" size="icon" aria-label="Load Unpacked" onClick={handleLoadUnpacked} disabled={extLoading} className="h-7 w-7 text-zinc-400 hover:text-zinc-200">
                   <FolderOpen className="w-3.5 h-3.5" />
                 </Button>
               </TooltipTrigger>
@@ -586,12 +609,48 @@ function ExtensionsSection(): React.ReactElement {
           </div>
         )}
 
-        {/* Installed external extensions */}
-        {externalExtensions.length > 0 && (
+        {/* Dev (unpacked) extensions */}
+        {devPaths.length > 0 && (
+          <div className="mb-4">
+            <div className="text-ui-sm text-zinc-500 uppercase tracking-wider mb-2">Dev (Unpacked)</div>
+            <div className="space-y-1">
+              {devPaths.map(dirPath => (
+                <div
+                  key={dirPath}
+                  className="flex items-center gap-3 px-3 py-2 rounded-md bg-zinc-800/50 hover:bg-zinc-800 transition-colors group"
+                >
+                  <FolderCode className="w-4 h-4 text-yellow-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-ui-base text-zinc-200 truncate">{dirPath.split('/').pop()}</div>
+                    <div className="text-ui-xs text-zinc-500 truncate">{dirPath}</div>
+                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Unload"
+                        onClick={() => handleUnloadDev(dirPath)}
+                        disabled={extLoading}
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 transition-all"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Unload</TooltipContent>
+                  </Tooltip>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Installed extensions (ZIP) */}
+        {installedExtensions.length > 0 && (
           <div className="mb-4">
             <div className="text-ui-sm text-zinc-500 uppercase tracking-wider mb-2">Installed</div>
             <div className="space-y-1">
-              {externalExtensions.map(ext => {
+              {installedExtensions.map(ext => {
                 const enabled = extensionRegistry.isEnabled(ext.id)
                 return (
                   <div

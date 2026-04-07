@@ -15,46 +15,51 @@ interface ExtensionManifest {
  * The directory must contain a manifest.json and a bundled JS file.
  */
 export async function loadExtension(dirPath: string): Promise<void> {
-  try {
-    const manifestPath = `${dirPath}/manifest.json`
-    const manifestResult = await window.electronAPI.readFile(manifestPath)
-    if (!manifestResult.success || !manifestResult.content) {
-      console.warn(`No manifest.json at ${dirPath}`)
-      return
-    }
+  const manifestPath = `${dirPath}/manifest.json`
+  const manifestResult = await window.electronAPI.readFile(manifestPath)
+  if (!manifestResult.success || !manifestResult.content) {
+    throw new Error(`No manifest.json found at ${dirPath}`)
+  }
 
-    const manifest: ExtensionManifest = JSON.parse(manifestResult.content)
-    const mainFile = manifest.main || 'index.js'
-    // Try the primary path, then fall back to dist/ so that selecting the
-    // project root folder works the same as selecting the built dist/ folder.
-    const candidates = [`${dirPath}/${mainFile}`, `${dirPath}/dist/${mainFile}`]
-    let bundleResult: Awaited<ReturnType<typeof window.electronAPI.readFile>> | null = null
-    for (const candidate of candidates) {
-      const result = await window.electronAPI.readFile(candidate)
-      if (result.success && result.content) { bundleResult = result; break }
-    }
-    if (!bundleResult) {
-      console.warn(`Could not load bundle for ${manifest.id} (tried: ${candidates.join(', ')})`)
-      return
-    }
+  const manifest: ExtensionManifest = JSON.parse(manifestResult.content)
+  const mainFile = manifest.main || 'index.js'
+  // Try the primary path, then fall back to dist/ so that selecting the
+  // project root folder works the same as selecting the built dist/ folder.
+  const candidates = [`${dirPath}/${mainFile}`, `${dirPath}/dist/${mainFile}`]
+  let bundleResult: Awaited<ReturnType<typeof window.electronAPI.readFile>> | null = null
+  for (const candidate of candidates) {
+    const result = await window.electronAPI.readFile(candidate)
+    if (result.success && result.content) { bundleResult = result; break }
+  }
+  if (!bundleResult) {
+    throw new Error(`Could not find bundle for "${manifest.id}" (tried: ${candidates.join(', ')})`)
+  }
 
-    // Execute the bundle in a sandboxed context
-    // The bundle can access the host API via window.__conductorAPI__
-    const module = { exports: {} as any }
-    const wrappedCode = `(function(module, exports, require) {\n${bundleResult.content!}\n})`
-    const factory = eval(wrappedCode)
-    factory(module, module.exports, createExtensionRequire())
+  // Execute the bundle in a sandboxed context
+  // The bundle can access the host API via window.__conductorAPI__
+  const module = { exports: {} as any }
+  const wrappedCode = `(function(module, exports, require) {\n${bundleResult.content!}\n})`
+  const factory = eval(wrappedCode)
+  factory(module, module.exports, createExtensionRequire())
 
-    const extension: Extension = module.exports.default || module.exports
-    if (!extension.id || !extension.name) {
-      console.warn(`Extension at ${dirPath} missing id or name, skipping.`)
-      return
-    }
+  const extension: Extension = module.exports.default || module.exports
+  if (!extension.id || !extension.name) {
+    throw new Error(`Extension at ${dirPath} is missing required "id" or "name" fields`)
+  }
 
-    extensionRegistry.register(extension, false)
-    console.log(`Loaded external extension: ${extension.name} (${extension.id})`)
-  } catch (err) {
-    console.error(`Failed to load extension from ${dirPath}:`, err)
+  extensionRegistry.register(extension, false)
+  console.log(`Loaded external extension: ${extension.name} (${extension.id})`)
+}
+
+/**
+ * Load unpacked dev extensions from the given list of directory paths.
+ * These are loaded directly from their source locations (no copy or symlink).
+ */
+export async function loadExtensionsFromDevPaths(devPaths: string[]): Promise<void> {
+  for (const dirPath of devPaths) {
+    await loadExtension(dirPath).catch(err =>
+      console.error(`Failed to load dev extension from ${dirPath}:`, err)
+    )
   }
 }
 
@@ -73,7 +78,9 @@ export async function loadExternalExtensions(): Promise<void> {
 
     for (const entry of entries) {
       if (!entry.isDirectory) continue
-      await loadExtension(entry.path)
+      await loadExtension(entry.path).catch(err =>
+        console.error(`Failed to load extension from ${entry.path}:`, err)
+      )
     }
   } catch (err) {
     console.error('Failed to load external extensions:', err)

@@ -854,30 +854,9 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
       return { success: false, error: 'manifest.json missing id field' }
     }
 
-    const destDir = path.join(extensionsDir, manifest.id)
-
-    // Remove existing entry (symlink or directory)
-    if (fs.existsSync(destDir) || fs.existsSync(destDir + '/')) {
-      try {
-        const stat = fs.lstatSync(destDir)
-        if (stat.isSymbolicLink()) {
-          fs.unlinkSync(destDir)
-        } else {
-          await fs.promises.rm(destDir, { recursive: true, force: true })
-        }
-      } catch { /* ignore */ }
-    }
-
-    // Symlink the source directory so rebuilds are reflected immediately
-    const symlinkType = process.platform === 'win32' ? 'junction' : 'dir'
-    fs.symlinkSync(dirPath, destDir, symlinkType)
-
-    // Notify all renderer windows so they can hot-load the extension
-    for (const win of BrowserWindow.getAllWindows()) {
-      win.webContents.send('extensions:installed', manifest.id)
-    }
-
-    return { success: true, extensionId: manifest.id }
+    // Return the original path so the renderer can store it in config and load
+    // directly from the source directory (no symlink needed).
+    return { success: true, extensionId: manifest.id, dirPath }
   })
 
   // Conductord log watching

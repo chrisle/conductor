@@ -48,6 +48,8 @@ export async function installTestMocks(page: Page) {
       isMaximized: async () => false,
       onCloseRequested: () => {},
       offCloseRequested: () => {},
+      onCloseTabRequested: () => {},
+      offCloseTabRequested: () => {},
 
       // File system
       readDir: async () => [],

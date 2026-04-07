@@ -64,6 +64,8 @@ export interface AppConfig {
   }
   extensions: {
     disabled: string[]
+    /** Paths to unpacked extension directories loaded directly from their source location */
+    devPaths: string[]
   }
   customization: {
     terminal: TerminalCustomization
@@ -139,6 +141,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   },
   extensions: {
     disabled: [],
+    devPaths: [],
   },
   customization: {
     terminal: { ...DEFAULT_TERMINAL_CUSTOMIZATION },

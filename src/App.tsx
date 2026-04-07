@@ -16,6 +16,7 @@ import { useWorkSessionsStore } from './store/work-sessions'
 import { initializeDefaultProject, createDefaultProject, saveProject, autosaveLayout } from './lib/project-io'
 import { startUsageScraper, stopUsageScraper } from './lib/claude-usage-scraper'
 import { initHomeDir } from './lib/terminal-cwd'
+import { loadExtensionsFromDevPaths } from './extensions/loader'
 
 function App(): React.ReactElement {
   const zoom = useUIStore(s => s.zoom)
@@ -24,7 +25,14 @@ function App(): React.ReactElement {
 
   // Initialize config, work sessions, and home dir cache
   useEffect(() => {
-    useConfigStore.getState().initialize()
+    useConfigStore.getState().initialize().then(() => {
+      const devPaths = useConfigStore.getState().config.extensions.devPaths
+      if (devPaths.length > 0) {
+        loadExtensionsFromDevPaths(devPaths).catch(err =>
+          console.error('Failed to load dev extensions:', err)
+        )
+      }
+    })
     useWorkSessionsStore.getState().initialize()
     initHomeDir()
   }, [])

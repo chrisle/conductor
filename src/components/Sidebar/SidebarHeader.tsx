@@ -51,6 +51,7 @@ export default function SidebarHeader({
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label={action.label}
                     onClick={action.onClick}
                     disabled={action.disabled}
                     className={`h-6 w-6 ${action.className || 'text-zinc-400 hover:text-zinc-200'}`}
