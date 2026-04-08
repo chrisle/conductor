@@ -7,7 +7,7 @@ import { useProjectStore } from '@/store/project'
 export function getSessionAutoPilot(sessionId: string): boolean {
   const state = useProjectStore.getState() as unknown as Record<string, unknown>
   const map = state.sessionAutoPilot as Record<string, boolean> | undefined
-  return map?.[sessionId] ?? false
+  return map?.[sessionId] ?? true
 }
 
 export function setSessionAutoPilot(sessionId: string, enabled: boolean) {

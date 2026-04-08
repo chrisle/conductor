@@ -29,13 +29,13 @@ describe('session-autopilot', () => {
   })
 
   describe('getSessionAutoPilot', () => {
-    it('returns false when sessionAutoPilot is not on the store', () => {
-      // The store currently has no sessionAutoPilot property
-      expect(getSessionAutoPilot('claude-code-44')).toBe(false)
+    it('returns true when sessionAutoPilot is not on the store', () => {
+      // The store currently has no sessionAutoPilot property — defaults to enabled
+      expect(getSessionAutoPilot('claude-code-44')).toBe(true)
     })
 
-    it('returns false for an unknown session ID', () => {
-      expect(getSessionAutoPilot('nonexistent')).toBe(false)
+    it('returns true for an unknown session ID', () => {
+      expect(getSessionAutoPilot('nonexistent')).toBe(true)
     })
   })
 

@@ -95,7 +95,7 @@ function useConductorSessions(intervalMs = 5_000) {
     try {
       const list = await window.electronAPI.conductordGetSessions()
       const mapped: ConductorSession[] = list
-        .filter((s: { dead: boolean }) => !s.dead)
+        .filter((s: { dead: boolean; id: string }) => !s.dead && !s.id.startsWith('__'))
         .map((s: { id: string; cwd: string; command: string }) => ({
           name: s.id,
           connected: true,
@@ -402,6 +402,15 @@ function SessionTreeNode({
                 )}
               </span>
             )}
+
+            {/* Kill button (hover only) */}
+            <button
+              onClick={e => { e.stopPropagation(); killSession() }}
+              className="shrink-0 text-zinc-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+              title="Kill session"
+            >
+              <Square className="w-3 h-3" />
+            </button>
 
             {/* Info toggle (hover only) */}
             <button
