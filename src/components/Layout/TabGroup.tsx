@@ -1026,6 +1026,22 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
           </DropdownMenu>
         </div>
         </div>
+
+        {/* Close pane button — only visible when the pane is empty and not the last group */}
+        {group.tabs.length === 0 && getAllGroupIds().length > 1 && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="w-8 h-8 shrink-0 rounded-none text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
+            onClick={() => {
+              removeGroup(groupId)
+              useTabsStore.getState().removeGroup(groupId)
+            }}
+            title="Close Pane"
+          >
+            <X className="w-3.5 h-3.5" />
+          </Button>
+        )}
       </div>
 
       {/* Floating new tab menu (Cmd+T at mouse position) */}

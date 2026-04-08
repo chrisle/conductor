@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Minus, Square, X, Maximize2, ChevronDown, FolderOpen, Plus, Pencil, Trash2, FilePlus2, SaveAll, AppWindow, PanelLeft } from 'lucide-react'
+import { Minus, Square, X, Maximize2, ChevronDown, FolderOpen, Plus, Pencil, Trash2, FilePlus2, SaveAll, AppWindow, PanelLeft, Train } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -173,6 +173,7 @@ export default function TitleBar(): React.ReactElement {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="no-drag flex items-center gap-0.5 text-ui-sm text-zinc-500 hover:text-zinc-300 transition-colors rounded px-1 py-0.5 hover:bg-zinc-800/50">
+                <Train className="w-3 h-3" />
                 Conductor
                 <ChevronDown className="w-2.5 h-2.5 text-zinc-600" />
               </button>

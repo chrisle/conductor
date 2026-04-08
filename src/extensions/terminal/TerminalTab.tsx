@@ -452,7 +452,7 @@ function TerminalTabInner({
   }, [isActive]);
 
   const toolbar = (
-    <div className={`flex items-center gap-3 px-2 min-h-5 py-0.5 shrink-0 overflow-hidden ${footerPosition === 'bottom' ? 'border-t border-zinc-800' : 'border-b border-zinc-800'}`}>
+    <div className={`relative flex items-center gap-3 px-2 min-h-5 py-0.5 shrink-0 overflow-hidden ${footerPosition === 'bottom' ? 'border-t border-zinc-800' : 'border-b border-zinc-800'}`}>
       {footerLeft}
       <div className="flex-1" />
       <button

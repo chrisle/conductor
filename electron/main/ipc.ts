@@ -809,6 +809,10 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
     const extDir = path.join(extensionsDir, extensionId)
     if (fs.existsSync(extDir)) {
       await fs.promises.rm(extDir, { recursive: true, force: true })
+      const extCacheDir = path.join(cacheDir, extensionId)
+      if (fs.existsSync(extCacheDir)) {
+        await fs.promises.rm(extCacheDir, { recursive: true, force: true })
+      }
       return { success: true }
     }
     return { success: false, error: 'Extension not found' }
