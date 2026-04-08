@@ -9,6 +9,32 @@ import type { TerminalCustomization } from '@/types/app-config'
 
 export type { Terminal, FitAddon, SerializeAddon }
 
+const webglAddons = new WeakMap<Terminal, WebglAddon>()
+
+/** Attach the WebGL renderer to a terminal. No-op if already attached. */
+export function attachWebgl(term: Terminal): void {
+  if (webglAddons.has(term)) return
+  try {
+    const addon = new WebglAddon()
+    addon.onContextLoss(() => {
+      addon.dispose()
+      webglAddons.delete(term)
+    })
+    term.loadAddon(addon)
+    webglAddons.set(term, addon)
+  } catch {
+    // WebGL not available — canvas renderer stays active
+  }
+}
+
+/** Detach the WebGL renderer, falling back to the default canvas renderer. */
+export function detachWebgl(term: Terminal): void {
+  const addon = webglAddons.get(term)
+  if (!addon) return
+  try { addon.dispose() } catch { /* already disposed */ }
+  webglAddons.delete(term)
+}
+
 // Inject once: make xterm fill its container instead of sizing to row count
 let styleInjected = false
 function injectXtermStyles() {
@@ -45,14 +71,14 @@ function injectXtermStyles() {
                drop-shadow(0 0 10px rgba(125, 211, 252, 0.4));
       }
     }
-    .xterm-cursor-layer {
+    .terminal-cursor-active .xterm-cursor-layer {
       animation: cursor-glow 2s ease-in-out infinite;
     }
   `
   document.head.appendChild(style)
 }
 
-function getTerminalCustomization(): TerminalCustomization {
+export function getTerminalCustomization(): TerminalCustomization {
   return useConfigStore.getState().config.customization.terminal
 }
 
@@ -87,16 +113,6 @@ export async function createXtermTerminal(container: HTMLElement): Promise<{ ter
   term.loadAddon(fitAddon)
   term.loadAddon(serializeAddon)
   term.open(container)
-
-  try {
-    const webglAddon = new WebglAddon()
-    webglAddon.onContextLoss(() => {
-      webglAddon.dispose()
-    })
-    term.loadAddon(webglAddon)
-  } catch {
-    // WebGL not available, fall back to default canvas renderer
-  }
 
   return { term, fitAddon, serializeAddon }
 }

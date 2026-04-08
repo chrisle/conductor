@@ -397,6 +397,34 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
   // refs during commit, before effects fire.
   }, [syncNavState, addTab, groupId, tabId, updateTab, handleConductorAction])
 
+  // Throttle webview GPU compositing when the browser tab is hidden to
+  // free GPU resources for visible terminals.
+  useEffect(() => {
+    const wv = webviewRef.current as any
+    if (!wv) return
+
+    const applyThrottle = () => {
+      try {
+        const id = wv.getWebContentsId?.()
+        if (id == null) return
+        if (isActive) {
+          window.electronAPI.resumeWebview(id)
+        } else {
+          window.electronAPI.suspendWebview(id)
+        }
+      } catch { /* webview not ready yet */ }
+    }
+
+    // getWebContentsId is only available after dom-ready
+    if (wv.getWebContentsId) {
+      applyThrottle()
+    } else {
+      const onReady = () => { applyThrottle(); wv.removeEventListener('dom-ready', onReady) }
+      wv.addEventListener('dom-ready', onReady)
+      return () => wv.removeEventListener('dom-ready', onReady)
+    }
+  }, [isActive])
+
   function normalizeUrl(raw: string): string {
     const trimmed = raw.trim()
     if (!trimmed) return 'about:blank'

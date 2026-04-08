@@ -5,7 +5,7 @@ import type { TerminalTabExtraProps } from "./types";
 import SearchBar from "./SearchBar";
 import * as termAPI from "@/lib/terminal-api";
 import { useTabsStore } from "@/store/tabs";
-import { createXtermTerminal } from "./xterm-init";
+import { createXtermTerminal, attachWebgl, detachWebgl, getTerminalCustomization } from "./xterm-init";
 import type { Terminal, SerializeAddon } from "./xterm-init";
 import { terminalConfig } from "./theme";
 
@@ -49,6 +49,9 @@ function TerminalTabInner({
   const [searchQuery, setSearchQuery] = useState("");
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error' | null>('connecting');
   const hydratingRef = useRef(false);
+  const isActiveRef = useRef(isActive);
+  const writeBufferRef = useRef<string[]>([]);
+  const writeRafRef = useRef<number | null>(null);
 
   const handleRefresh = useCallback(() => {
     termAPI.killTerminal(tabId);
@@ -66,6 +69,9 @@ function TerminalTabInner({
   useEffect(() => {
     onPtyDataRef.current = onPtyData;
   }, [onPtyData]);
+  useEffect(() => {
+    isActiveRef.current = isActive;
+  }, [isActive]);
 
   function doFit() {
     const fitAddon = fitAddonRef.current;
@@ -189,10 +195,22 @@ function TerminalTabInner({
         if (!data) return;
       }
 
-      writePtyData(term, data);
-
-      // Notify parent extension of raw PTY data
-      onPtyDataRef.current?.(data);
+      // Batch writes: accumulate data and flush once per animation frame
+      // to reduce xterm parse cycles during high-throughput output.
+      writeBufferRef.current.push(data);
+      if (writeRafRef.current === null) {
+        writeRafRef.current = requestAnimationFrame(() => {
+          writeRafRef.current = null;
+          const chunks = writeBufferRef.current;
+          if (chunks.length === 0) return;
+          writeBufferRef.current = [];
+          const joined = chunks.join('');
+          const t = terminalRef.current;
+          if (!t) return;
+          writePtyData(t, joined);
+          onPtyDataRef.current?.(joined);
+        });
+      }
     };
 
     const handleTerminalExit = (_event: any, id: string) => {
@@ -332,6 +350,9 @@ function TerminalTabInner({
 
       let resizeTimer: ReturnType<typeof setTimeout> | null = null;
       const scheduleRefit = () => {
+        // Skip refit for hidden terminals — avoids N useless layout
+        // calculations during split pane resizing.
+        if (!isActiveRef.current) return;
         if (resizeTimer) clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
           try {
@@ -352,6 +373,9 @@ function TerminalTabInner({
 
       cleanupRef.current = () => {
         if (resizeTimer) clearTimeout(resizeTimer);
+        if (writeRafRef.current !== null) cancelAnimationFrame(writeRafRef.current);
+        writeRafRef.current = null;
+        writeBufferRef.current = [];
         window.removeEventListener("resize", onWindowResize);
         termAPI.offTerminalData(handleTerminalData);
         termAPI.offTerminalExit(handleTerminalExit);
@@ -425,9 +449,22 @@ function TerminalTabInner({
     }
   }
 
-  // --- Focus / fit on tab activation ---
+  // --- Focus / fit / GPU management on tab activation ---
   useEffect(() => {
-    if (isActive && terminalRef.current) {
+    const term = terminalRef.current;
+    if (!term) return;
+
+    if (isActive) {
+      // Restore full scrollback before rendering
+      const custom = getTerminalCustomization();
+      term.options.scrollback = custom.scrollback || terminalConfig.scrollback;
+
+      // Attach WebGL renderer to active terminal only
+      attachWebgl(term);
+
+      // Enable cursor glow animation
+      wrapperRef.current?.classList.add('terminal-cursor-active');
+
       const fitAndScroll = () => {
         const el = containerRef.current;
         if (el && el.offsetWidth > 0 && el.offsetHeight > 0) {
@@ -446,8 +483,17 @@ function TerminalTabInner({
       });
       setTimeout(fitAndScroll, 100);
       setTimeout(fitAndScroll, 300);
-    } else if (!isActive && terminalRef.current) {
-      terminalRef.current.blur();
+    } else {
+      term.blur();
+
+      // Release WebGL context for hidden terminals
+      detachWebgl(term);
+
+      // Stop cursor glow animation
+      wrapperRef.current?.classList.remove('terminal-cursor-active');
+
+      // Reduce scrollback to lower memory pressure
+      term.options.scrollback = 1000;
     }
   }, [isActive]);
 
