@@ -383,6 +383,10 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
 
   function handleContentDrop(e: React.DragEvent) {
     e.preventDefault()
+    // Stop propagation so the event doesn't bubble to the parent content div
+    // and fire this handler twice (once from the overlay, once from the parent).
+    // A double-fire creates a second empty group in the layout (CON-85).
+    e.stopPropagation()
     if (contentDragRafRef.current !== null) {
       cancelAnimationFrame(contentDragRafRef.current)
       contentDragRafRef.current = null
