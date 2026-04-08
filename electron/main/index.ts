@@ -194,14 +194,24 @@ function buildAppMenu(): void {
           }
         },
         { type: 'separator' as const },
-        isMac
-          ? { role: 'close' as const, accelerator: '' }  // Remove default Cmd+W from Close Window
-          : { role: 'quit' as const }
+        isMac ? { role: 'quit' as const } : { role: 'quit' as const }
       ]
     },
     { role: 'editMenu' as const },
     { role: 'viewMenu' as const },
-    { role: 'windowMenu' as const },
+    // Custom Window menu: omit the default "Close" (Cmd+W) item so it doesn't
+    // compete with our "Close Tab" accelerator above.
+    isMac
+      ? {
+          label: 'Window',
+          submenu: [
+            { role: 'minimize' as const },
+            { role: 'zoom' as const },
+            { type: 'separator' as const },
+            { role: 'front' as const },
+          ]
+        }
+      : { role: 'windowMenu' as const },
   ]
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
