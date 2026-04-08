@@ -14,10 +14,15 @@ const N_TABS = 10           // number of terminal tabs to open
 const N_SWITCHES = 50       // number of tab switches per benchmark
 const N_WRITE_CYCLES = 20   // number of PTY write bursts per tab
 const WRITE_CHUNK = 2048    // bytes per PTY write
+const N_CONCURRENT_TABS = 5 // number of tabs streaming simultaneously (concurrent Claude scenario)
+const N_CONCURRENT_ROUNDS = 10  // how many concurrent-burst rounds to run
 
 // Failure thresholds
 const MAX_P95_TAB_SWITCH_MS = 50    // tab switch should be <50ms p95
 const MAX_P95_WRITE_MS = 16         // terminal write should complete in <1 frame p95
+// Concurrent scenario: tab switches should still be fast even while all tabs are streaming.
+// Threshold is looser because each isThinking updateTab causes a real Zustand re-render.
+const MAX_P95_CONCURRENT_SWITCH_MS = 80
 
 // ---------------------------------------------------------------------------
 
@@ -201,10 +206,106 @@ test.describe('Performance stress tests', () => {
   })
 
   // ---------------------------------------------------------------------------
-  // Test 3: Render count — verify only the active TabGroup re-renders on switch
+  // Test 3: Concurrent Claude sessions — all tabs streaming simultaneously
+  //
+  // This simulates the real-world scenario where N Claude instances are all
+  // actively streaming PTY output at the same time (thinking spinners, tool
+  // output, etc.). Each stream fires updateTab({ isThinking }) which triggers
+  // a Zustand state update that causes TabGroup to re-render.
+  //
+  // The test measures:
+  //   a) Store update throughput under concurrent PTY load
+  //   b) Tab switch latency WHILE all tabs are concurrently streaming
   // ---------------------------------------------------------------------------
 
-  test('tab switch triggers no excess re-renders in unrelated components', async ({ page }) => {
+  test(`concurrent PTY streams from ${N_CONCURRENT_TABS} simultaneous Claude-like sessions`, async ({ page }) => {
+    await page.evaluate(() => { localStorage.setItem('conductor.perf', '1') })
+
+    const tabIds: string[] = []
+    for (let i = 0; i < N_CONCURRENT_TABS; i++) {
+      const id = await addTerminalTab(page, { title: `Claude ${i + 1}` })
+      tabIds.push(id)
+    }
+
+    const chunk = generateAnsiChunk(WRITE_CHUNK)
+
+    // Part A: measure how long it takes to fire updateTab on all tabs at once.
+    // Each round simulates one "thinking tick" arriving from every Claude session.
+    const batchDurationsMs: number[] = await page.evaluate(
+      ({ tabIds, chunk, rounds }: { tabIds: string[]; chunk: string; rounds: number }) => {
+        const { tabs, layout } = (window as any).__stores__
+        const groupId = layout.getState().getAllGroupIds()[0]
+        const t = (window as any).__testTerminal__
+        const durations: number[] = []
+
+        for (let r = 0; r < rounds; r++) {
+          const t0 = performance.now()
+
+          // Simulate all tabs receiving PTY data in the same JS task
+          for (const id of tabIds) {
+            t.feedData(id, chunk)
+          }
+
+          // Also simulate the isThinking toggle that useThinkingDetect fires
+          for (const id of tabIds) {
+            tabs.getState().updateTab(groupId, id, { isThinking: true })
+          }
+
+          durations.push(performance.now() - t0)
+        }
+
+        return durations
+      },
+      { tabIds, chunk, rounds: N_CONCURRENT_ROUNDS },
+    )
+
+    const batchMetrics = computeMetrics(batchDurationsMs)
+    printMetrics(`Concurrent PTY burst (${N_CONCURRENT_TABS} tabs × ${WRITE_CHUNK}B + updateTab)`, batchMetrics)
+
+    // Part B: measure tab switch latency WHILE concurrent streams are live.
+    // Interleave tab switches with PTY bursts to simulate the real experience
+    // of clicking between tabs while Claude is running in all of them.
+    const concurrentSwitchMs: number[] = await page.evaluate(
+      ({ tabIds, chunk }: { tabIds: string[]; chunk: string }) => {
+        const { tabs, layout } = (window as any).__stores__
+        const groupId = layout.getState().getAllGroupIds()[0]
+        const t = (window as any).__testTerminal__
+        const durations: number[] = []
+
+        for (let i = 0; i < 20; i++) {
+          // Fire a PTY burst from all tabs (background load)
+          for (const id of tabIds) {
+            t.feedData(id, chunk)
+            tabs.getState().updateTab(groupId, id, { isThinking: true })
+          }
+
+          // Immediately switch to another tab and measure
+          const targetId = tabIds[i % tabIds.length]
+          const t0 = performance.now()
+          tabs.getState().setActiveTab(groupId, targetId)
+          durations.push(performance.now() - t0)
+        }
+
+        return durations
+      },
+      { tabIds, chunk },
+    )
+
+    const switchMetrics = computeMetrics(concurrentSwitchMs)
+    printMetrics('Tab switch under concurrent PTY load', switchMetrics)
+
+    console.log(`\n  threshold: p95 < ${MAX_P95_CONCURRENT_SWITCH_MS}ms`)
+    expect(
+      switchMetrics.p95,
+      `p95 tab switch under concurrent load (${switchMetrics.p95.toFixed(1)}ms) exceeded ${MAX_P95_CONCURRENT_SWITCH_MS}ms`,
+    ).toBeLessThan(MAX_P95_CONCURRENT_SWITCH_MS)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Test 4: Render count — verify only the active TabGroup re-renders on switch
+  // ---------------------------------------------------------------------------
+
+  test('tab switch triggers no excess re-renders in unrelated components (perf marks)', async ({ page }) => {
     // Inject render tracking into key components via the perf utility
     await page.evaluate(() => {
       // Enable the perf utility so tab-switch marks are collected
