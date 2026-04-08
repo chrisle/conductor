@@ -43,6 +43,7 @@ export interface AppConfig {
   ui: {
     zoom: number
     kanbanCompactColumns: string[]
+    kanbanHideDoneColumn: boolean
   }
   /** Last working directory used when opening a new terminal tab */
   lastTerminalCwd?: string
@@ -126,6 +127,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   ui: {
     zoom: 1,
     kanbanCompactColumns: [],
+    kanbanHideDoneColumn: false,
   },
   claudeAccounts: [],
   defaultClaudeAccountId: null,
