@@ -12,8 +12,6 @@ const DRAGGING_GROUP_KEY = "__dragging_group__";
 
 function EdgeDropZone({ side, dragging }: { side: "west" | "east" | "north" | "south"; dragging: boolean }) {
   const [active, setActive] = useState(false);
-  const { insertAtEdge, removeGroup } = useLayoutStore();
-  const { moveTab, createGroup } = useTabsStore();
 
   const isHorizontal = side === "north" || side === "south";
 
@@ -37,14 +35,14 @@ function EdgeDropZone({ side, dragging }: { side: "west" | "east" | "north" | "s
     const sourceGroupId = e.dataTransfer.getData(DRAGGING_GROUP_KEY);
     if (!tabId) return;
 
-    const newGroupId = createGroup();
-    insertAtEdge(side, newGroupId);
-    moveTab(sourceGroupId, tabId, newGroupId);
+    const newGroupId = useTabsStore.getState().createGroup();
+    useLayoutStore.getState().insertAtEdge(side, newGroupId);
+    useTabsStore.getState().moveTab(sourceGroupId, tabId, newGroupId);
 
     setTimeout(() => {
       const src = useTabsStore.getState().groups[sourceGroupId];
       if (src && src.tabs.length === 0) {
-        removeGroup(sourceGroupId);
+        useLayoutStore.getState().removeGroup(sourceGroupId);
         useTabsStore.getState().removeGroup(sourceGroupId);
       }
     }, 0);
@@ -91,8 +89,7 @@ function EdgeDropZone({ side, dragging }: { side: "west" | "east" | "north" | "s
 }
 
 export default function MainLayout(): React.ReactElement {
-  const { root, setRoot, setFocusedGroup } = useLayoutStore();
-  const { createGroup } = useTabsStore();
+  const root = useLayoutStore(s => s.root);
   const initialized = useRef(false);
   const [dragging, setDragging] = useState(false);
 
@@ -106,9 +103,9 @@ export default function MainLayout(): React.ReactElement {
     // (e.g. from a fast restore), skip to avoid creating orphan groups.
     if (useLayoutStore.getState().root) return;
 
-    const groupId = createGroup();
-    setRoot({ type: "leaf", groupId });
-    setFocusedGroup(groupId);
+    const groupId = useTabsStore.getState().createGroup();
+    useLayoutStore.getState().setRoot({ type: "leaf", groupId });
+    useLayoutStore.getState().setFocusedGroup(groupId);
   }, []);
 
   // Enable edge drop zones only while a tab drag is in progress so

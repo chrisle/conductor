@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { X, Plus, FileText, FolderOpen, FilePlus2, RotateCw, Pencil, Skull, LayoutGrid, Columns3, Rows3, UserCircle, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -109,11 +109,11 @@ function TabBadge({ tabId }: { tabId: string }) {
   )
 }
 
-export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement {
-  const { groups, setActiveTab, removeTab, addTab, moveTab } = useTabsStore()
+function TabGroup({ groupId }: TabGroupProps): React.ReactElement {
+  const group = useTabsStore(s => s.groups[groupId])
   const selectedTabIds = useTabsStore(s => s.selectedTabIds[groupId])
-  const { focusedGroupId, setFocusedGroup, insertPanel, removeGroup, getAllGroupIds } = useLayoutStore()
-  const group = groups[groupId]
+  const focusedGroupId = useLayoutStore(s => s.focusedGroupId)
+  const isOnlyGroup = useLayoutStore(s => s.getAllGroupIds().length <= 1)
 
   const [dropZone, setDropZone] = useState<DropZone>(null)
   const dropZoneRef = useRef<DropZone>(null)
@@ -132,7 +132,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   const dragIndexRef = useRef<number | null>(null)
   const contentDragRafRef = useRef<number | null>(null)
   const mousePos = useRef({ x: 0, y: 0 })
-  const { rootPath } = useSidebarStore()
+  const rootPath = useSidebarStore(s => s.rootPath)
   const isFocused = focusedGroupId === groupId
 
   // Track mouse position for Cmd+T
@@ -167,10 +167,12 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   const setProjectSettings = useProjectStore(s => s.setProjectSettings)
 
   // Effective default: project-level overrides global
-  const effectiveDefaultAccountId =
+  const effectiveDefaultAccountId = useMemo(() =>
     projectSettings?.defaultClaudeAccountId !== undefined
       ? projectSettings.defaultClaudeAccountId
-      : defaultClaudeAccountId
+      : defaultClaudeAccountId,
+    [projectSettings?.defaultClaudeAccountId, defaultClaudeAccountId]
+  )
 
   function addClaudeTab(apiKey?: string, accountName?: string) {
     const cwd = rootPath || undefined
@@ -200,12 +202,14 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     useProjectStore.getState().markWorkspaceDirty()
   }
 
-  // Get menu items from plugin registry (for third-party extensions)
-  const menuItems = extensionRegistry.getNewTabMenuItems()
-  // Filter out built-in items we render ourselves
-  const extraMenuItems = menuItems.filter(item =>
-    !['Claude Code', 'Claude Code (continue)', 'Claude Code (resume)', 'Codex', 'Terminal', 'Browser'].includes(item.label)
-  )
+  // Get menu items from plugin registry — memoized since the registry is
+  // populated once at startup and doesn't change during normal operation.
+  const extraMenuItems = useMemo(() => {
+    const menuItems = extensionRegistry.getNewTabMenuItems()
+    return menuItems.filter(item =>
+      !['Claude Code', 'Claude Code (continue)', 'Claude Code (resume)', 'Codex', 'Terminal', 'Browser'].includes(item.label)
+    )
+  }, [])
 
   // Keyboard number shortcuts for the floating menu
   useEffect(() => {
@@ -311,13 +315,13 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
         useTabsStore.getState().reorderTab(groupId, sourceIndex, targetIndex)
       }
     } else {
-      moveTab(sourceGroupId, tabId, groupId, targetIndex)
+      useTabsStore.getState().moveTab(sourceGroupId, tabId, groupId, targetIndex)
 
       // Clean up the source pane if dragging away its last tab
       setTimeout(() => {
         const src = useTabsStore.getState().groups[sourceGroupId]
         if (src && src.tabs.length === 0 && sourceGroupId !== groupId) {
-          removeGroup(sourceGroupId)
+          useLayoutStore.getState().removeGroup(sourceGroupId)
           useTabsStore.getState().removeGroup(sourceGroupId)
         }
       }, 0)
@@ -401,15 +405,15 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     if (!tabId || !zone) return
 
     const newGroupId = useTabsStore.getState().createGroup()
-    insertPanel(groupId, zone, newGroupId)
-    moveTab(sourceGroupId, tabId, newGroupId)
+    useLayoutStore.getState().insertPanel(groupId, zone, newGroupId)
+    useTabsStore.getState().moveTab(sourceGroupId, tabId, newGroupId)
 
     setTimeout(() => {
       const src = useTabsStore.getState().groups[sourceGroupId]
       if (src && src.tabs.length === 0) {
         const remaining = Object.keys(useTabsStore.getState().groups)
         if (remaining.length > 1) {
-          removeGroup(sourceGroupId)
+          useLayoutStore.getState().removeGroup(sourceGroupId)
           useTabsStore.getState().removeGroup(sourceGroupId)
         }
       }
@@ -431,12 +435,12 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
 
   function closeTab(tabId: string) {
     const groupTabs = group.tabs
-    removeTab(groupId, tabId)
+    useTabsStore.getState().removeTab(groupId, tabId)
     if (groupTabs.length === 1) {
-      const allIds = getAllGroupIds()
+      const allIds = useLayoutStore.getState().getAllGroupIds()
       if (allIds.length > 1) {
         setTimeout(() => {
-          removeGroup(groupId)
+          useLayoutStore.getState().removeGroup(groupId)
           useTabsStore.getState().removeGroup(groupId)
         }, 0)
       }
@@ -492,7 +496,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     const allGroupIds = [groupId]
     for (let i = 1; i < ids.length; i++) {
       const newGroupId = useTabsStore.getState().createGroup()
-      moveTab(groupId, ids[i], newGroupId)
+      useTabsStore.getState().moveTab(groupId, ids[i], newGroupId)
       allGroupIds.push(newGroupId)
     }
     // Build layout tree for the chosen mode and replace this group's leaf
@@ -501,7 +505,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   }
 
   function handleContentClick() {
-    setFocusedGroup(groupId)
+    useLayoutStore.getState().setFocusedGroup(groupId)
   }
 
   function startRename(tab: Tab) {
@@ -910,7 +914,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                 onDragLeave={() => setDragOverTabIndex(null)}
                 onDrop={e => handleTabDrop(e, index)}
                 onClick={(e) => {
-                  setFocusedGroup(groupId)
+                  useLayoutStore.getState().setFocusedGroup(groupId)
                   if (e.shiftKey) {
                     // Shift-click: select range from anchor to this tab
                     e.preventDefault()
@@ -925,7 +929,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                   }
                   // Plain click: clear selection, activate tab
                   useTabsStore.getState().clearSelection(groupId)
-                  setActiveTab(groupId, tab.id)
+                  useTabsStore.getState().setActiveTab(groupId, tab.id)
                   // Set anchor for future shift-clicks
                   useTabsStore.setState(s => ({
                     selectionAnchor: { ...s.selectionAnchor, [groupId]: tab.id },
@@ -1177,13 +1181,13 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
         </div>
 
         {/* Close pane button — only visible when the pane is empty and not the last group */}
-        {group.tabs.length === 0 && getAllGroupIds().length > 1 && (
+        {group.tabs.length === 0 && !isOnlyGroup && (
           <Button
             variant="ghost"
             size="icon"
             className="w-8 h-8 shrink-0 rounded-none text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
             onClick={() => {
-              removeGroup(groupId)
+              useLayoutStore.getState().removeGroup(groupId)
               useTabsStore.getState().removeGroup(groupId)
             }}
             title="Close Pane"
@@ -1303,3 +1307,5 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     </div>
   )
 }
+
+export default React.memo(TabGroup)
