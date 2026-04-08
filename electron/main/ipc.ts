@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, app, dialog, shell } from 'electron'
+import { ipcMain, BrowserWindow, app, dialog, shell, webContents } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
@@ -988,6 +988,21 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
     } catch (err) {
       console.error('[ipc] Failed to open external URL:', url, err)
     }
+  })
+
+  // Webview GPU throttling — reduce compositing when browser tab is hidden
+  ipcMain.handle('webview:suspend', (_event, webContentsId: number) => {
+    const wc = webContents.fromId(webContentsId)
+    if (!wc) return
+    wc.setBackgroundThrottling(true)
+    wc.setFrameRate(1)
+  })
+
+  ipcMain.handle('webview:resume', (_event, webContentsId: number) => {
+    const wc = webContents.fromId(webContentsId)
+    if (!wc) return
+    wc.setBackgroundThrottling(false)
+    wc.setFrameRate(60)
   })
 
   // Terminal WebSocket bridge (renderer <-> conductord via Unix socket)

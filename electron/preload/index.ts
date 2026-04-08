@@ -143,6 +143,10 @@ const electronAPI = {
   // Shell
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
 
+  // Webview GPU throttling
+  suspendWebview: (webContentsId: number) => ipcRenderer.invoke('webview:suspend', webContentsId),
+  resumeWebview: (webContentsId: number) => ipcRenderer.invoke('webview:resume', webContentsId),
+
   // Platform
   platform: process.platform
 }

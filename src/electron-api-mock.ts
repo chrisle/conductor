@@ -226,6 +226,10 @@ const mock: typeof window.electronAPI = {
   logDebug: noop,
   openExternal: noopAsync,
 
+  // Webview GPU throttling
+  suspendWebview: noopAsync,
+  resumeWebview: noopAsync,
+
   // Platform
   platform: 'darwin',
 }
