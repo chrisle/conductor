@@ -25,21 +25,24 @@ import { loadExternalExtensions, loadExtension } from './extensions/loader'
 // Use local monaco-editor bundle instead of CDN (required for Electron)
 loader.config({ monaco })
 
-// Configure Monaco web workers for language services (JSON, CSS, HTML, TypeScript)
-// Uses ?worker import for Vite compatibility in both dev and production builds
-import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
-import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
-import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
-import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
-import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
-
+// Configure Monaco web workers for language services (JSON, CSS, HTML, TypeScript).
+// Workers are instantiated lazily on first request so they don't consume resources
+// at startup when no editor tabs are open.
 ;(window as any).MonacoEnvironment = {
   getWorker(_workerId: string, label: string) {
-    if (label === 'json') return new jsonWorker()
-    if (label === 'css' || label === 'scss' || label === 'less') return new cssWorker()
-    if (label === 'html' || label === 'handlebars' || label === 'razor') return new htmlWorker()
-    if (label === 'typescript' || label === 'javascript') return new tsWorker()
-    return new editorWorker()
+    if (label === 'json') {
+      return import('monaco-editor/esm/vs/language/json/json.worker?worker').then(m => new m.default())
+    }
+    if (label === 'css' || label === 'scss' || label === 'less') {
+      return import('monaco-editor/esm/vs/language/css/css.worker?worker').then(m => new m.default())
+    }
+    if (label === 'html' || label === 'handlebars' || label === 'razor') {
+      return import('monaco-editor/esm/vs/language/html/html.worker?worker').then(m => new m.default())
+    }
+    if (label === 'typescript' || label === 'javascript') {
+      return import('monaco-editor/esm/vs/language/typescript/ts.worker?worker').then(m => new m.default())
+    }
+    return import('monaco-editor/esm/vs/editor/editor.worker?worker').then(m => new m.default())
   }
 }
 
