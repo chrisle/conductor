@@ -52,7 +52,8 @@ export interface AppConfig {
   jiraConnections: JiraConnection[]
   aiCli: {
     claudeCode: {
-      skipDangerousPermissions: boolean
+      allowYoloMode: boolean
+      yoloModeByDefault: boolean
       autoPilotScanMs: number
       disableBackgroundTasks: boolean
       agentTeams: boolean
@@ -129,7 +130,8 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   jiraConnections: [],
   aiCli: {
     claudeCode: {
-      skipDangerousPermissions: false,
+      allowYoloMode: false,
+      yoloModeByDefault: false,
       autoPilotScanMs: 250,
       disableBackgroundTasks: true,
       agentTeams: false,

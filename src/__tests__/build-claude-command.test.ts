@@ -1,15 +1,20 @@
 import { describe, it, expect } from 'vitest'
 import { buildClaudeCommand } from '../extensions/ai-cli/contexts/buildClaudeCommand'
 
-const base = { skipDangerousPermissions: false, disableBackgroundTasks: false, agentTeams: false }
+const base = { allowYoloMode: false, yoloModeByDefault: false, disableBackgroundTasks: false, agentTeams: false }
 
 describe('buildClaudeCommand', () => {
   it('returns the command unchanged when no options are set', () => {
     expect(buildClaudeCommand('claude\n', base)).toBe('claude\n')
   })
 
-  it('adds --dangerously-skip-permissions flag', () => {
-    const result = buildClaudeCommand('claude\n', { ...base, skipDangerousPermissions: true })
+  it('adds --allow-dangerously-skip-permissions when allowYoloMode is set', () => {
+    const result = buildClaudeCommand('claude\n', { ...base, allowYoloMode: true })
+    expect(result).toBe('claude --allow-dangerously-skip-permissions\n')
+  })
+
+  it('adds --dangerously-skip-permissions when yoloModeByDefault is set', () => {
+    const result = buildClaudeCommand('claude\n', { ...base, allowYoloMode: true, yoloModeByDefault: true })
     expect(result).toBe('claude --dangerously-skip-permissions\n')
   })
 
@@ -20,7 +25,8 @@ describe('buildClaudeCommand', () => {
 
   it('adds both export and flag when both options are set', () => {
     const result = buildClaudeCommand('claude\n', {
-      skipDangerousPermissions: true,
+      allowYoloMode: true,
+      yoloModeByDefault: true,
       disableBackgroundTasks: true,
       agentTeams: false,
     })
@@ -29,7 +35,8 @@ describe('buildClaudeCommand', () => {
 
   it('preserves cd prefix before claude', () => {
     const result = buildClaudeCommand('cd /some/path && claude\n', {
-      skipDangerousPermissions: true,
+      allowYoloMode: true,
+      yoloModeByDefault: true,
       disableBackgroundTasks: true,
       agentTeams: false,
     })
@@ -38,7 +45,8 @@ describe('buildClaudeCommand', () => {
 
   it('preserves --resume flag after claude', () => {
     const result = buildClaudeCommand('claude --resume abc123\n', {
-      skipDangerousPermissions: true,
+      allowYoloMode: true,
+      yoloModeByDefault: true,
       disableBackgroundTasks: false,
       agentTeams: false,
     })
@@ -47,7 +55,8 @@ describe('buildClaudeCommand', () => {
 
   it('preserves a prompt argument after claude', () => {
     const result = buildClaudeCommand("cd /path && claude 'fix the bug'\n", {
-      skipDangerousPermissions: false,
+      allowYoloMode: false,
+      yoloModeByDefault: false,
       disableBackgroundTasks: true,
       agentTeams: false,
     })
@@ -55,9 +64,9 @@ describe('buildClaudeCommand', () => {
   })
 
   it('only replaces the first occurrence of claude', () => {
-    // edge case: if "claude" appears in a path or argument
     const result = buildClaudeCommand('claude --resume claude\n', {
-      skipDangerousPermissions: true,
+      allowYoloMode: true,
+      yoloModeByDefault: true,
       disableBackgroundTasks: false,
       agentTeams: false,
     })
@@ -66,7 +75,8 @@ describe('buildClaudeCommand', () => {
 
   it('adds multiple export statements when multiple env vars are set', () => {
     const result = buildClaudeCommand('claude\n', {
-      skipDangerousPermissions: false,
+      allowYoloMode: false,
+      yoloModeByDefault: false,
       disableBackgroundTasks: true,
       agentTeams: true,
     })

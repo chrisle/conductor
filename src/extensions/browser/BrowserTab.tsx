@@ -242,8 +242,8 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
           const { cwd } = await resolveWorktree(ticketKey)
           const prompt = buildPrompt(ticketKey, domain)
           const escaped = prompt.replace(/'/g, "'\\''")
-          const skipPerms = getConfig().config.aiCli.claudeCode.skipDangerousPermissions
-          const flag = skipPerms ? ' --dangerously-skip-permissions' : ''
+          const { allowYoloMode, yoloModeByDefault } = getConfig().config.aiCli.claudeCode
+          const flag = yoloModeByDefault ? ' --dangerously-skip-permissions' : allowYoloMode ? ' --allow-dangerously-skip-permissions' : ''
           const initialCommand = `cd ${JSON.stringify(cwd)} && claude${flag} '${escaped}'\n`
 
           addTab(targetGroup, {
@@ -264,8 +264,8 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
           const { cwd } = await resolveWorktree(ticketKey)
           const prompt = buildPrompt(ticketKey, domain)
           const escaped = prompt.replace(/'/g, "'\\''")
-          const skipPerms = getConfig().config.aiCli.claudeCode.skipDangerousPermissions
-          const flag = skipPerms ? ' --dangerously-skip-permissions' : ''
+          const { allowYoloMode, yoloModeByDefault } = getConfig().config.aiCli.claudeCode
+          const flag = yoloModeByDefault ? ' --dangerously-skip-permissions' : allowYoloMode ? ' --allow-dangerously-skip-permissions' : ''
           const command = `cd ${JSON.stringify(cwd)} && claude${flag} '${escaped}'\n`
 
           await window.electronAPI.createTerminal(tmuxName, cwd, command)

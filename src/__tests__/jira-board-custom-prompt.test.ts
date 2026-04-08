@@ -83,7 +83,7 @@ describe('JiraBoardTab custom prompt template (CON-55)', () => {
         aiCli: {
           claudeCode: {
             startWorkPromptTemplate: customTemplate,
-            skipDangerousPermissions: true,
+            allowYoloMode: true, yoloModeByDefault: true,
           },
         },
       },
@@ -101,7 +101,7 @@ describe('JiraBoardTab custom prompt template (CON-55)', () => {
         aiCli: {
           claudeCode: {
             startWorkPromptTemplate: DEFAULT_START_WORK_PROMPT_TEMPLATE,
-            skipDangerousPermissions: false,
+            allowYoloMode: false, yoloModeByDefault: false,
           },
         },
       },
@@ -120,7 +120,7 @@ describe('JiraBoardTab custom prompt template (CON-55)', () => {
         aiCli: {
           claudeCode: {
             startWorkPromptTemplate: 'domain is {{domain}}',
-            skipDangerousPermissions: false,
+            allowYoloMode: false, yoloModeByDefault: false,
           },
         },
       },
@@ -136,7 +136,7 @@ describe('JiraBoardTab custom prompt template (CON-55)', () => {
         aiCli: {
           claudeCode: {
             startWorkPromptTemplate: 'domain is {{domain}}',
-            skipDangerousPermissions: false,
+            allowYoloMode: false, yoloModeByDefault: false,
           },
         },
       },
@@ -146,37 +146,57 @@ describe('JiraBoardTab custom prompt template (CON-55)', () => {
     expect(result).toBe('domain is myteam.atlassian.net')
   })
 
-  it('respects skipDangerousPermissions=false (no flag)', () => {
+  it('produces no flag when yolo mode is off', () => {
     mockGetState.mockReturnValue({
       config: {
         aiCli: {
           claudeCode: {
             startWorkPromptTemplate: 'prompt',
-            skipDangerousPermissions: false,
+            allowYoloMode: false,
+            yoloModeByDefault: false,
           },
         },
       },
     })
 
-    const settings = mockGetState().config.aiCli.claudeCode
-    const flag = settings.skipDangerousPermissions ? ' --dangerously-skip-permissions' : ''
+    const { allowYoloMode, yoloModeByDefault } = mockGetState().config.aiCli.claudeCode
+    const flag = yoloModeByDefault ? ' --dangerously-skip-permissions' : allowYoloMode ? ' --allow-dangerously-skip-permissions' : ''
     expect(flag).toBe('')
   })
 
-  it('respects skipDangerousPermissions=true (adds flag)', () => {
+  it('produces --allow-dangerously-skip-permissions when allowYoloMode only', () => {
     mockGetState.mockReturnValue({
       config: {
         aiCli: {
           claudeCode: {
             startWorkPromptTemplate: 'prompt',
-            skipDangerousPermissions: true,
+            allowYoloMode: true,
+            yoloModeByDefault: false,
           },
         },
       },
     })
 
-    const settings = mockGetState().config.aiCli.claudeCode
-    const flag = settings.skipDangerousPermissions ? ' --dangerously-skip-permissions' : ''
+    const { allowYoloMode, yoloModeByDefault } = mockGetState().config.aiCli.claudeCode
+    const flag = yoloModeByDefault ? ' --dangerously-skip-permissions' : allowYoloMode ? ' --allow-dangerously-skip-permissions' : ''
+    expect(flag).toBe(' --allow-dangerously-skip-permissions')
+  })
+
+  it('produces --dangerously-skip-permissions when yoloModeByDefault is set', () => {
+    mockGetState.mockReturnValue({
+      config: {
+        aiCli: {
+          claudeCode: {
+            startWorkPromptTemplate: 'prompt',
+            allowYoloMode: true,
+            yoloModeByDefault: true,
+          },
+        },
+      },
+    })
+
+    const { allowYoloMode, yoloModeByDefault } = mockGetState().config.aiCli.claudeCode
+    const flag = yoloModeByDefault ? ' --dangerously-skip-permissions' : allowYoloMode ? ' --allow-dangerously-skip-permissions' : ''
     expect(flag).toBe(' --dangerously-skip-permissions')
   })
 
@@ -186,7 +206,7 @@ describe('JiraBoardTab custom prompt template (CON-55)', () => {
         aiCli: {
           claudeCode: {
             startWorkPromptTemplate: '{{ticketKey}} belongs to {{projectKey}}. Repeat: {{ticketKey}} in {{projectKey}}',
-            skipDangerousPermissions: false,
+            allowYoloMode: false, yoloModeByDefault: false,
           },
         },
       },

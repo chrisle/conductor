@@ -11,11 +11,11 @@ import type { ClaudeCodeSettings } from './useClaudeCodeSettings'
  *
  * Result examples (with all options on):
  *   CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude --dangerously-skip-permissions\n
- *   cd /path && CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude --dangerously-skip-permissions --resume <id>\n
+ *   cd /path && CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude --allow-dangerously-skip-permissions --resume <id>\n
  */
 export function buildClaudeCommand(
   command: string,
-  settings: Pick<ClaudeCodeSettings, 'skipDangerousPermissions' | 'disableBackgroundTasks' | 'agentTeams'>,
+  settings: Pick<ClaudeCodeSettings, 'allowYoloMode' | 'yoloModeByDefault' | 'disableBackgroundTasks' | 'agentTeams'>,
   apiKey?: string,
 ): string {
   const envVars: string[] = []
@@ -23,9 +23,13 @@ export function buildClaudeCommand(
   if (settings.disableBackgroundTasks) envVars.push('export CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1')
   if (settings.agentTeams) envVars.push('export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1')
 
-  const flags = settings.skipDangerousPermissions
+  // yoloModeByDefault => always bypass permissions (--dangerously-skip-permissions)
+  // allowYoloMode only => make the option available but not default (--allow-dangerously-skip-permissions)
+  const flags = settings.yoloModeByDefault
     ? ' --dangerously-skip-permissions'
-    : ''
+    : settings.allowYoloMode
+      ? ' --allow-dangerously-skip-permissions'
+      : ''
 
   // Replace the `claude` invocation, leaving anything before/after it intact.
   let result = command.replace(/\bclaude\b/, `claude${flags}`)

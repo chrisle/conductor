@@ -28,7 +28,7 @@ describe('DEFAULT_APP_CONFIG', () => {
   })
 
   it('has claude code default settings', () => {
-    expect(DEFAULT_APP_CONFIG.aiCli.claudeCode.skipDangerousPermissions).toBe(false)
+    expect(DEFAULT_APP_CONFIG.aiCli.claudeCode.allowYoloMode).toBe(false)
     expect(DEFAULT_APP_CONFIG.aiCli.claudeCode.autoPilotScanMs).toBe(250)
     expect(DEFAULT_APP_CONFIG.aiCli.claudeCode.disableBackgroundTasks).toBe(true)
   })

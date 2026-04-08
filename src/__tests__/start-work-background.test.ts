@@ -30,7 +30,7 @@ vi.mock('@conductor/extension-api', () => ({
     getState: () => ({
       config: {
         ui: { kanbanCompactColumns: [] },
-        aiCli: { claudeCode: { skipDangerousPermissions: true } },
+        aiCli: { claudeCode: { allowYoloMode: true, yoloModeByDefault: true } },
       },
       ready: true,
     }),

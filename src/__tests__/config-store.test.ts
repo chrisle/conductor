@@ -103,8 +103,8 @@ describe('useConfigStore', () => {
 
   describe('setClaudeCodeSettings', () => {
     it('merges claude code settings and patches', async () => {
-      await useConfigStore.getState().setClaudeCodeSettings({ skipDangerousPermissions: true })
-      expect(useConfigStore.getState().config.aiCli.claudeCode.skipDangerousPermissions).toBe(true)
+      await useConfigStore.getState().setClaudeCodeSettings({ allowYoloMode: true, yoloModeByDefault: true })
+      expect(useConfigStore.getState().config.aiCli.claudeCode.allowYoloMode).toBe(true)
       expect(useConfigStore.getState().config.aiCli.claudeCode.disableBackgroundTasks).toBe(true)
     })
   })

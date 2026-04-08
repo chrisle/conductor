@@ -12,7 +12,7 @@ vi.mock('../store/config', () => ({
       config: {
         aiCli: {
           claudeCode: {
-            skipDangerousPermissions: true,
+            allowYoloMode: true, yoloModeByDefault: true,
             startWorkPromptTemplate: 'Work on {{ticketKey}} in {{projectKey}} at {{domain}}',
           },
         },
@@ -23,7 +23,7 @@ vi.mock('../store/config', () => ({
         config: {
           aiCli: {
             claudeCode: {
-              skipDangerousPermissions: true,
+              allowYoloMode: true, yoloModeByDefault: true,
               startWorkPromptTemplate: 'Work on {{ticketKey}} in {{projectKey}} at {{domain}}',
             },
           },

@@ -11,7 +11,7 @@ function resetStores() {
   })
   useCodexSettings.setState({ autoPilotScanMs: 250 })
   useClaudeCodeSettings.setState({
-    skipDangerousPermissions: false,
+    allowYoloMode: false, yoloModeByDefault: false,
     autoPilotScanMs: 250,
     disableBackgroundTasks: true,
     agentTeams: false,

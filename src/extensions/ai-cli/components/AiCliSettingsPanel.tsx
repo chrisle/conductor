@@ -120,14 +120,28 @@ export default function AiCliSettingsPanel(): React.ReactElement {
 
         <div className="flex items-center justify-between gap-4">
           <div>
-            <div className="text-ui-base font-medium text-zinc-200">Skip dangerous permissions</div>
+            <div className="text-ui-base font-medium text-zinc-200">Allow yolo mode</div>
             <div className="text-ui-sm text-zinc-500 mt-0.5">
-              Passes --dangerously-skip-permissions to claude
+              Passes --allow-dangerously-skip-permissions so Claude can skip permission prompts when asked
             </div>
           </div>
           <Switch
-            checked={claudeCode.skipDangerousPermissions}
-            onCheckedChange={(v) => claudeCode.update({ skipDangerousPermissions: v })}
+            checked={claudeCode.allowYoloMode}
+            onCheckedChange={(v) => claudeCode.update({ allowYoloMode: v, yoloModeByDefault: v ? claudeCode.yoloModeByDefault : false })}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-ui-base font-medium text-zinc-200">Use yolo mode by default</div>
+            <div className="text-ui-sm text-zinc-500 mt-0.5">
+              Passes --dangerously-skip-permissions so Claude always skips permission prompts
+            </div>
+          </div>
+          <Switch
+            checked={claudeCode.yoloModeByDefault}
+            disabled={!claudeCode.allowYoloMode}
+            onCheckedChange={(v) => claudeCode.update({ yoloModeByDefault: v })}
           />
         </div>
 

@@ -3,7 +3,8 @@ import { useConfigStore } from '@/store/config'
 import { DEFAULT_START_WORK_PROMPT_TEMPLATE } from '@/types/app-config'
 
 export interface ClaudeCodeSettings {
-  skipDangerousPermissions: boolean
+  allowYoloMode: boolean
+  yoloModeByDefault: boolean
   autoPilotScanMs: number
   disableBackgroundTasks: boolean
   agentTeams: boolean
@@ -11,7 +12,8 @@ export interface ClaudeCodeSettings {
 }
 
 const defaults: ClaudeCodeSettings = {
-  skipDangerousPermissions: false,
+  allowYoloMode: false,
+  yoloModeByDefault: false,
   autoPilotScanMs: 250,
   disableBackgroundTasks: true,
   agentTeams: false,

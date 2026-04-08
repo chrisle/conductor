@@ -26,7 +26,7 @@ describe('useClaudeCodeSettings', () => {
   it('has correct defaults', async () => {
     const store = await freshStore()
     const state = store.getState()
-    expect(state.skipDangerousPermissions).toBe(false)
+    expect(state.allowYoloMode).toBe(false)
     expect(state.autoPilotScanMs).toBe(250)
     expect(state.disableBackgroundTasks).toBe(true)
     expect(state.startWorkPromptTemplate).toContain('{{ticketKey}}')
@@ -34,8 +34,8 @@ describe('useClaudeCodeSettings', () => {
 
   it('update merges partial settings', async () => {
     const store = await freshStore()
-    store.getState().update({ skipDangerousPermissions: true })
-    expect(store.getState().skipDangerousPermissions).toBe(true)
+    store.getState().update({ allowYoloMode: true, yoloModeByDefault: true })
+    expect(store.getState().allowYoloMode).toBe(true)
     expect(store.getState().autoPilotScanMs).toBe(250)
   })
 
@@ -74,29 +74,29 @@ describe('buildClaudeCommand with apiKey', () => {
     vi.resetModules()
     const { buildClaudeCommand } = await import('../extensions/ai-cli/contexts/buildClaudeCommand')
     const result = buildClaudeCommand('claude\n', {
-      skipDangerousPermissions: false,
+      allowYoloMode: false, yoloModeByDefault: false,
       disableBackgroundTasks: false,
       agentTeams: false,
     }, 'sk-ant-test-key')
-    expect(result).toBe('ANTHROPIC_API_KEY=sk-ant-test-key claude\n')
+    expect(result).toBe('export ANTHROPIC_API_KEY=sk-ant-test-key; claude\n')
   })
 
   it('combines apiKey with other env vars and flags', async () => {
     vi.resetModules()
     const { buildClaudeCommand } = await import('../extensions/ai-cli/contexts/buildClaudeCommand')
     const result = buildClaudeCommand('claude\n', {
-      skipDangerousPermissions: true,
+      allowYoloMode: true, yoloModeByDefault: true,
       disableBackgroundTasks: true,
       agentTeams: false,
     }, 'sk-key')
-    expect(result).toBe('ANTHROPIC_API_KEY=sk-key CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 claude --dangerously-skip-permissions\n')
+    expect(result).toBe('export ANTHROPIC_API_KEY=sk-key; export CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1; claude --dangerously-skip-permissions\n')
   })
 
   it('does not add ANTHROPIC_API_KEY when apiKey is undefined', async () => {
     vi.resetModules()
     const { buildClaudeCommand } = await import('../extensions/ai-cli/contexts/buildClaudeCommand')
     const result = buildClaudeCommand('claude\n', {
-      skipDangerousPermissions: false,
+      allowYoloMode: false, yoloModeByDefault: false,
       disableBackgroundTasks: false,
       agentTeams: false,
     })
