@@ -150,6 +150,10 @@ interface ElectronAPI {
   // Shell
   openExternal: (url: string) => Promise<void>
 
+  // Webview GPU throttling
+  suspendWebview: (webContentsId: number) => Promise<void>
+  resumeWebview: (webContentsId: number) => Promise<void>
+
   // Platform
   platform: string
 }
