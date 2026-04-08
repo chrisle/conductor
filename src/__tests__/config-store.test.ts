@@ -31,7 +31,7 @@ describe('useConfigStore', () => {
     it('loads existing config and deep-merges with defaults', async () => {
       const savedConfig: AppConfig = {
         ...DEFAULT_APP_CONFIG,
-        ui: { zoom: 1.5, kanbanCompactColumns: ['Done'] },
+        ui: { zoom: 1.5, kanbanCompactColumns: ['Done'], kanbanHideDoneColumn: false },
       }
       vi.mocked(window.electronAPI.loadConfig).mockResolvedValue(savedConfig)
       await useConfigStore.getState().initialize()

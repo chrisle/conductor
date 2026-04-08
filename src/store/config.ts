@@ -13,6 +13,7 @@ export interface ConfigState {
   // Convenience setters
   setZoom: (zoom: number) => Promise<void>
   setKanbanCompactColumns: (columns: string[]) => Promise<void>
+  setKanbanHideDoneColumn: (hide: boolean) => Promise<void>
   setClaudeCodeSettings: (patch: Partial<AppConfig['aiCli']['claudeCode']>) => Promise<void>
   setCodexSettings: (patch: Partial<AppConfig['aiCli']['codex']>) => Promise<void>
   setDisabledExtensions: (disabled: string[]) => Promise<void>
@@ -101,6 +102,13 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       config: { ...state.config, ui: { ...state.config.ui, kanbanCompactColumns: columns } },
     }))
     await window.electronAPI.patchConfig({ ui: { kanbanCompactColumns: columns } })
+  },
+
+  setKanbanHideDoneColumn: async (hide) => {
+    set(state => ({
+      config: { ...state.config, ui: { ...state.config.ui, kanbanHideDoneColumn: hide } },
+    }))
+    await window.electronAPI.patchConfig({ ui: { kanbanHideDoneColumn: hide } })
   },
 
   setClaudeCodeSettings: async (patch) => {
