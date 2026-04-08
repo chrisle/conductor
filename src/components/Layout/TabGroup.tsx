@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { X, Plus, FileText, FolderOpen, FilePlus2, RotateCw, Pencil, Skull, LayoutGrid, Columns3, Rows3 } from 'lucide-react'
+import { X, Plus, FileText, FolderOpen, FilePlus2, RotateCw, Pencil, Skull, LayoutGrid, Columns3, Rows3, UserCircle, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
@@ -163,15 +163,23 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
 
   const claudeAccounts = useConfigStore(s => s.config.claudeAccounts)
   const defaultClaudeAccountId = useConfigStore(s => s.config.defaultClaudeAccountId)
+  const projectSettings = useProjectStore(s => s.projectSettings)
+  const setProjectSettings = useProjectStore(s => s.setProjectSettings)
+
+  // Effective default: project-level overrides global
+  const effectiveDefaultAccountId =
+    projectSettings?.defaultClaudeAccountId !== undefined
+      ? projectSettings.defaultClaudeAccountId
+      : defaultClaudeAccountId
 
   function addClaudeTab(apiKey?: string, accountName?: string) {
     const cwd = rootPath || undefined
     const id = nextSessionId('claude-code')
-    // If no explicit account is given, fall back to the user's configured default account
+    // If no explicit account is given, use the effective default (project → global)
     let resolvedApiKey = apiKey
     let resolvedName = accountName
-    if (resolvedApiKey === undefined && defaultClaudeAccountId) {
-      const defaultAccount = claudeAccounts.find(a => a.id === defaultClaudeAccountId)
+    if (resolvedApiKey === undefined && effectiveDefaultAccountId) {
+      const defaultAccount = claudeAccounts.find(a => a.id === effectiveDefaultAccountId)
       if (defaultAccount) {
         resolvedApiKey = defaultAccount.apiKey
         resolvedName = defaultAccount.name
@@ -185,6 +193,11 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
       initialCommand: 'claude\n',
       apiKey: resolvedApiKey,
     })
+  }
+
+  function setProjectDefaultAccount(id: string | null) {
+    setProjectSettings({ ...projectSettings, defaultClaudeAccountId: id })
+    useProjectStore.getState().markWorkspaceDirty()
   }
 
   // Get menu items from plugin registry (for third-party extensions)
@@ -562,6 +575,41 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
               <Plus className="w-3.5 h-3.5" />
               <span>Add Account</span>
             </DropdownMenuItem>
+            {claudeAccounts.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="gap-2 text-ui-base cursor-pointer text-zinc-400">
+                    <UserCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Project Default</span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="bg-zinc-900 border-zinc-700">
+                    <DropdownMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5">Default for this project</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => { setProjectDefaultAccount(null); onDone() }}
+                      className="gap-2 text-ui-base cursor-pointer"
+                    >
+                      {effectiveDefaultAccountId == null && <Check className="w-3.5 h-3.5 text-blue-400" />}
+                      {effectiveDefaultAccountId != null && <span className="w-3.5" />}
+                      Use Global Default
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {claudeAccounts.map(account => (
+                      <DropdownMenuItem
+                        key={account.id}
+                        onClick={() => { setProjectDefaultAccount(account.id); onDone() }}
+                        className="gap-2 text-ui-base cursor-pointer"
+                      >
+                        {effectiveDefaultAccountId === account.id && <Check className="w-3.5 h-3.5 text-blue-400" />}
+                        {effectiveDefaultAccountId !== account.id && <span className="w-3.5" />}
+                        {account.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              </>
+            )}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
@@ -702,6 +750,41 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
               <Plus className="w-3.5 h-3.5" />
               <span>Add Account</span>
             </ContextMenuItem>
+            {claudeAccounts.length > 0 && (
+              <>
+                <CtxMenuSeparator className="bg-zinc-700" />
+                <ContextMenuSub>
+                  <ContextMenuSubTrigger className="gap-2 text-ui-base cursor-pointer text-zinc-400">
+                    <UserCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Project Default</span>
+                  </ContextMenuSubTrigger>
+                  <ContextMenuSubContent className="bg-zinc-900 border-zinc-700">
+                    <ContextMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5">Default for this project</ContextMenuLabel>
+                    <CtxMenuSeparator className="bg-zinc-700" />
+                    <ContextMenuItem
+                      onClick={() => setProjectDefaultAccount(null)}
+                      className="gap-2 text-ui-base cursor-pointer"
+                    >
+                      {effectiveDefaultAccountId == null && <Check className="w-3.5 h-3.5 text-blue-400" />}
+                      {effectiveDefaultAccountId != null && <span className="w-3.5" />}
+                      Use Global Default
+                    </ContextMenuItem>
+                    <CtxMenuSeparator className="bg-zinc-700" />
+                    {claudeAccounts.map(account => (
+                      <ContextMenuItem
+                        key={account.id}
+                        onClick={() => setProjectDefaultAccount(account.id)}
+                        className="gap-2 text-ui-base cursor-pointer"
+                      >
+                        {effectiveDefaultAccountId === account.id && <Check className="w-3.5 h-3.5 text-blue-400" />}
+                        {effectiveDefaultAccountId !== account.id && <span className="w-3.5" />}
+                        {account.name}
+                      </ContextMenuItem>
+                    ))}
+                  </ContextMenuSubContent>
+                </ContextMenuSub>
+              </>
+            )}
           </ContextMenuSubContent>
         </ContextMenuSub>
 
@@ -980,6 +1063,55 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                         <Pencil className="w-3.5 h-3.5" />
                         Rename
                       </ContextMenuItem>
+                      {tab.type === 'claude-code' && claudeAccounts.length > 0 && (
+                        <>
+                          <CtxMenuSeparator className="bg-zinc-700" />
+                          <ContextMenuSub>
+                            <ContextMenuSubTrigger className="gap-2 text-ui-base cursor-pointer">
+                              <UserCircle className="w-3.5 h-3.5" />
+                              Switch Account
+                            </ContextMenuSubTrigger>
+                            <ContextMenuSubContent className="bg-zinc-900 border-zinc-700">
+                              <ContextMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5">Restart with account</ContextMenuLabel>
+                              <CtxMenuSeparator className="bg-zinc-700" />
+                              <ContextMenuItem
+                                className="gap-2 text-ui-base cursor-pointer"
+                                onClick={() => {
+                                  killTerminal(tab.id)
+                                  useTabsStore.getState().updateTab(groupId, tab.id, {
+                                    apiKey: undefined,
+                                    initialCommand: 'claude\n',
+                                    refreshKey: (tab.refreshKey || 0) + 1,
+                                  })
+                                }}
+                              >
+                                {!tab.apiKey && <Check className="w-3.5 h-3.5 text-blue-400" />}
+                                {tab.apiKey && <span className="w-3.5" />}
+                                Default
+                              </ContextMenuItem>
+                              <CtxMenuSeparator className="bg-zinc-700" />
+                              {claudeAccounts.map(account => (
+                                <ContextMenuItem
+                                  key={account.id}
+                                  className="gap-2 text-ui-base cursor-pointer"
+                                  onClick={() => {
+                                    killTerminal(tab.id)
+                                    useTabsStore.getState().updateTab(groupId, tab.id, {
+                                      apiKey: account.apiKey,
+                                      initialCommand: 'claude\n',
+                                      refreshKey: (tab.refreshKey || 0) + 1,
+                                    })
+                                  }}
+                                >
+                                  {tab.apiKey === account.apiKey && <Check className="w-3.5 h-3.5 text-blue-400" />}
+                                  {tab.apiKey !== account.apiKey && <span className="w-3.5" />}
+                                  {account.name}
+                                </ContextMenuItem>
+                              ))}
+                            </ContextMenuSubContent>
+                          </ContextMenuSub>
+                        </>
+                      )}
                       {isTerminalLike(tab.type) && (
                         <>
                           <CtxMenuSeparator className="bg-zinc-700" />
