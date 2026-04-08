@@ -5,6 +5,13 @@
  */
 export interface ProjectSettings {
   terminal?: Record<string, never>
+  /**
+   * ID of the Claude account (from AppConfig.claudeAccounts) to use by default
+   * when opening new Claude Code tabs in this project.
+   * null = use the global default from AppConfig.defaultClaudeAccountId.
+   * undefined = not set (falls through to global default).
+   */
+  defaultClaudeAccountId?: string | null
 }
 
 export const DEFAULT_PROJECT_SETTINGS: Required<{
