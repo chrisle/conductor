@@ -173,9 +173,11 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
   const [newName, setNewName] = useState('')
   const createInputRef = useRef<HTMLInputElement>(null)
 
-  const { isExpanded, toggleExpanded, selectedPath, setSelectedPath } = useSidebarStore()
-  const { addTab } = useTabsStore()
-  const { focusedGroupId, setFocusedGroup } = useLayoutStore()
+  const isExpanded = useSidebarStore(s => s.isExpanded)
+  const toggleExpanded = useSidebarStore(s => s.toggleExpanded)
+  const selectedPath = useSidebarStore(s => s.selectedPath)
+  const setSelectedPath = useSidebarStore(s => s.setSelectedPath)
+  const focusedGroupId = useLayoutStore(s => s.focusedGroupId)
 
   const expanded = isExpanded(entry.path)
   const isSelected = selectedPath === entry.path
@@ -248,14 +250,14 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
       const existing = group.tabs.find(t => t.filePath === entry.path)
       if (existing) {
         useTabsStore.getState().setActiveTab(gid, existing.id)
-        setFocusedGroup(gid)
+        useLayoutStore.getState().setFocusedGroup(gid)
         return
       }
     }
     const targetGroupId = (focusedGroupId && layoutGroupIds.includes(focusedGroupId))
       ? focusedGroupId
       : groupId
-    addTab(targetGroupId, {
+    useTabsStore.getState().addTab(targetGroupId, {
       type: extensionRegistry.getTabTypeForFile(entry.name),
       title: entry.name,
       filePath: entry.path
@@ -320,7 +322,7 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
       ? focusedGroupId
       : groupId
     const id = nextSessionId('claude-code')
-    addTab(targetGroupId, {
+    useTabsStore.getState().addTab(targetGroupId, {
       id,
       type: 'claude-code',
       title: id,
@@ -336,7 +338,7 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
     const targetGroupId = (focusedGroupId && layoutGroupIds.includes(focusedGroupId))
       ? focusedGroupId
       : groupId
-    addTab(targetGroupId, { type: 'terminal', title: 'Terminal', filePath: cwd })
+    useTabsStore.getState().addTab(targetGroupId, { type: 'terminal', title: 'Terminal', filePath: cwd })
   }
 
   useEffect(() => {

@@ -28,9 +28,9 @@ export default function FileTree({ groupId }: FileTreeProps): React.ReactElement
   const [creating, setCreating] = useState<CreatingType>(null)
   const [newName, setNewName] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
-  const { rootPath, setRootPath } = useSidebarStore()
-  const { addTab } = useTabsStore()
-  const { focusedGroupId } = useLayoutStore()
+  const rootPath = useSidebarStore(s => s.rootPath)
+  const setRootPath = useSidebarStore(s => s.setRootPath)
+  const focusedGroupId = useLayoutStore(s => s.focusedGroupId)
 
   function openClaudeHere() {
     const cwd = rootPath || '/'
@@ -39,7 +39,7 @@ export default function FileTree({ groupId }: FileTreeProps): React.ReactElement
       ? focusedGroupId
       : groupId
     const id = nextSessionId('claude-code')
-    addTab(targetGroupId, {
+    useTabsStore.getState().addTab(targetGroupId, {
       id,
       type: 'claude-code',
       title: id,
@@ -55,7 +55,7 @@ export default function FileTree({ groupId }: FileTreeProps): React.ReactElement
     const targetGroupId = (focusedGroupId && layoutGroupIds.includes(focusedGroupId))
       ? focusedGroupId
       : groupId
-    addTab(targetGroupId, { type: 'terminal', title: 'Terminal', filePath: cwd })
+    useTabsStore.getState().addTab(targetGroupId, { type: 'terminal', title: 'Terminal', filePath: cwd })
   }
 
   useEffect(() => {
