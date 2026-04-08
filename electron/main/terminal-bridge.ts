@@ -7,6 +7,7 @@ import { StringDecoder } from 'string_decoder'
 import os from 'os'
 import WebSocket from 'ws'
 import { CONDUCTORD_SOCKET } from './conductord-client'
+import { isTempDir } from './platform-utils'
 
 interface TerminalSession {
   ws: WebSocket
@@ -35,10 +36,8 @@ export function registerTerminalBridge(): void {
     }
 
     const connectionPromise = new Promise<{ isNew: boolean; autoPilot?: boolean }>((resolve, reject) => {
-      // Guard: never pass a macOS temp directory as working directory
-      const safeCwd = (cwd && !cwd.startsWith('/var/folders') && !cwd.startsWith('/private/var/folders'))
-        ? cwd
-        : os.homedir()
+      // Guard: never pass a temp directory as working directory
+      const safeCwd = (cwd && !isTempDir(cwd)) ? cwd : os.homedir()
 
       const params = new URLSearchParams()
       params.set('id', id)

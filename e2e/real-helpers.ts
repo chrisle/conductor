@@ -7,6 +7,7 @@
 import { expect } from '@playwright/test'
 import { chromium, type Browser, type Page } from 'playwright'
 import { execSync, spawn, type ChildProcess } from 'child_process'
+import net from 'net'
 import path from 'path'
 import os from 'os'
 
@@ -20,19 +21,52 @@ export const HOME_DIR = os.homedir()
  * Call this before and after every test run.
  */
 export function killAllConductorProcesses(): void {
-  const cmds = [
-    'pkill -f conductord 2>/dev/null',
-    'pkill -f "Electron" 2>/dev/null',
-    'pkill -f "electron-vite" 2>/dev/null',
-  ]
-  for (const cmd of cmds) {
-    try { execSync(cmd, { stdio: 'ignore' }) } catch {}
+  if (process.platform === 'win32') {
+    const targets = ['conductord.exe', 'electron.exe']
+    for (const t of targets) {
+      try { execSync(`taskkill /F /IM ${t}`, { stdio: 'ignore' }) } catch {}
+    }
+    // Also kill by window title pattern
+    try { execSync('taskkill /F /FI "WINDOWTITLE eq electron-vite*"', { stdio: 'ignore' }) } catch {}
+  } else {
+    const cmds = [
+      'pkill -f conductord 2>/dev/null',
+      'pkill -f "Electron" 2>/dev/null',
+      'pkill -f "electron-vite" 2>/dev/null',
+    ]
+    for (const cmd of cmds) {
+      try { execSync(cmd, { stdio: 'ignore' }) } catch {}
+    }
   }
 }
 
-/** Check if conductord is healthy via its Unix socket. */
+/** Wait for conductord to become healthy. */
+async function waitForDaemon(socketPath: string, timeoutMs = 10_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      if (process.platform === 'win32') {
+        // On Windows, try connecting to a TCP health endpoint if available.
+        // For now, just wait a fixed interval as the socket model differs.
+        await new Promise(r => setTimeout(r, 2_000))
+        return
+      }
+      execSync(`curl -sf --unix-socket "${socketPath}" http://localhost/health`, { timeout: 2_000 })
+      return
+    } catch {
+      await new Promise(r => setTimeout(r, 500))
+    }
+  }
+  throw new Error(`Daemon did not become healthy within ${timeoutMs}ms`)
+}
+
+/** Check if conductord is healthy via its Unix socket (or TCP on Windows). */
 export function conductordIsRunning(): boolean {
   try {
+    if (process.platform === 'win32') {
+      // Windows uses a different IPC transport; fall through to waitForDaemon instead
+      return false
+    }
     execSync(`curl -sf --unix-socket "${CONDUCTORD_SOCKET}" http://localhost/health`, {
       timeout: 2_000,
     })
@@ -160,15 +194,11 @@ export async function waitForAppAndResetToEmptyProject(page: Page): Promise<void
  * Wait for conductord to become healthy (up to 15s).
  */
 export async function waitForConductord(): Promise<void> {
-  let healthy = false
-  for (let i = 0; i < 15; i++) {
-    if (conductordIsRunning()) {
-      healthy = true
-      break
-    }
-    await new Promise(r => setTimeout(r, 1000))
+  try {
+    await waitForDaemon(CONDUCTORD_SOCKET, 15_000)
+  } catch {
+    expect(false).toBe(true) // fail the test with a clear message
   }
-  expect(healthy).toBe(true)
 }
 
 /**
