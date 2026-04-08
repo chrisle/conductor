@@ -116,6 +116,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   const group = groups[groupId]
 
   const [dropZone, setDropZone] = useState<DropZone>(null)
+  const dropZoneRef = useRef<DropZone>(null)
   const [dragOverTabIndex, setDragOverTabIndex] = useState<number | null>(null)
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
   const [floatingMenuOpen, setFloatingMenuOpen] = useState(false)
@@ -128,6 +129,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   const tabBarRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const dragIndexRef = useRef<number | null>(null)
+  const contentDragRafRef = useRef<number | null>(null)
   const mousePos = useRef({ x: 0, y: 0 })
   const { rootPath } = useSidebarStore()
   const isFocused = focusedGroupId === groupId
@@ -270,7 +272,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   function handleTabDragOver(e: React.DragEvent, index: number) {
     e.preventDefault()
     e.stopPropagation()
-    setDragOverTabIndex(index)
+    setDragOverTabIndex(prev => prev === index ? prev : index)
   }
 
   function handleTabDrop(e: React.DragEvent, targetIndex: number) {
@@ -302,42 +304,72 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   }
 
   // --- Content area drop (split screen) ---
+  function calcDropZone(clientX: number, clientY: number): DropZone {
+    const rect = contentRef.current?.getBoundingClientRect()
+    if (!rect) return null
+    const distances = {
+      west: clientX - rect.left,
+      east: rect.right - clientX,
+      north: clientY - rect.top,
+      south: rect.bottom - clientY,
+    }
+    return (Object.keys(distances) as NonNullable<DropZone>[]).reduce((a, b) =>
+      distances[a] < distances[b] ? a : b
+    )
+  }
+
   function handleContentDragOver(e: React.DragEvent) {
     e.preventDefault()
-    const rect = contentRef.current?.getBoundingClientRect()
-    if (!rect) return
-
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    const w = rect.width
-    const h = rect.height
-
-    // Determine zone by which edge is closest
-    const distances = {
-      west: x,
-      east: w - x,
-      north: y,
-      south: h - y,
-    }
-    const closest = (Object.keys(distances) as DropZone[]).reduce((a, b) =>
-      a && b && distances[a as keyof typeof distances] < distances[b as keyof typeof distances] ? a : b
-    )
-
-    setDropZone(closest)
     e.dataTransfer.dropEffect = 'move'
+
+    // When entering the content area for the first time (dropZone is null),
+    // show the highlight immediately — no rAF delay. This matters most for
+    // browser tabs where the overlay may miss the very first dragover event.
+    if (dropZoneRef.current === null) {
+      const zone = calcDropZone(e.clientX, e.clientY)
+      if (zone !== null) {
+        dropZoneRef.current = zone
+        setDropZone(zone)
+      }
+      return
+    }
+
+    // Already showing — throttle to one update per animation frame so we
+    // don't re-render at 60fps while the cursor moves within the same zone.
+    if (contentDragRafRef.current !== null) return
+    const clientX = e.clientX
+    const clientY = e.clientY
+    contentDragRafRef.current = requestAnimationFrame(() => {
+      contentDragRafRef.current = null
+      const zone = calcDropZone(clientX, clientY)
+      if (zone !== dropZoneRef.current) {
+        dropZoneRef.current = zone
+        setDropZone(zone)
+      }
+    })
   }
 
   function handleContentDragLeave(e: React.DragEvent) {
+    if (contentDragRafRef.current !== null) {
+      cancelAnimationFrame(contentDragRafRef.current)
+      contentDragRafRef.current = null
+    }
     if (!contentRef.current?.contains(e.relatedTarget as Node)) {
+      dropZoneRef.current = null
       setDropZone(null)
     }
   }
 
   function handleContentDrop(e: React.DragEvent) {
     e.preventDefault()
+    if (contentDragRafRef.current !== null) {
+      cancelAnimationFrame(contentDragRafRef.current)
+      contentDragRafRef.current = null
+    }
     const tabId = e.dataTransfer.getData(DRAGGING_TAB_KEY)
     const sourceGroupId = e.dataTransfer.getData(DRAGGING_GROUP_KEY)
     const zone = dropZone
+    dropZoneRef.current = null
     setDropZone(null)
 
     if (!tabId || !zone) return
@@ -760,7 +792,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
           ref={tabBarRef}
           className="flex items-end flex-1 min-w-0 overflow-x-auto scrollbar-hide"
           // Empty tab bar area is also a drop zone for appending tabs to the end
-          onDragOver={e => { e.preventDefault(); setDragOverTabIndex(group.tabs.length) }}
+          onDragOver={e => handleTabDragOver(e, group.tabs.length)}
           onDragLeave={() => setDragOverTabIndex(null)}
           onDrop={e => handleTabDrop(e, group.tabs.length)}
         >

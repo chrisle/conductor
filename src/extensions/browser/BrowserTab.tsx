@@ -80,62 +80,57 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
   const getRootPath = () => useSidebarStore.getState().rootPath
   const getFocusedGroupId = () => useLayoutStore.getState().focusedGroupId
 
-  // Track whether a tab drag or pane resize is in progress so we can show a
-  // transparent overlay on top of the webview. Electron's <webview> is a native
-  // element that swallows all mouse/drag events, preventing TabGroup's NESW
-  // drop zone logic and SplitPane/Sidebar resize handlers from receiving them.
-  const [isTabDragging, setIsTabDragging] = useState(false)
-  const [isPaneResizing, setIsPaneResizing] = useState(false)
-
-  // Safety timeout: if a drag/resize end event is lost (e.g. window loses
-  // focus, Electron edge case), auto-reset after 3 seconds so the overlay
-  // doesn't permanently block clicks on the webview.
+  // Overlay shown during tab drags and pane resizes to intercept mouse/drag
+  // events that the native <webview> element would otherwise swallow.
+  // Uses a ref + direct DOM style mutation instead of useState to avoid
+  // re-rendering the heavy BrowserTab component (and its webview) on every
+  // dragstart/dragend event — especially costly when multiple browser tabs are open.
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const OVERLAY_SAFETY_TIMEOUT_MS = 3000
 
-  useEffect(() => {
-    if (!isTabDragging && !isPaneResizing) return
-    const timer = setTimeout(() => {
-      setIsTabDragging(false)
-      setIsPaneResizing(false)
+  const showOverlay = useCallback(() => {
+    if (safetyTimerRef.current) clearTimeout(safetyTimerRef.current)
+    // Use pointer-events instead of display so the element stays in the
+    // compositing layer — toggling pointer-events has no layout/paint cost,
+    // making the overlay active on the very next hit-test cycle.
+    if (overlayRef.current) overlayRef.current.style.pointerEvents = 'auto'
+    safetyTimerRef.current = setTimeout(() => {
+      if (overlayRef.current) overlayRef.current.style.pointerEvents = 'none'
     }, OVERLAY_SAFETY_TIMEOUT_MS)
-    return () => clearTimeout(timer)
-  }, [isTabDragging, isPaneResizing])
+  }, [])
+
+  const hideOverlay = useCallback(() => {
+    if (safetyTimerRef.current) {
+      clearTimeout(safetyTimerRef.current)
+      safetyTimerRef.current = null
+    }
+    if (overlayRef.current) overlayRef.current.style.pointerEvents = 'none'
+  }, [])
 
   useEffect(() => {
     const handleDragStart = (e: DragEvent) => {
-      if (e.dataTransfer?.types.includes(DRAGGING_TAB_KEY)) {
-        setIsTabDragging(true)
-      }
+      if (e.dataTransfer?.types.includes(DRAGGING_TAB_KEY)) showOverlay()
     }
-    const handleDragEnd = () => setIsTabDragging(false)
-    const handleDrop = () => setIsTabDragging(false)
 
-    const handleResizeStart = () => setIsPaneResizing(true)
-    const handleResizeEnd = () => setIsPaneResizing(false)
-
-    // Additional safety: reset drag state if window loses focus, since
-    // drag/resize operations can't continue without the window.
-    const handleWindowBlur = () => {
-      setIsTabDragging(false)
-      setIsPaneResizing(false)
-    }
+    const handleResizeStart = () => showOverlay()
 
     window.addEventListener('dragstart', handleDragStart)
-    window.addEventListener('dragend', handleDragEnd)
-    window.addEventListener('drop', handleDrop)
+    window.addEventListener('dragend', hideOverlay)
+    window.addEventListener('drop', hideOverlay)
     window.addEventListener('pane-resize-start', handleResizeStart)
-    window.addEventListener('pane-resize-end', handleResizeEnd)
-    window.addEventListener('blur', handleWindowBlur)
+    window.addEventListener('pane-resize-end', hideOverlay)
+    window.addEventListener('blur', hideOverlay)
 
     return () => {
       window.removeEventListener('dragstart', handleDragStart)
-      window.removeEventListener('dragend', handleDragEnd)
-      window.removeEventListener('drop', handleDrop)
+      window.removeEventListener('dragend', hideOverlay)
+      window.removeEventListener('drop', hideOverlay)
       window.removeEventListener('pane-resize-start', handleResizeStart)
-      window.removeEventListener('pane-resize-end', handleResizeEnd)
-      window.removeEventListener('blur', handleWindowBlur)
+      window.removeEventListener('pane-resize-end', hideOverlay)
+      window.removeEventListener('blur', hideOverlay)
     }
-  }, [])
+  }, [showOverlay, hideOverlay])
 
   // Sync nav state (back/forward buttons, URL bar, tab title) from the webview
   // without touching the src attribute.
@@ -499,18 +494,15 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
         {/* Transparent overlay shown during tab drags and pane resizes to
             intercept mouse/drag events that the native <webview> element would
             otherwise swallow, allowing TabGroup's NESW drop zone logic and
-            SplitPane/Sidebar resize handlers to receive them. */}
-        {(isTabDragging || isPaneResizing) && (
-          <div
-            className="absolute inset-0 z-10"
-            onMouseDown={() => {
-              // Safety valve: if the overlay is stuck (end event was lost),
-              // a click dismisses it so the user can interact with the webview.
-              setIsTabDragging(false)
-              setIsPaneResizing(false)
-            }}
-          />
-        )}
+            SplitPane/Sidebar resize handlers to receive them.
+            Always rendered but hidden via inline style to avoid mount/unmount
+            cost on every drag event. */}
+        <div
+          ref={overlayRef}
+          className="absolute inset-0 z-10"
+          style={{ pointerEvents: 'none' }}
+          onMouseDown={hideOverlay}
+        />
       </div>
     </div>
   )

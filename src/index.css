@@ -179,6 +179,14 @@ webview {
   background-color: rgba(59, 130, 246, 0.2);
 }
 
+/* Prevent SVGs and other child elements from acting as independent drag sources
+   inside any draggable container (e.g. tabs, session rows). Without this, Chromium
+   treats SVG icons as draggable images and intercepts the drag before it reaches
+   the parent draggable div, so you can only drag from the title text. */
+[draggable="true"] * {
+  -webkit-user-drag: none;
+}
+
 /* Split drop zones */
 .drop-zone-active {
   pointer-events: all;

@@ -118,9 +118,15 @@ export default function MainLayout(): React.ReactElement {
     const onEnd = () => setDragging(false);
     window.addEventListener("dragstart", onStart);
     window.addEventListener("dragend", onEnd);
+    // "dragend" doesn't fire when the dragged element is removed from the DOM
+    // before the drag finishes (e.g. moving the last tab out of a group destroys
+    // the source group mid-drag). Capture-phase "drop" fires before any handler
+    // calls stopPropagation, so it reliably resets the dragging state.
+    window.addEventListener("drop", onEnd, true);
     return () => {
       window.removeEventListener("dragstart", onStart);
       window.removeEventListener("dragend", onEnd);
+      window.removeEventListener("drop", onEnd, true);
     };
   }, []);
 
