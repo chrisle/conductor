@@ -76,6 +76,7 @@ function clear() {
   console.log('[perf] Cleared.')
 }
 
-// Expose helpers on window for DevTools access
+// Expose helpers on window for DevTools access and E2E tests
 ;(window as any).__perfSummary = summary
 ;(window as any).__perfClear = clear
+;(window as any).__perfMeasurements = measurements

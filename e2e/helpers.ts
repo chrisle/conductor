@@ -227,8 +227,9 @@ export async function addTerminalTab(
 
   // Wait for xterm to attach AND for the mock's initial '$ ' prompt to
   // render, confirming the full data pipeline (mock → terminal-ws bridge →
-  // TerminalTab → xterm) is connected.
-  await page.locator('.xterm').waitFor({ state: 'attached', timeout: 5000 })
+  // TerminalTab → xterm) is connected. Use .first() so this works even when
+  // multiple terminal tabs are open simultaneously.
+  await page.locator('.xterm').first().waitFor({ state: 'attached', timeout: 5000 })
   await page.waitForFunction(
     () => {
       const rows = document.querySelector('.xterm-rows')
