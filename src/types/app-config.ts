@@ -95,7 +95,7 @@ export const DEFAULT_EDITOR_CUSTOMIZATION: EditorCustomization = {
   renderWhitespace: 'selection',
 }
 
-const mod = process.platform === 'darwin' ? 'Meta' : 'Ctrl'
+const mod = navigator.userAgent.includes('Mac') ? 'Meta' : 'Ctrl'
 
 export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcut[] = [
   { id: 'goToFile', label: 'Go to File', keys: `${mod}+g` },
