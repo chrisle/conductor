@@ -218,8 +218,7 @@ function SessionTreeNode({
   allFolders: SessionFolder[]
   sessionMap: Map<string, EnrichedSession>
 }) {
-  const { addTab } = useTabsStore()
-  const { focusedGroupId } = useLayoutStore()
+  const focusedGroupId = useLayoutStore(s => s.focusedGroupId)
   const groups = useTabsStore(s => s.groups)
   const claudeAccounts = useConfigStore(s => s.config.claudeAccounts)
   const [isExpanded, setIsExpanded] = useState(false)
@@ -291,7 +290,7 @@ function SessionTreeNode({
 
     if (anchorGroup) {
       // Add tab after the currently active tab in the focused group
-      addTab(anchorGroup, {
+      tabsState.addTab(anchorGroup, {
         id: session.session.name,
         type: 'claude-code',
         title: label,
@@ -301,7 +300,7 @@ function SessionTreeNode({
     } else {
       // No panels exist yet — create the first one
       const newGroupId = tabsState.createGroup()
-      addTab(newGroupId, {
+      tabsState.addTab(newGroupId, {
         id: session.session.name,
         type: 'claude-code',
         title: label,

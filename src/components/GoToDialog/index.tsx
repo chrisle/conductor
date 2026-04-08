@@ -20,7 +20,8 @@ interface GoToDialogProps {
 }
 
 export default function GoToDialog({ open, onOpenChange }: GoToDialogProps): React.ReactElement {
-  const { rootPath, setRootPath, favorites, removeFavorite } = useSidebarStore()
+  const rootPath = useSidebarStore(s => s.rootPath)
+  const favorites = useSidebarStore(s => s.favorites)
   const [inputValue, setInputValue] = useState('')
   const [suggestions, setSuggestions] = useState<string[]>([])
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -88,7 +89,7 @@ export default function GoToDialog({ open, onOpenChange }: GoToDialogProps): Rea
       else if (part !== '.' && part !== '') normalized.push(part)
     }
     resolved = '/' + normalized.join('/')
-    setRootPath(resolved)
+    useSidebarStore.getState().setRootPath(resolved)
     onOpenChange(false)
   }
 
@@ -133,7 +134,7 @@ export default function GoToDialog({ open, onOpenChange }: GoToDialogProps): Rea
                     <CommandShortcut>
                       <button
                         className="text-zinc-600 hover:text-red-400 opacity-0 group-hover:opacity-100"
-                        onClick={(e) => { e.stopPropagation(); removeFavorite(fav) }}
+                        onClick={(e) => { e.stopPropagation(); useSidebarStore.getState().removeFavorite(fav) }}
                       >
                         <X className="w-3 h-3" />
                       </button>

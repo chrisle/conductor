@@ -94,7 +94,6 @@ interface ResizeHandleProps {
 }
 
 function ResizeHandle({ node, index, isRow }: ResizeHandleProps): React.ReactElement {
-  const { setSizes } = useLayoutStore()
   const isResizing = useRef(false)
   const handleRef = useRef<HTMLDivElement>(null)
 
@@ -160,7 +159,7 @@ function ResizeHandle({ node, index, isRow }: ResizeHandleProps): React.ReactEle
           }
         }
 
-        setSizes(anchorGroupId, newSizes)
+        useLayoutStore.getState().setSizes(anchorGroupId, newSizes)
       })
     }
 
@@ -176,7 +175,7 @@ function ResizeHandle({ node, index, isRow }: ResizeHandleProps): React.ReactEle
 
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-  }, [node, isRow, setSizes, index])
+  }, [node, isRow, index])
 
   return (
     <div

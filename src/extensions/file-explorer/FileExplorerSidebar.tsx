@@ -13,9 +13,8 @@ interface FileExplorerSidebarProps {
 }
 
 export default function FileExplorerSidebar({ groupId }: FileExplorerSidebarProps): React.ReactElement {
-  const { addTab } = useTabsStore()
-  const { focusedGroupId } = useLayoutStore()
-  const { rootPath } = useSidebarStore()
+  const focusedGroupId = useLayoutStore(s => s.focusedGroupId)
+  const rootPath = useSidebarStore(s => s.rootPath)
   const [isGitRepo, setIsGitRepo] = useState(false)
 
   useEffect(() => {
@@ -27,11 +26,11 @@ export default function FileExplorerSidebar({ groupId }: FileExplorerSidebarProp
     const targetGroup = focusedGroupId || groupId
     const cwd = resolveTerminalCwd()
     saveTerminalCwd(cwd)
-    addTab(targetGroup, { type: 'terminal', title: 'Terminal', filePath: cwd })
+    useTabsStore.getState().addTab(targetGroup, { type: 'terminal', title: 'Terminal', filePath: cwd })
   }
   function openGitGraph() {
     const targetGroup = focusedGroupId || groupId
-    addTab(targetGroup, { type: 'git-graph', title: 'Git Graph', filePath: rootPath || undefined })
+    useTabsStore.getState().addTab(targetGroup, { type: 'git-graph', title: 'Git Graph', filePath: rootPath || undefined })
   }
 
   const actions: SidebarAction[] = [

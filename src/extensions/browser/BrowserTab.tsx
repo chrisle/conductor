@@ -75,7 +75,6 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
   // initialSrc is set once and never changes — prevents React re-renders
   // from resetting the webview's src and causing full-page reloads.
   const [initialSrc] = useState(initialUrl || 'about:blank')
-  const { updateTab, addTab } = useTabsStore()
 
   // Stores needed for Conductor actions on Atlassian pages
   const getConfig = useConfigStore.getState
@@ -144,9 +143,9 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
     setInputUrl(wv.getURL())
     const title = wv.getTitle()
     if (title) {
-      updateTab(groupId, tabId, { title: title.slice(0, 40) })
+      useTabsStore.getState().updateTab(groupId, tabId, { title: title.slice(0, 40) })
     }
-  }, [groupId, tabId, updateTab])
+  }, [groupId, tabId])
 
   /**
    * Resolves (or creates) a git worktree for the given ticket key,
@@ -259,7 +258,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
           } else {
             // Create a fresh group and pin it as a new column at the far right
             const newGroupId = useTabsStore.getState().createGroup()
-            addTab(newGroupId, {
+            useTabsStore.getState().addTab(newGroupId, {
               id: tmuxName,
               type: 'claude-code',
               title: `Claude · ${ticketKey}`,
@@ -288,7 +287,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
 
         case 'open-in-claude': {
           const { cwd } = await resolveWorktree(ticketKey)
-          addTab(targetGroup, {
+          useTabsStore.getState().addTab(targetGroup, {
             id: tmuxName,
             type: 'claude-code',
             title: `Claude · ${ticketKey}`,
@@ -307,7 +306,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
     } catch (err) {
       console.error(`[Conductor] Action "${action}" failed for ${ticketKey}:`, err)
     }
-  }, [groupId, addTab, resolveWorktree, buildPrompt, getConfig, getFocusedGroupId])
+  }, [groupId, resolveWorktree, buildPrompt, getConfig, getFocusedGroupId])
 
   useEffect(() => {
     const webview = webviewRef.current
@@ -348,7 +347,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
     }
 
     const handleTitleUpdated = (e: any) => {
-      updateTab(groupId, tabId, { title: (e.title || 'Browser').slice(0, 40) })
+      useTabsStore.getState().updateTab(groupId, tabId, { title: (e.title || 'Browser').slice(0, 40) })
     }
 
     // Handles SPA navigations (pushState / replaceState) so the URL bar
@@ -367,7 +366,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
     const handleNewWindow = (e: any) => {
       const targetUrl = e.url
       if (targetUrl && targetUrl !== 'about:blank') {
-        addTab(groupId, {
+        useTabsStore.getState().addTab(groupId, {
           type: 'browser',
           title: targetUrl.replace(/^https?:\/\//, '').slice(0, 40),
           url: targetUrl,
@@ -395,7 +394,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
   // webviewRef.current is read inside the effect body (not as a dependency) —
   // the ref is always set by the time this effect runs because React assigns
   // refs during commit, before effects fire.
-  }, [syncNavState, addTab, groupId, tabId, updateTab, handleConductorAction])
+  }, [syncNavState, groupId, tabId, handleConductorAction])
 
   // Throttle webview GPU compositing when the browser tab is hidden to
   // free GPU resources for visible terminals.

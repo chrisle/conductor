@@ -12,7 +12,6 @@ import { useTabsStore } from '@/store/tabs'
  * frame-by-frame signal (~200ms apart) so a short debounce is sufficient.
  */
 export function useThinkingDetect(tabId: string, groupId: string) {
-  const { updateTab } = useTabsStore()
   const recentDataRef = useRef('')
   const thinkingRef = useRef(false)
   const offTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -37,7 +36,7 @@ export function useThinkingDetect(tabId: string, groupId: string) {
       }
       if (!thinkingRef.current || time) {
         thinkingRef.current = true
-        updateTab(groupId, tabId, { isThinking: true, thinkingTime: time })
+        useTabsStore.getState().updateTab(groupId, tabId, { isThinking: true, thinkingTime: time })
       }
     } else if (done && thinkingRef.current) {
       // "Cooked for…" seen — clear immediately, no debounce
@@ -48,7 +47,7 @@ export function useThinkingDetect(tabId: string, groupId: string) {
       thinkingRef.current = false
       // Clear the buffer so the done message doesn't block future detection
       recentDataRef.current = ''
-      updateTab(groupId, tabId, { isThinking: false, thinkingTime: undefined })
+      useTabsStore.getState().updateTab(groupId, tabId, { isThinking: false, thinkingTime: undefined })
     } else if (thinkingRef.current) {
       // Reset the debounce timer on every data arrival — same-line overwrites
       // keep sending data without matching THINKING_RE, so we must extend the
@@ -58,10 +57,10 @@ export function useThinkingDetect(tabId: string, groupId: string) {
         offTimerRef.current = null
         thinkingRef.current = false
         recentDataRef.current = ''
-        updateTab(groupId, tabId, { isThinking: false, thinkingTime: undefined })
+        useTabsStore.getState().updateTab(groupId, tabId, { isThinking: false, thinkingTime: undefined })
       }, 800)
     }
-  }, [tabId, groupId, updateTab])
+  }, [tabId, groupId])
 
   return onPtyData
 }

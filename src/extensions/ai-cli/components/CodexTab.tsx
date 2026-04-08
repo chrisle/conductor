@@ -11,7 +11,6 @@ import { useTabsStore } from '@/store/tabs'
 export default function CodexTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
   const settings = useCodexSettings()
   const [autoPilot, setAutoPilot] = useState(tab.autoPilot ?? false)
-  const { updateTab } = useTabsStore()
   const autoPilotRef = useRef(autoPilot)
   const writeRef = useRef<((data: string) => void) | null>(null)
 
@@ -60,7 +59,7 @@ export default function CodexTab({ tabId, groupId, isActive, tab }: TabProps): R
       }}
       onPtyData={onPtyData}
       onTerminalReady={handleTerminalReady}
-      onSessionReady={() => updateTab(groupId, tabId, { hasSession: true })}
+      onSessionReady={() => useTabsStore.getState().updateTab(groupId, tabId, { hasSession: true })}
       interceptKeys={interceptKeys}
       footerLeft={footerLeft}
       footerPosition="bottom"

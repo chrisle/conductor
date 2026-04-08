@@ -154,14 +154,13 @@ export default function NotificationsSidebar({ groupId }: { groupId: string }): 
   useTerminalNotifications()
 
   const { notifications, settings, updateSettings, markAllRead, clearAll, getUnreadCount } = useNotificationsStore()
-  const { setActiveTab } = useTabsStore()
   const unreadCount = getUnreadCount()
 
   const handleNavigate = useCallback((n: Notification) => {
     if (n.sourceTabId && n.sourceGroupId) {
-      setActiveTab(n.sourceGroupId, n.sourceTabId)
+      useTabsStore.getState().setActiveTab(n.sourceGroupId, n.sourceTabId)
     }
-  }, [setActiveTab])
+  }, [])
 
   const actions = [
     {

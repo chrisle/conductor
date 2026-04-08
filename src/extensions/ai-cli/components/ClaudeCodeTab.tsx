@@ -61,12 +61,11 @@ export default function ClaudeCodeTab({
 }: TabProps): React.ReactElement {
   const settings = useClaudeCodeSettings();
   const [autoPilot, setAutoPilot] = useState(tab.autoPilot ?? getSessionAutoPilot(tabId));
-  const { rootPath } = useSidebarStore();
+  const rootPath = useSidebarStore(s => s.rootPath);
   const claudeAccounts = useConfigStore((s) => s.config.claudeAccounts);
   const apiKeyAccount = tab.apiKey
     ? claudeAccounts.find((a) => a.apiKey === tab.apiKey)
     : null;
-  const { updateTab } = useTabsStore();
   const writeRef = useRef<((data: string) => void) | null>(null);
   const autoPilotRef = useRef(autoPilot);
 
@@ -133,10 +132,10 @@ export default function ClaudeCodeTab({
       // Restore autopilot state from conductord when reattaching to an existing session
       if (!isNew && opts?.autoPilot && !autoPilotRef.current) {
         setAutoPilot(true);
-        updateTab(groupId, tabId, { autoPilot: true });
+        useTabsStore.getState().updateTab(groupId, tabId, { autoPilot: true });
       }
     },
-    [tabId, groupId, updateTab],
+    [tabId, groupId],
   );
 
   // Translate Shift+Enter → Alt+Enter (newline) in Claude's input
@@ -313,7 +312,7 @@ export default function ClaudeCodeTab({
       onPtyData={onPtyData}
       onTerminalReady={handleTerminalReady}
       onSessionReady={(isNew: boolean, opts?: { autoPilot?: boolean }) => {
-        updateTab(groupId, tabId, { hasSession: true });
+        useTabsStore.getState().updateTab(groupId, tabId, { hasSession: true });
         handleSessionReady(isNew, opts);
       }}
       interceptKeys={interceptKeys}

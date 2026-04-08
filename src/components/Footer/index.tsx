@@ -255,7 +255,7 @@ function formatTimeAgo(ts: number): string {
 }
 
 export default function Footer(): React.ReactElement {
-  const { rootPath } = useSidebarStore()
+  const rootPath = useSidebarStore(s => s.rootPath)
   const [gitBranch, setGitBranch] = useState<string | null>(null)
   const [gitStat, setGitStat] = useState<{ insertions: number; deletions: number }>({ insertions: 0, deletions: 0 })
   const [conductord, setConductord] = useState<{ ok: boolean; sessions: number }>({ ok: false, sessions: 0 })

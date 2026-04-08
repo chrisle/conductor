@@ -25,8 +25,7 @@ interface InstalledExtension {
 }
 
 export default function SettingsSidebar({ groupId }: SettingsSidebarProps): React.ReactElement {
-  const { addTab, setActiveTab, groups } = useTabsStore()
-  const { focusedGroupId } = useLayoutStore()
+  const focusedGroupId = useLayoutStore(s => s.focusedGroupId)
 
   // Extensions state
   const [externalExtensions, setExternalExtensions] = useState<InstalledExtension[]>([])
@@ -54,15 +53,15 @@ export default function SettingsSidebar({ groupId }: SettingsSidebarProps): Reac
 
   function openTab(tabType: string, label: string) {
     const targetGroup = focusedGroupId || groupId
-    const group = groups[targetGroup]
+    const group = useTabsStore.getState().groups[targetGroup]
     if (group) {
       const existing = group.tabs.find(t => t.type === tabType)
       if (existing) {
-        setActiveTab(targetGroup, existing.id)
+        useTabsStore.getState().setActiveTab(targetGroup, existing.id)
         return
       }
     }
-    addTab(targetGroup, { type: tabType, title: label })
+    useTabsStore.getState().addTab(targetGroup, { type: tabType, title: label })
   }
 
   async function handleInstallExtension() {

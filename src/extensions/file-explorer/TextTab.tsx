@@ -26,7 +26,7 @@ export default function TextTab({ tabId, groupId, isActive, tab }: TabProps): Re
   const [content, setContent] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { updateTab } = useTabsStore()
+  
   const editorConfig = useConfigStore(s => s.config.customization.editor)
 
   useEffect(() => {
@@ -55,14 +55,14 @@ export default function TextTab({ tabId, groupId, isActive, tab }: TabProps): Re
   function handleChange(value: string | undefined) {
     const newContent = value || ''
     setContent(newContent)
-    updateTab(groupId, tabId, { isDirty: true, content: newContent })
+    useTabsStore.getState().updateTab(groupId, tabId, { isDirty: true, content: newContent })
   }
 
   async function handleSave() {
     if (!filePath || !content) return
     const result = await window.electronAPI.writeFile(filePath, content)
     if (result.success) {
-      updateTab(groupId, tabId, { isDirty: false })
+      useTabsStore.getState().updateTab(groupId, tabId, { isDirty: false })
     }
   }
 

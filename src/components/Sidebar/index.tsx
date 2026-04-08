@@ -9,8 +9,8 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ defaultGroupId }: SidebarProps): React.ReactElement {
-  const { width, setWidth } = useSidebarStore()
-  const { activeExtensionId } = useActivityBarStore()
+  const width = useSidebarStore(s => s.width)
+  const activeExtensionId = useActivityBarStore(s => s.activeExtensionId)
   const isResizing = useRef(false)
   const startX = useRef(0)
   const startWidth = useRef(0)
@@ -35,7 +35,7 @@ export default function Sidebar({ defaultGroupId }: SidebarProps): React.ReactEl
       rafId = requestAnimationFrame(() => {
         rafId = null
         if (!isResizing.current) return
-        setWidth(startWidth.current + (e.clientX - startX.current))
+        useSidebarStore.getState().setWidth(startWidth.current + (e.clientX - startX.current))
       })
     }
     const handleMouseUp = () => {
@@ -49,7 +49,7 @@ export default function Sidebar({ defaultGroupId }: SidebarProps): React.ReactEl
     }
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-  }, [width, setWidth])
+  }, [width])
 
   // No active extension = sidebar collapsed
   if (!activeExtensionId) return <></>

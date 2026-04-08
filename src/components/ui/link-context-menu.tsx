@@ -27,14 +27,13 @@ interface LinkContextMenuProps {
  * Labels can be customized via openInAppLabel / openExternalLabel props.
  */
 export function LinkContextMenu({ url, title, children, openInAppLabel = 'Go to Kanban Board', openExternalLabel = 'Open Jira' }: LinkContextMenuProps) {
-  const { addTab } = useTabsStore()
-  const { focusedGroupId } = useLayoutStore()
+  const focusedGroupId = useLayoutStore(s => s.focusedGroupId)
 
   function openInConductor() {
     const groups = useTabsStore.getState().groups
     const targetGroup = focusedGroupId || Object.keys(groups)[0]
     if (!targetGroup) return
-    addTab(targetGroup, {
+    useTabsStore.getState().addTab(targetGroup, {
       type: 'browser',
       title: title || url.replace(/^https?:\/\//, '').slice(0, 40),
       url,

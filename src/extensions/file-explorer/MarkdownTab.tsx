@@ -15,7 +15,7 @@ export default function MarkdownTab({ tabId, groupId, isActive, tab }: TabProps)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(true)
-  const { updateTab } = useTabsStore()
+  
 
   useEffect(() => {
     if (filePath) loadFile()
@@ -41,16 +41,16 @@ export default function MarkdownTab({ tabId, groupId, isActive, tab }: TabProps)
   function handleChange(value: string | undefined) {
     const newContent = value || ''
     setContent(newContent)
-    updateTab(groupId, tabId, { isDirty: true, content: newContent })
+    useTabsStore.getState().updateTab(groupId, tabId, { isDirty: true, content: newContent })
   }
 
   const handleSave = useCallback(async () => {
     if (!filePath || !content) return
     const result = await window.electronAPI.writeFile(filePath, content)
     if (result.success) {
-      updateTab(groupId, tabId, { isDirty: false })
+      useTabsStore.getState().updateTab(groupId, tabId, { isDirty: false })
     }
-  }, [filePath, content, groupId, tabId, updateTab])
+  }, [filePath, content, groupId, tabId])
 
   if (isLoading) {
     return (
