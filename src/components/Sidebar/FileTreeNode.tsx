@@ -4,7 +4,7 @@ import {
   FileCode, FileJson, FileText, FileImage, FileArchive,
   Terminal, Settings, Globe, Palette, Package, Database,
   Film, Music, File, Lock, GitBranch,
-  FileUp, FilePlus, FolderPlus, Star, StarOff, Pencil, Trash2, Bot
+  FileUp, FilePlus, FolderPlus, Star, StarOff, Pencil, Trash2, Bot, Copy
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -442,6 +442,21 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
           <ContextMenuItem className="text-ui-base text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={openTerminalHere}>
             <Terminal className="w-3.5 h-3.5 mr-2" />
             Open Terminal here
+          </ContextMenuItem>
+          <ContextMenuSeparator className="bg-zinc-700" />
+          <ContextMenuItem className="text-ui-base text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => navigator.clipboard.writeText(entry.path)}>
+            <Copy className="w-3.5 h-3.5 mr-2" />
+            Copy Path
+          </ContextMenuItem>
+          <ContextMenuItem className="text-ui-base text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => {
+            const root = useSidebarStore.getState().rootPath
+            const rel = root && entry.path.startsWith(root + '/')
+              ? entry.path.slice(root.length + 1)
+              : entry.path
+            navigator.clipboard.writeText(rel)
+          }}>
+            <Copy className="w-3.5 h-3.5 mr-2" />
+            Copy Relative Path
           </ContextMenuItem>
           <ContextMenuSeparator className="bg-zinc-700" />
           <ContextMenuItem className="text-ui-base text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => { setIsRenaming(true); setRenameValue(entry.name) }}>
