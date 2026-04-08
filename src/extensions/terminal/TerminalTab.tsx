@@ -8,6 +8,7 @@ import { useTabsStore } from "@/store/tabs";
 import { createXtermTerminal, attachWebgl, detachWebgl, getTerminalCustomization } from "./xterm-init";
 import type { Terminal, SerializeAddon } from "./xterm-init";
 import { terminalConfig } from "./theme";
+import { perfStart } from "@/lib/perf";
 
 export type { TerminalWatcher, TerminalTabExtraProps } from "./types";
 
@@ -207,7 +208,9 @@ function TerminalTabInner({
           const joined = chunks.join('');
           const t = terminalRef.current;
           if (!t) return;
+          const stopWrite = perfStart('terminal-write');
           writePtyData(t, joined);
+          stopWrite();
           onPtyDataRef.current?.(joined);
         });
       }

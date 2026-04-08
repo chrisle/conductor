@@ -21,6 +21,7 @@ import ClaudeIcon from '@/components/ui/ClaudeIcon'
 import CodexIcon from '@/components/ui/CodexIcon'
 import { useNotificationsStore } from '@/store/notifications'
 import { Terminal, Globe } from 'lucide-react'
+import { perfStart } from '@/lib/perf'
 
 interface TabGroupProps {
   groupId: string
@@ -914,22 +915,26 @@ function TabGroup({ groupId }: TabGroupProps): React.ReactElement {
                 onDragLeave={() => setDragOverTabIndex(null)}
                 onDrop={e => handleTabDrop(e, index)}
                 onClick={(e) => {
+                  const stopTabSwitch = perfStart('tab-switch')
                   useLayoutStore.getState().setFocusedGroup(groupId)
                   if (e.shiftKey) {
                     // Shift-click: select range from anchor to this tab
                     e.preventDefault()
                     useTabsStore.getState().selectTabRange(groupId, tab.id)
+                    stopTabSwitch()
                     return
                   }
                   if (e.metaKey || e.ctrlKey) {
                     // Cmd/Ctrl-click: toggle this tab in selection
                     e.preventDefault()
                     useTabsStore.getState().toggleSelectTab(groupId, tab.id)
+                    stopTabSwitch()
                     return
                   }
                   // Plain click: clear selection, activate tab
                   useTabsStore.getState().clearSelection(groupId)
                   useTabsStore.getState().setActiveTab(groupId, tab.id)
+                  requestAnimationFrame(() => stopTabSwitch())
                   // Set anchor for future shift-clicks
                   useTabsStore.setState(s => ({
                     selectionAnchor: { ...s.selectionAnchor, [groupId]: tab.id },
