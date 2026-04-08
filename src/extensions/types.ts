@@ -25,6 +25,13 @@ export interface NewTabMenuItem {
   separator?: 'before' | 'after'
 }
 
+export interface SkillDefinition {
+  /** Short slug — installed as `conductor-<extensionId>-<slug>` */
+  slug: string
+  /** Full SKILL.md content */
+  content: string
+}
+
 export interface Extension {
   id: string
   name: string
@@ -37,4 +44,5 @@ export interface Extension {
   settingsPanel?: React.ComponentType<Record<string, never>>
   configPanel?: React.ComponentType
   onActivate?: () => void
+  skills?: SkillDefinition[]
 }

@@ -71,6 +71,10 @@ const electronAPI = {
   worktreeList: (repoPath: string) => ipcRenderer.invoke('git:worktreeList', repoPath),
   worktreeAdd: (repoPath: string, branchName: string, basePath?: string) => ipcRenderer.invoke('git:worktreeAdd', repoPath, branchName, basePath),
 
+  // Skills
+  skillExists: (name: string) => ipcRenderer.invoke('skill:exists', name),
+  installSkill: (name: string, content: string) => ipcRenderer.invoke('skill:install', name, content),
+
   // Claude
   getCwd: () => ipcRenderer.invoke('app:getCwd'),
   listClaudeSessions: (projectPath: string) => ipcRenderer.invoke('claude:listSessions', projectPath),

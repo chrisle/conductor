@@ -1,8 +1,9 @@
-import React, { useEffect, useCallback } from 'react'
+import React, { useEffect, useCallback, useState } from 'react'
 import TitleBar from './components/TitleBar'
 import MainLayout from './components/Layout'
 import Footer from './components/Footer'
 import GoToDialog from './components/GoToDialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './components/ui/dialog'
 
 import { extensionRegistry } from './extensions'
 import { useSidebarStore } from './store/sidebar'
@@ -17,22 +18,29 @@ import { initializeDefaultProject, createDefaultProject, saveProject, autosaveLa
 import { startUsageScraper, stopUsageScraper } from './lib/claude-usage-scraper'
 import { initHomeDir } from './lib/terminal-cwd'
 import { loadExtensionsFromDevPaths } from './extensions/loader'
+import { getSkillsNeedingInstall, installSkills } from './lib/skill-installer'
 
 function App(): React.ReactElement {
   const zoom = useUIStore(s => s.zoom)
   const goToOpen = useUIStore(s => s.goToOpen)
   const setGoToOpen = useUIStore(s => s.setGoToOpen)
+  const [skillsToInstall, setSkillsToInstall] = useState<{ name: string; content: string }[]>([])
+  const [installing, setInstalling] = useState(false)
 
   // Initialize config, work sessions, and home dir cache
   useEffect(() => {
-    useConfigStore.getState().initialize().then(() => {
+    ;(async () => {
+      await useConfigStore.getState().initialize()
       const devPaths = useConfigStore.getState().config.extensions.devPaths
       if (devPaths.length > 0) {
-        loadExtensionsFromDevPaths(devPaths).catch(err =>
+        await loadExtensionsFromDevPaths(devPaths).catch(err =>
           console.error('Failed to load dev extensions:', err)
         )
       }
-    })
+      getSkillsNeedingInstall().then(pending => {
+        if (pending.length > 0) setSkillsToInstall(pending)
+      }).catch(() => {})
+    })()
     useWorkSessionsStore.getState().initialize()
     initHomeDir()
   }, [])
@@ -225,6 +233,48 @@ function App(): React.ReactElement {
       </div>
       <Footer />
       <GoToDialog open={goToOpen} onOpenChange={setGoToOpen} />
+      <Dialog open={skillsToInstall.length > 0} onOpenChange={() => setSkillsToInstall([])}>
+        <DialogContent className="bg-zinc-900 border-zinc-700 text-zinc-100 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-medium">Install Conductor Skills</DialogTitle>
+            <DialogDescription className="text-xs text-zinc-400">
+              Conductor's built-in Claude Code skills need to be installed or updated in{' '}
+              <code className="text-zinc-300">~/.claude/skills/</code>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <ul className="text-xs text-zinc-300 space-y-1">
+              {skillsToInstall.map(skill => (
+                <li key={skill.name} className="font-mono text-zinc-400">{skill.name}</li>
+              ))}
+            </ul>
+          </div>
+          <DialogFooter className="gap-2">
+            <button
+              className="px-3 py-1.5 text-xs rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition-colors"
+              onClick={() => setSkillsToInstall([])}
+              disabled={installing}
+            >
+              Skip
+            </button>
+            <button
+              className="px-3 py-1.5 text-xs rounded bg-blue-600 text-white hover:bg-blue-500 transition-colors disabled:opacity-50"
+              disabled={installing}
+              onClick={async () => {
+                setInstalling(true)
+                try {
+                  await installSkills(skillsToInstall)
+                } finally {
+                  setInstalling(false)
+                  setSkillsToInstall([])
+                }
+              }}
+            >
+              {installing ? 'Installing…' : 'Install / Update'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

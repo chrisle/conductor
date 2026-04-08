@@ -7,6 +7,7 @@ import { readDir, readFile, readFileBinary, writeFile, mkdirRecursive, deleteEnt
 
 import { conductordFetch } from './conductord-client'
 import { registerTerminalBridge } from './terminal-bridge'
+import { worktreeAdd } from './worktree'
 import { debugLog } from './logger'
 import { getJsonlPath, readJsonlTail, computeSessionMetrics } from './claude-session-metrics'
 
@@ -364,26 +365,22 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('git:worktreeAdd', (_event, repoPath: string, branchName: string, basePath?: string) => {
-    const worktreePath = basePath
-      ? path.join(basePath, branchName)
-      : path.join(path.dirname(repoPath), path.basename(repoPath) + '-' + branchName)
-    return new Promise<{ success: boolean; path?: string; error?: string }>((resolve) => {
-      // Prune stale worktree entries first so leftover references don't block creation
-      execFile('git', ['-C', repoPath, 'worktree', 'prune'], () => {
-        // Try creating a new branch + worktree
-        execFile('git', ['-C', repoPath, 'worktree', 'add', '-b', branchName, worktreePath], (err) => {
-          if (!err) {
-            resolve({ success: true, path: worktreePath })
-            return
-          }
-          // Branch might already exist, try checking out the existing branch
-          execFile('git', ['-C', repoPath, 'worktree', 'add', worktreePath, branchName], (err2) => {
-            if (err2) resolve({ success: false, error: err2.message })
-            else resolve({ success: true, path: worktreePath })
-          })
-        })
-      })
-    })
+    return worktreeAdd(repoPath, branchName, basePath)
+  })
+
+  // Skills
+  const skillsDir = path.join(os.homedir(), '.claude', 'skills')
+
+  ipcMain.handle('skill:exists', (_event, name: string) => {
+    const skillFile = path.join(skillsDir, name, 'SKILL.md')
+    return fs.existsSync(skillFile)
+  })
+
+  ipcMain.handle('skill:install', async (_event, name: string, content: string) => {
+    const skillDir = path.join(skillsDir, name)
+    await fs.promises.mkdir(skillDir, { recursive: true })
+    await fs.promises.writeFile(path.join(skillDir, 'SKILL.md'), content, 'utf-8')
+    return { success: true }
   })
 
   // Projects

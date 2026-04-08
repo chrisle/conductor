@@ -148,6 +148,8 @@ const mock: typeof window.electronAPI = {
   // Git
   worktreeList: async () => [],
   worktreeAdd: async () => ({ success: false, error: 'Not available in web mode' }),
+  skillExists: async () => false,
+  installSkill: async () => ({ success: false }),
 
   // Claude
   getCwd: async () => '/tmp',

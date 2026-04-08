@@ -79,6 +79,10 @@ interface ElectronAPI {
   worktreeList: (repoPath: string) => Promise<Array<{ path: string; branch: string; bare: boolean; head: string }>>
   worktreeAdd: (repoPath: string, branchName: string, basePath?: string) => Promise<{ success: boolean; path?: string; error?: string }>
 
+  // Skills
+  skillExists: (name: string) => Promise<boolean>
+  installSkill: (name: string, content: string) => Promise<{ success: boolean }>
+
   // Claude
   getCwd: () => Promise<string>
   listClaudeSessions: (projectPath: string) => Promise<Array<{ id: string; mtime: number; summary: string }>>
