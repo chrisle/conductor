@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react'
-import os from 'os'
 import { Activity, ArrowDownToLine, ArrowUpFromLine, Check, GitBranch, Minus, Plus, RefreshCw, User } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -306,7 +305,7 @@ export default function Footer(): React.ReactElement {
         <span>Current directory:</span>
         <span className="truncate max-w-[300px]">
           {rootPath ? (() => {
-            const p = rootPath.replace(os.homedir(), '~')
+            const p = rootPath.replace(/^\/Users\/[^/]+/, '~').replace(/^C:\\Users\\[^\\]+/i, '~')
             const parts = p.split('/').filter(Boolean)
             return parts.length > 3 ? '../' + parts.slice(-2).join('/') : p
           })() : '—'}
