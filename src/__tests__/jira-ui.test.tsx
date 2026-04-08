@@ -53,6 +53,10 @@ vi.mock('@conductor/extension-api', () => ({
     ContextMenuSubTrigger: ({ children }: any) => <div>{children}</div>,
     ContextMenuSubContent: ({ children }: any) => <div>{children}</div>,
     LinkContextMenu: ({ children }: any) => <>{children}</>,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children, asChild }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <span data-testid="tooltip-content">{children}</span>,
+    TooltipProvider: ({ children }: any) => <>{children}</>,
     Skeleton: ({ className }: any) => <div data-testid="skeleton" className={className} />,
     Collapsible: ({ children, open }: any) => open !== false ? <div>{children}</div> : null,
     CollapsibleTrigger: ({ children, className, ...rest }: any) => (
