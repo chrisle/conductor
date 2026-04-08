@@ -16,6 +16,7 @@
     "test:e2e:real": "npx playwright test --config playwright.real.config.ts"
   },
   "dependencies": {
+    "@jvmr/pptx-to-html": "^1.0.1",
     "@monaco-editor/react": "^4.6.0",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-context-menu": "^2.2.16",

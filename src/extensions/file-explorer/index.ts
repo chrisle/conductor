@@ -1,9 +1,10 @@
-import { FolderOpen, FileText, BookOpen, FileSpreadsheet, Image, GitBranch } from 'lucide-react'
+import { FolderOpen, FileText, BookOpen, FileSpreadsheet, Image, GitBranch, Presentation } from 'lucide-react'
 import type { Extension } from '../types'
 import FileExplorerSidebar from './FileExplorerSidebar'
 import TextTab from './TextTab'
 import MarkdownTab from './MarkdownTab'
 import WordTab from './WordTab'
+import PowerPointTab from './PowerPointTab'
 import ExcelTab from './ExcelTab'
 import ImageTab from './ImageTab'
 import GitGraphTab from './GitGraphTab'
@@ -44,6 +45,13 @@ export const fileExplorerExtension: Extension = {
       icon: FileText,
       component: WordTab,
       fileExtensions: ['.docx', '.doc']
+    },
+    {
+      type: 'powerpoint',
+      label: 'PowerPoint',
+      icon: Presentation,
+      component: PowerPointTab,
+      fileExtensions: ['.pptx', '.ppt']
     },
     {
       type: 'excel',
