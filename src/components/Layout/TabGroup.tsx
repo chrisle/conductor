@@ -118,6 +118,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   const [dropZone, setDropZone] = useState<DropZone>(null)
   const dropZoneRef = useRef<DropZone>(null)
   const [dragOverTabIndex, setDragOverTabIndex] = useState<number | null>(null)
+  const [isDraggingTab, setIsDraggingTab] = useState(false)
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
   const [floatingMenuOpen, setFloatingMenuOpen] = useState(false)
   const [floatingMenuPos, setFloatingMenuPos] = useState({ x: 0, y: 0 })
@@ -267,6 +268,12 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     e.dataTransfer.setData(DRAGGING_TAB_KEY, tab.id)
     e.dataTransfer.setData(DRAGGING_GROUP_KEY, groupId)
     e.dataTransfer.effectAllowed = 'move'
+    setIsDraggingTab(true)
+  }
+
+  function handleTabDragEnd() {
+    setIsDraggingTab(false)
+    setDragOverTabIndex(null)
   }
 
   function handleTabDragOver(e: React.DragEvent, index: number) {
@@ -281,6 +288,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     const tabId = e.dataTransfer.getData(DRAGGING_TAB_KEY)
     const sourceGroupId = e.dataTransfer.getData(DRAGGING_GROUP_KEY)
     setDragOverTabIndex(null)
+    setIsDraggingTab(false)
 
     if (!tabId) return
 
@@ -371,6 +379,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     const zone = dropZone
     dropZoneRef.current = null
     setDropZone(null)
+    setIsDraggingTab(false)
 
     if (!tabId || !zone) return
 
@@ -380,9 +389,12 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
 
     setTimeout(() => {
       const src = useTabsStore.getState().groups[sourceGroupId]
-      if (src && src.tabs.length === 0 && sourceGroupId !== groupId) {
-        removeGroup(sourceGroupId)
-        useTabsStore.getState().removeGroup(sourceGroupId)
+      if (src && src.tabs.length === 0) {
+        const remaining = Object.keys(useTabsStore.getState().groups)
+        if (remaining.length > 1) {
+          removeGroup(sourceGroupId)
+          useTabsStore.getState().removeGroup(sourceGroupId)
+        }
       }
     }, 0)
   }
@@ -806,6 +818,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                 // where user-select:none can limit drag initiation to text nodes only.
                 style={{ WebkitUserDrag: 'element' } as React.CSSProperties}
                 onDragStart={e => handleTabDragStart(e, tab, index)}
+                onDragEnd={handleTabDragEnd}
                 onDragOver={e => handleTabDragOver(e, index)}
                 onDragLeave={() => setDragOverTabIndex(null)}
                 onDrop={e => handleTabDrop(e, index)}
@@ -1125,9 +1138,19 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
           })
         )}
 
+        {/* Drag capture overlay — covers canvas/webview children that eat drag events */}
+        {isDraggingTab && (
+          <div
+            className="absolute inset-0 z-10"
+            onDragOver={handleContentDragOver}
+            onDragLeave={handleContentDragLeave}
+            onDrop={handleContentDrop}
+          />
+        )}
+
         {/* Drop zone overlay */}
         {dropZone && (
-          <div className="absolute inset-0 pointer-events-none z-10">
+          <div className="absolute inset-0 pointer-events-none z-20">
             <div
               className={cn(
                 'absolute bg-blue-500/20 border-2 border-blue-500 transition-all',

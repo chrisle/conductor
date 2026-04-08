@@ -11,9 +11,10 @@
 
 import { extensionRegistry } from '@/extensions/registry'
 
-interface PendingSkill {
+export interface PendingSkill {
   name: string
   content: string
+  extensionName: string
 }
 
 /** Collects all skills declared by registered extensions. */
@@ -25,6 +26,7 @@ function getAllExtensionSkills(): PendingSkill[] {
       skills.push({
         name: `conductor-${ext.id}-${skill.slug}`,
         content: skill.content,
+        extensionName: ext.name,
       })
     }
   }

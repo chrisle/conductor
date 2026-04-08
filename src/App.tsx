@@ -24,7 +24,7 @@ function App(): React.ReactElement {
   const zoom = useUIStore(s => s.zoom)
   const goToOpen = useUIStore(s => s.goToOpen)
   const setGoToOpen = useUIStore(s => s.setGoToOpen)
-  const [skillsToInstall, setSkillsToInstall] = useState<{ name: string; content: string }[]>([])
+  const [skillsToInstall, setSkillsToInstall] = useState<{ name: string; content: string; extensionName: string }[]>([])
   const [installing, setInstalling] = useState(false)
 
   // Initialize config, work sessions, and home dir cache
@@ -236,16 +236,20 @@ function App(): React.ReactElement {
       <Dialog open={skillsToInstall.length > 0} onOpenChange={() => setSkillsToInstall([])}>
         <DialogContent className="bg-zinc-900 border-zinc-700 text-zinc-100 max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-sm font-medium">Install Conductor Skills</DialogTitle>
+            <DialogTitle className="text-sm font-medium">Install Extension Skills</DialogTitle>
             <DialogDescription className="text-xs text-zinc-400">
-              Conductor's built-in Claude Code skills need to be installed or updated in{' '}
+              The following Claude Code skills need to be installed or updated in{' '}
               <code className="text-zinc-300">~/.claude/skills/</code>.
             </DialogDescription>
           </DialogHeader>
           <div className="py-2">
-            <ul className="text-xs text-zinc-300 space-y-1">
+            <ul className="text-xs space-y-2">
               {skillsToInstall.map(skill => (
-                <li key={skill.name} className="font-mono text-zinc-400">{skill.name}</li>
+                <li key={skill.name}>
+                  <span className="text-zinc-500">from </span>
+                  <span className="text-zinc-300">{skill.extensionName}</span>
+                  <div className="font-mono text-zinc-500 mt-0.5">{skill.name}</div>
+                </li>
               ))}
             </ul>
           </div>
