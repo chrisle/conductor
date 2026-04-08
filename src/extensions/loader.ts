@@ -10,6 +10,9 @@ interface ExtensionManifest {
   main: string
 }
 
+/** Maps directory paths to their loaded extension IDs (for dev/external extensions). */
+export const dirPathToExtensionId = new Map<string, string>()
+
 /**
  * Load a single external extension from a directory path.
  * The directory must contain a manifest.json and a bundled JS file.
@@ -48,6 +51,7 @@ export async function loadExtension(dirPath: string): Promise<void> {
   }
 
   extensionRegistry.register(extension, false)
+  dirPathToExtensionId.set(dirPath, extension.id)
   console.log(`Loaded external extension: ${extension.name} (${extension.id})`)
 }
 

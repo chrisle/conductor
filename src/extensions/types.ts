@@ -35,5 +35,6 @@ export interface Extension {
   tabs?: TabRegistration[]
   newTabMenuItems?: NewTabMenuItem[]
   settingsPanel?: React.ComponentType<Record<string, never>>
+  configPanel?: React.ComponentType
   onActivate?: () => void
 }

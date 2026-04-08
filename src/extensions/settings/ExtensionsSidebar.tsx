@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Download, Trash2, Package, RefreshCw, Puzzle, ChevronRight, FolderOpen, FolderCode, X } from 'lucide-react'
+import { Download, Trash2, Package, RefreshCw, Puzzle, ChevronRight, FolderOpen, FolderCode, X, Settings, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { extensionRegistry } from '@/extensions'
-import { loadExtension, loadExtensionsFromDevPaths } from '@/extensions/loader'
+import { loadExtension, loadExtensionsFromDevPaths, dirPathToExtensionId } from '@/extensions/loader'
 import { useConfigStore } from '@/store/config'
 import SidebarLayout from '@/components/Sidebar/SidebarLayout'
 
@@ -26,6 +26,7 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
   const [installedExtensions, setInstalledExtensions] = useState<InstalledExtension[]>([])
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [configExtensionId, setConfigExtensionId] = useState<string | null>(null)
 
   const devPaths = useConfigStore(s => s.config.extensions.devPaths)
   const setExtensionDevPaths = useConfigStore(s => s.setExtensionDevPaths)
@@ -158,6 +159,34 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
     e => extensionRegistry.isBuiltin(e.id)
   )
 
+  // If a config panel is active, render it instead of the extension list
+  if (configExtensionId) {
+    const ext = extensionRegistry.getExtension(configExtensionId)
+    const ConfigPanel = ext?.configPanel
+    if (ConfigPanel) {
+      return (
+        <SidebarLayout title={ext.name + ' Settings'}>
+          <div className="px-3 py-2 border-b border-zinc-800">
+            <button
+              onClick={() => setConfigExtensionId(null)}
+              className="flex items-center gap-1.5 text-ui-sm text-zinc-400 hover:text-zinc-200 transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back to Extensions
+            </button>
+          </div>
+          <ScrollArea className="flex-1">
+            <div className="p-3">
+              <ConfigPanel />
+            </div>
+          </ScrollArea>
+        </SidebarLayout>
+      )
+    }
+    // Extension not found or no config panel — fall back to list
+    setConfigExtensionId(null)
+  }
+
   return (
     <SidebarLayout
       title="Extensions"
@@ -185,49 +214,69 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
               <div className="px-1 py-1.5 text-ui-sm text-zinc-500 uppercase tracking-wider font-medium">
                 Dev (Unpacked)
               </div>
-              {devPaths.map(dirPath => (
-                <div
-                  key={dirPath}
-                  className="flex items-start gap-2 px-2 py-2 rounded hover:bg-zinc-800/50 group transition-colors"
-                >
-                  <FolderCode className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-ui-base text-zinc-200 truncate">{dirPath.split('/').pop()}</div>
-                    <div className="text-ui-sm text-zinc-600 truncate">{dirPath}</div>
+              {devPaths.map(dirPath => {
+                const extId = dirPathToExtensionId.get(dirPath)
+                const ext = extId ? extensionRegistry.getExtension(extId) : undefined
+                const hasConfig = !!ext?.configPanel
+                return (
+                  <div
+                    key={dirPath}
+                    className="flex items-start gap-2 px-2 py-2 rounded hover:bg-zinc-800/50 group transition-colors"
+                  >
+                    <FolderCode className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-ui-base text-zinc-200 truncate">{dirPath.split('/').pop()}</div>
+                      <div className="text-ui-sm text-zinc-600 truncate">{dirPath}</div>
+                    </div>
+                    <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                      {hasConfig && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setConfigExtensionId(extId!)}
+                              className="h-6 w-6 text-zinc-500 hover:text-zinc-300"
+                            >
+                              <Settings className="w-3 h-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Configure</TooltipContent>
+                        </Tooltip>
+                      )}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleReloadDev(dirPath)}
+                            disabled={loading}
+                            className="h-6 w-6 text-zinc-500 hover:text-zinc-300"
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Reload</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Unload"
+                            onClick={() => handleUnloadDev(dirPath)}
+                            disabled={loading}
+                            className="h-6 w-6 text-zinc-500 hover:text-red-400"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Unload</TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
-                  <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all shrink-0">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleReloadDev(dirPath)}
-                          disabled={loading}
-                          className="h-6 w-6 text-zinc-500 hover:text-zinc-300"
-                        >
-                          <RefreshCw className="w-3 h-3" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Reload</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label="Unload"
-                          onClick={() => handleUnloadDev(dirPath)}
-                          disabled={loading}
-                          className="h-6 w-6 text-zinc-500 hover:text-red-400"
-                        >
-                          <X className="w-3 h-3" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Unload</TooltipContent>
-                    </Tooltip>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
               <Separator className="my-2 bg-zinc-800" />
             </>
           )}
@@ -238,40 +287,61 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
               <div className="px-1 py-1.5 text-ui-sm text-zinc-500 uppercase tracking-wider font-medium">
                 Installed
               </div>
-              {installedExtensions.map(ext => (
-                <div
-                  key={ext.id}
-                  className="flex items-start gap-2 px-2 py-2 rounded hover:bg-zinc-800/50 group transition-colors"
-                >
-                  <Package className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-ui-base text-zinc-200 truncate">{ext.name}</span>
-                      <Badge variant="outline" className="h-4 px-1 text-ui-xs border-zinc-700 text-zinc-500">
-                        v{ext.version}
-                      </Badge>
+              {installedExtensions.map(ext => {
+                const registered = extensionRegistry.getExtension(ext.id)
+                const hasConfig = !!registered?.configPanel
+                return (
+                  <div
+                    key={ext.id}
+                    className="flex items-start gap-2 px-2 py-2 rounded hover:bg-zinc-800/50 group transition-colors"
+                  >
+                    <Package className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-ui-base text-zinc-200 truncate">{ext.name}</span>
+                        <Badge variant="outline" className="h-4 px-1 text-ui-xs border-zinc-700 text-zinc-500">
+                          v{ext.version}
+                        </Badge>
+                      </div>
+                      {ext.description && (
+                        <div className="text-ui-sm text-zinc-500 truncate">{ext.description}</div>
+                      )}
+                      <div className="text-ui-sm text-zinc-600 truncate">{ext.id}</div>
                     </div>
-                    {ext.description && (
-                      <div className="text-ui-sm text-zinc-500 truncate">{ext.description}</div>
-                    )}
-                    <div className="text-ui-sm text-zinc-600 truncate">{ext.id}</div>
+                    <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                      {hasConfig && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setConfigExtensionId(ext.id)}
+                              className="h-6 w-6 text-zinc-500 hover:text-zinc-300"
+                            >
+                              <Settings className="w-3 h-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Configure</TooltipContent>
+                        </Tooltip>
+                      )}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleUninstall(ext.id)}
+                            disabled={loading}
+                            className="h-6 w-6 text-zinc-500 hover:text-red-400"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Uninstall</TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleUninstall(ext.id)}
-                        disabled={loading}
-                        className="h-6 w-6 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 transition-all shrink-0"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Uninstall</TooltipContent>
-                  </Tooltip>
-                </div>
-              ))}
+                )
+              })}
               <Separator className="my-2 bg-zinc-800" />
             </>
           )}
@@ -290,10 +360,11 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
             <CollapsibleContent>
               {builtinExtensions.map(ext => {
                 const Icon = ext.icon || Puzzle
+                const hasConfig = !!ext.configPanel
                 return (
                   <div
                     key={ext.id}
-                    className="flex items-start gap-2 px-2 py-2 rounded transition-colors"
+                    className="flex items-start gap-2 px-2 py-2 rounded hover:bg-zinc-800/50 group transition-colors"
                   >
                     <Icon className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
@@ -309,6 +380,21 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
                         <div className="text-ui-sm text-zinc-600">{ext.description}</div>
                       )}
                     </div>
+                    {hasConfig && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setConfigExtensionId(ext.id)}
+                            className="h-6 w-6 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-zinc-300 transition-all shrink-0"
+                          >
+                            <Settings className="w-3 h-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Configure</TooltipContent>
+                      </Tooltip>
+                    )}
                   </div>
                 )
               })}
