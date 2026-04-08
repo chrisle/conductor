@@ -7,6 +7,7 @@ import { useLayoutStore } from '@/store/layout'
 import { useWorkSessionsStore } from '@/store/work-sessions'
 import { useProjectStore } from '@/store/project'
 import type { TabProps } from '@/extensions/types'
+import { buildClaudeCommand } from '@/extensions/ai-cli/contexts/buildClaudeCommand'
 import {
   isAtlassianUrl,
   buildAtlassianInjectScript,
@@ -242,9 +243,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
           const { cwd } = await resolveWorktree(ticketKey)
           const prompt = buildPrompt(ticketKey, domain)
           const escaped = prompt.replace(/'/g, "'\\''")
-          const { allowYoloMode, yoloModeByDefault } = getConfig().config.aiCli.claudeCode
-          const flag = yoloModeByDefault ? ' --dangerously-skip-permissions' : allowYoloMode ? ' --allow-dangerously-skip-permissions' : ''
-          const initialCommand = `cd ${JSON.stringify(cwd)} && claude${flag} '${escaped}'\n`
+          const initialCommand = buildClaudeCommand(`cd ${JSON.stringify(cwd)} && claude '${escaped}'\n`, getConfig().config.aiCli.claudeCode)
 
           addTab(targetGroup, {
             id: tmuxName,
@@ -264,9 +263,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
           const { cwd } = await resolveWorktree(ticketKey)
           const prompt = buildPrompt(ticketKey, domain)
           const escaped = prompt.replace(/'/g, "'\\''")
-          const { allowYoloMode, yoloModeByDefault } = getConfig().config.aiCli.claudeCode
-          const flag = yoloModeByDefault ? ' --dangerously-skip-permissions' : allowYoloMode ? ' --allow-dangerously-skip-permissions' : ''
-          const command = `cd ${JSON.stringify(cwd)} && claude${flag} '${escaped}'\n`
+          const command = buildClaudeCommand(`cd ${JSON.stringify(cwd)} && claude '${escaped}'\n`, getConfig().config.aiCli.claudeCode)
 
           await window.electronAPI.createTerminal(tmuxName, cwd, command)
           await window.electronAPI.setAutoPilot(tmuxName, true)

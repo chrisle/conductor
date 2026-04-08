@@ -58,6 +58,7 @@ import {
   getThinkingState, stripAnsi, type ThinkingState,
 } from '@/lib/terminal-detection'
 import { interpolatePromptTemplate } from '@/lib/prompt-template'
+import { buildClaudeCommand } from '@/extensions/ai-cli/contexts/buildClaudeCommand'
 
 export const conductorAPI = {
   // React (shared instance so hooks work)
@@ -99,6 +100,7 @@ export const conductorAPI = {
 
   // Utilities
   cn,
+  buildClaudeCommand,
   createTerminal,
   killTerminal,
   setAutoPilot,

@@ -1,12 +1,11 @@
 import React, { useState } from 'react'
-import { Plus, Trash2, Eye, EyeOff, RotateCcw } from 'lucide-react'
+import { Plus, Trash2, Eye, EyeOff } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { useClaudeCodeSettings } from '../contexts/useClaudeCodeSettings'
 import { useCodexSettings } from '../contexts/useCodexSettings'
 import { useConfigStore } from '@/store/config'
 import { nanoid } from '@/lib/nanoid'
-import { DEFAULT_START_WORK_PROMPT_TEMPLATE } from '@/types/app-config'
 
 export default function AiCliSettingsPanel(): React.ReactElement {
   const claudeCode = useClaudeCodeSettings()
@@ -189,35 +188,6 @@ export default function AiCliSettingsPanel(): React.ReactElement {
           <Switch
             checked={claudeCode.agentTeams}
             onCheckedChange={(v) => claudeCode.update({ agentTeams: v })}
-          />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-ui-base font-medium text-zinc-200">Start work prompt template</div>
-              <div className="text-ui-sm text-zinc-500 mt-0.5">
-                Prompt sent when clicking &quot;Start work&quot; on a Jira ticket.
-                Use {'{{ticketKey}}'}, {'{{projectKey}}'}, {'{{domain}}'} as placeholders.
-              </div>
-            </div>
-            {claudeCode.startWorkPromptTemplate !== DEFAULT_START_WORK_PROMPT_TEMPLATE && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="w-7 h-7 shrink-0"
-                title="Reset to default"
-                onClick={() => claudeCode.update({ startWorkPromptTemplate: DEFAULT_START_WORK_PROMPT_TEMPLATE })}
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-              </Button>
-            )}
-          </div>
-          <textarea
-            value={claudeCode.startWorkPromptTemplate}
-            onChange={(e) => claudeCode.update({ startWorkPromptTemplate: e.target.value })}
-            rows={10}
-            className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-ui-sm text-zinc-200 font-mono leading-relaxed resize-y focus:outline-none focus:border-zinc-500"
           />
         </div>
       </div>

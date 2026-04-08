@@ -303,8 +303,12 @@ export default function Footer(): React.ReactElement {
         className="flex items-center gap-1.5 text-white hover:text-zinc-300 transition-colors cursor-pointer px-2"
       >
         <span>Current directory:</span>
-        <span className="truncate max-w-[300px]" dir="rtl">
-          {rootPath ? rootPath.replace(/^\/Users\/[^/]+/, '~') : '—'}
+        <span className="truncate max-w-[300px]">
+          {rootPath ? (() => {
+            const p = rootPath.replace(/^\/Users\/[^/]+/, '~')
+            const parts = p.split('/').filter(Boolean)
+            return parts.length > 3 ? '../' + parts.slice(-2).join('/') : p
+          })() : '—'}
         </span>
       </button>
       <Separator orientation="vertical" className="h-3 bg-zinc-800" />
