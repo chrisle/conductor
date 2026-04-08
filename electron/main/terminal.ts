@@ -3,6 +3,7 @@ import { BrowserWindow } from 'electron'
 import os from 'os'
 import fs from 'fs'
 import path from 'path'
+import { isTempDir } from './platform-utils'
 
 interface TerminalInstance {
   pty: pty.IPty
@@ -40,6 +41,7 @@ function ensureNodePtySpawnHelperExecutable(): void {
   }
 }
 
+
 export function createTerminal(id: string, win: BrowserWindow, cwd?: string): void {
   if (terminals.has(id)) {
     return
@@ -47,10 +49,8 @@ export function createTerminal(id: string, win: BrowserWindow, cwd?: string): vo
 
   ensureNodePtySpawnHelperExecutable()
   const shell = getShell()
-  // Guard: never use a macOS temp directory as working directory
-  const safeCwd = (cwd && !cwd.startsWith('/var/folders') && !cwd.startsWith('/private/var/folders'))
-    ? cwd
-    : os.homedir()
+  // Guard: never use a temp directory as working directory
+  const safeCwd = (cwd && !isTempDir(cwd)) ? cwd : os.homedir()
   const ptyProcess = pty.spawn(shell, ['-l'], {
     name: 'xterm-256color',
     cols: 80,

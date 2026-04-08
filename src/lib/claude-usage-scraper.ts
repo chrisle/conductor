@@ -6,6 +6,7 @@
  * cleans up the session. Runs on a configurable interval.
  */
 
+import os from 'os'
 import * as termAPI from './terminal-ws'
 import { stripAnsi } from './terminal-detection'
 import { useClaudeUsageStore } from '@/store/claude-usage'
@@ -205,9 +206,9 @@ async function scrapeOnce(): Promise<void> {
     termAPI.onTerminalData(dataHandler)
 
     // Create hidden PTY session with the usage command.
-    // Use /tmp as cwd so the PTY doesn't fall back to os.homedir(), which
+    // Use os.tmpdir() as cwd so the PTY doesn't fall back to os.homedir(), which
     // triggers macOS TCC permission prompts for Desktop/Documents access.
-    await termAPI.createTerminal(sessionId, '/tmp', 'claude "/usage"\n')
+    await termAPI.createTerminal(sessionId, os.tmpdir(), 'claude "/usage"\n')
 
     // Enable autopilot so conductord auto-accepts any permission prompts
     termAPI.setAutoPilot(sessionId, true)

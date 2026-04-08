@@ -95,14 +95,16 @@ export const DEFAULT_EDITOR_CUSTOMIZATION: EditorCustomization = {
   renderWhitespace: 'selection',
 }
 
+const mod = process.platform === 'darwin' ? 'Meta' : 'Ctrl'
+
 export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcut[] = [
-  { id: 'goToFile', label: 'Go to File', keys: 'Meta+g' },
-  { id: 'nextTab', label: 'Next Tab', keys: 'Meta+Shift+]' },
-  { id: 'prevTab', label: 'Previous Tab', keys: 'Meta+Shift+[' },
-  { id: 'toggleSidebar', label: 'Toggle Sidebar', keys: 'Meta+b' },
-  { id: 'zoomIn', label: 'Zoom In', keys: 'Meta+=' },
-  { id: 'zoomOut', label: 'Zoom Out', keys: 'Meta+-' },
-  { id: 'zoomReset', label: 'Reset Zoom', keys: 'Meta+0' },
+  { id: 'goToFile', label: 'Go to File', keys: `${mod}+g` },
+  { id: 'nextTab', label: 'Next Tab', keys: `${mod}+Shift+]` },
+  { id: 'prevTab', label: 'Previous Tab', keys: `${mod}+Shift+[` },
+  { id: 'toggleSidebar', label: 'Toggle Sidebar', keys: `${mod}+b` },
+  { id: 'zoomIn', label: 'Zoom In', keys: `${mod}+=` },
+  { id: 'zoomOut', label: 'Zoom Out', keys: `${mod}+-` },
+  { id: 'zoomReset', label: 'Reset Zoom', keys: `${mod}+0` },
 ]
 
 export const DEFAULT_START_WORK_PROMPT_TEMPLATE = [
