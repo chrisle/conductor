@@ -204,8 +204,10 @@ async function scrapeOnce(): Promise<void> {
     // Listen for PTY data
     termAPI.onTerminalData(dataHandler)
 
-    // Create hidden PTY session with the usage command
-    await termAPI.createTerminal(sessionId, undefined, 'claude "/usage"\n')
+    // Create hidden PTY session with the usage command.
+    // Use /tmp as cwd so the PTY doesn't fall back to os.homedir(), which
+    // triggers macOS TCC permission prompts for Desktop/Documents access.
+    await termAPI.createTerminal(sessionId, '/tmp', 'claude "/usage"\n')
 
     // Enable autopilot so conductord auto-accepts any permission prompts
     termAPI.setAutoPilot(sessionId, true)

@@ -61,15 +61,15 @@ export default function WordTab({ tabId, groupId, isActive, tab }: TabProps): Re
   }
 
   return (
-    <div className="h-full w-full overflow-auto p-8">
+    <div className="h-full w-full overflow-auto bg-white p-8">
       <div
-        className="max-w-3xl mx-auto prose prose-invert prose-zinc prose-base
-          prose-headings:text-zinc-100 prose-headings:font-semibold
-          prose-p:text-zinc-300 prose-p:leading-relaxed
-          prose-a:text-blue-400
-          prose-strong:text-zinc-200
-          prose-li:text-zinc-300
-          prose-th:text-zinc-200 prose-td:text-zinc-300
+        className="max-w-3xl mx-auto prose prose-base
+          prose-headings:text-zinc-900 prose-headings:font-semibold
+          prose-p:text-zinc-800 prose-p:leading-relaxed
+          prose-a:text-blue-600
+          prose-strong:text-zinc-900
+          prose-li:text-zinc-800
+          prose-th:text-zinc-900 prose-td:text-zinc-700
           prose-img:rounded-lg
           prose-table:border-collapse
         "

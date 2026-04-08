@@ -22,7 +22,7 @@ describe('LinkContextMenu', () => {
     vi.clearAllMocks()
   })
 
-  it('renders default labels "Open Action Board" and "Open Jira"', () => {
+  it('renders default labels "Go to Kanban Board" and "Open Jira"', () => {
     render(
       <LinkContextMenu url="https://jira.example.com/browse/CON-1">
         <button>Right-click me</button>
@@ -32,7 +32,7 @@ describe('LinkContextMenu', () => {
     // Trigger the context menu
     fireEvent.contextMenu(screen.getByText('Right-click me'))
 
-    expect(screen.getByText('Open Action Board')).toBeDefined()
+    expect(screen.getByText('Go to Kanban Board')).toBeDefined()
     expect(screen.getByText('Open Jira')).toBeDefined()
   })
 
