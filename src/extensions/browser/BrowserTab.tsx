@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { ArrowLeft, ArrowRight, RotateCw, X, Globe } from 'lucide-react'
 import { useTabsStore } from '@/store/tabs'
+import type { TabGroup } from '@/store/tabs'
 import { useConfigStore } from '@/store/config'
 import { useSidebarStore } from '@/store/sidebar'
 import { useLayoutStore } from '@/store/layout'
@@ -245,14 +246,29 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
           const escaped = prompt.replace(/'/g, "'\\''")
           const initialCommand = buildClaudeCommand(`cd ${JSON.stringify(cwd)} && claude '${escaped}'\n`, getConfig().config.aiCli.claudeCode)
 
-          addTab(targetGroup, {
-            id: tmuxName,
-            type: 'claude-code',
-            title: `Claude · ${ticketKey}`,
-            filePath: cwd,
-            initialCommand,
-            autoPilot: true,
-          })
+          // If a tab with this session ID already exists in any group, focus it instead
+          // of opening a duplicate. Otherwise, create a new column on the far right.
+          const allGroups = useTabsStore.getState().groups
+          const existingEntry = (Object.entries(allGroups) as [string, TabGroup][]).find(
+            ([, g]) => g.tabs.some(t => t.id === tmuxName)
+          )
+          if (existingEntry) {
+            const [existingGroupId] = existingEntry
+            useTabsStore.getState().setActiveTab(existingGroupId, tmuxName)
+            useLayoutStore.getState().setFocusedGroup(existingGroupId)
+          } else {
+            // Create a fresh group and pin it as a new column at the far right
+            const newGroupId = useTabsStore.getState().createGroup()
+            addTab(newGroupId, {
+              id: tmuxName,
+              type: 'claude-code',
+              title: `Claude · ${ticketKey}`,
+              filePath: cwd,
+              initialCommand,
+              autoPilot: true,
+            })
+            useLayoutStore.getState().insertAtEdge('east', newGroupId)
+          }
           break
         }
 

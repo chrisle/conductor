@@ -3,6 +3,7 @@ import { cleanup, render, act } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import BrowserTab from '../extensions/browser/BrowserTab'
 import { useTabsStore } from '../store/tabs'
+import type { TabGroup } from '../store/tabs'
 import { CONDUCTOR_MSG_PREFIX } from '../extensions/browser/atlassian-inject'
 
 // Mock stores that the Conductor action handler depends on
@@ -39,9 +40,16 @@ vi.mock('../store/sidebar', () => ({
   }),
 }))
 
+const mockInsertAtEdge = vi.fn()
+const mockSetFocusedGroup = vi.fn()
+
 vi.mock('../store/layout', () => ({
   useLayoutStore: Object.assign(vi.fn(), {
-    getState: () => ({ focusedGroupId: null }),
+    getState: () => ({
+      focusedGroupId: null,
+      insertAtEdge: mockInsertAtEdge,
+      setFocusedGroup: mockSetFocusedGroup,
+    }),
   }),
 }))
 
@@ -113,6 +121,9 @@ describe('BrowserTab Atlassian integration', () => {
   }
 
   beforeEach(() => {
+    mockInsertAtEdge.mockClear()
+    mockSetFocusedGroup.mockClear()
+
     // Mock electronAPI
     window.electronAPI = {
       worktreeList: vi.fn().mockResolvedValue([]),
@@ -224,6 +235,68 @@ describe('BrowserTab Atlassian integration', () => {
       expect.stringContaining('claude'),
     )
     expect(window.electronAPI.setAutoPilot).toHaveBeenCalledWith('t-CON-41', true)
+  })
+
+  it('start-coding-in-tab creates a new column on the far right (CON-82)', async () => {
+    const { container } = render(<BrowserTab {...atlassianProps} />)
+    const wv = patchWebview(container)
+
+    emitWebviewEvent(wv, 'dom-ready')
+
+    const message = CONDUCTOR_MSG_PREFIX + JSON.stringify({
+      action: 'start-coding-in-tab',
+      ticketKey: 'CON-41',
+    })
+
+    await act(async () => {
+      emitWebviewEvent(wv, 'console-message', { message })
+      await new Promise(r => setTimeout(r, 50))
+    })
+
+    // A new group should have been created and inserted at the east edge
+    const allGroups = useTabsStore.getState().groups
+    const newGroupEntry = (Object.entries(allGroups) as [string, TabGroup][]).find(
+      ([id, g]) => id !== 'group-1' && g.tabs.some(t => t.id === 't-CON-41')
+    )
+    expect(newGroupEntry).toBeDefined()
+    const [newGroupId, newGroup] = newGroupEntry!
+    const claudeTab = newGroup.tabs.find(t => t.id === 't-CON-41')
+    expect(claudeTab).toBeDefined()
+    expect(claudeTab!.type).toBe('claude-code')
+    expect(claudeTab!.autoPilot).toBe(true)
+    expect(mockInsertAtEdge).toHaveBeenCalledWith('east', newGroupId)
+  })
+
+  it('start-coding-in-tab focuses existing tab instead of duplicating (CON-82)', async () => {
+    // Pre-populate an existing claude-code tab for this ticket in a second group
+    useTabsStore.setState({
+      groups: {
+        'group-1': { id: 'group-1', tabs: [{ id: 'tab-1', type: 'browser', title: 'Jira' }], activeTabId: 'tab-1', tabHistory: ['tab-1'] },
+        'group-2': { id: 'group-2', tabs: [{ id: 't-CON-41', type: 'claude-code', title: 'Claude · CON-41' }], activeTabId: 't-CON-41', tabHistory: ['t-CON-41'] },
+      },
+    })
+
+    const { container } = render(<BrowserTab {...atlassianProps} />)
+    const wv = patchWebview(container)
+    emitWebviewEvent(wv, 'dom-ready')
+
+    const message = CONDUCTOR_MSG_PREFIX + JSON.stringify({
+      action: 'start-coding-in-tab',
+      ticketKey: 'CON-41',
+    })
+
+    await act(async () => {
+      emitWebviewEvent(wv, 'console-message', { message })
+      await new Promise(r => setTimeout(r, 50))
+    })
+
+    // No new group should be created — still only 2 groups
+    const groupCount = Object.keys(useTabsStore.getState().groups).length
+    expect(groupCount).toBe(2)
+    // insertAtEdge should NOT have been called
+    expect(mockInsertAtEdge).not.toHaveBeenCalled()
+    // setFocusedGroup should have been called with the existing group
+    expect(mockSetFocusedGroup).toHaveBeenCalledWith('group-2')
   })
 
   it('uses custom prompt template from config store (CON-55)', async () => {
