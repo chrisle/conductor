@@ -26,11 +26,11 @@ function Item({ children }: { children: React.ReactNode }) {
 const ZOOM_PRESETS = [0.75, 0.9, 1.0, 1.25, 1.5]
 
 function ZoomControl() {
-  const { zoom, zoomIn, zoomOut, setZoom, resetZoom } = useUIStore()
+  const zoom = useUIStore(s => s.zoom)
   const pct = Math.round(zoom * 100)
   return (
     <span className="flex items-center gap-0.5 text-zinc-500 px-1">
-      <button onClick={zoomOut} className="hover:text-zinc-300 transition-colors p-0.5 rounded hover:bg-zinc-800">
+      <button onClick={() => useUIStore.getState().zoomOut()} className="hover:text-zinc-300 transition-colors p-0.5 rounded hover:bg-zinc-800">
         <Minus className="w-2.5 h-2.5" />
       </button>
       <DropdownMenu>
@@ -45,19 +45,19 @@ function ZoomControl() {
           {ZOOM_PRESETS.map(z => (
             <DropdownMenuItem
               key={z}
-              onClick={() => setZoom(z)}
+              onClick={() => useUIStore.getState().setZoom(z)}
               className={`text-ui-base cursor-pointer justify-center tabular-nums ${Math.abs(zoom - z) < 0.01 ? 'text-blue-400' : ''}`}
             >
               {Math.round(z * 100)}%
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={resetZoom} className="text-ui-base cursor-pointer justify-center">
+          <DropdownMenuItem onClick={() => useUIStore.getState().resetZoom()} className="text-ui-base cursor-pointer justify-center">
             Reset
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <button onClick={zoomIn} className="hover:text-zinc-300 transition-colors p-0.5 rounded hover:bg-zinc-800">
+      <button onClick={() => useUIStore.getState().zoomIn()} className="hover:text-zinc-300 transition-colors p-0.5 rounded hover:bg-zinc-800">
         <Plus className="w-2.5 h-2.5" />
       </button>
     </span>

@@ -52,14 +52,13 @@ function NotificationItem({
   notification: Notification
   onNavigate: (n: Notification) => void
 }) {
-  const { markRead, removeNotification } = useNotificationsStore()
   const Icon = typeIcon(notification.type)
   const color = typeColor(notification.type)
 
   const handleClick = useCallback(() => {
-    markRead(notification.id)
+    useNotificationsStore.getState().markRead(notification.id)
     onNavigate(notification)
-  }, [notification, markRead, onNavigate])
+  }, [notification, onNavigate])
 
   return (
     <ContextMenu>
@@ -98,7 +97,7 @@ function NotificationItem({
       <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
         <ContextMenuItem
           className="gap-2 text-xs cursor-pointer"
-          onClick={() => markRead(notification.id)}
+          onClick={() => useNotificationsStore.getState().markRead(notification.id)}
         >
           <CheckCheck className="w-3.5 h-3.5" />
           Mark as read
@@ -106,7 +105,7 @@ function NotificationItem({
         <ContextMenuSeparator className="bg-zinc-700" />
         <ContextMenuItem
           className="gap-2 text-xs cursor-pointer text-red-400 focus:text-red-300"
-          onClick={() => removeNotification(notification.id)}
+          onClick={() => useNotificationsStore.getState().removeNotification(notification.id)}
         >
           <Trash2 className="w-3.5 h-3.5" />
           Remove
@@ -117,7 +116,7 @@ function NotificationItem({
 }
 
 function SettingsPanel() {
-  const { settings, updateSettings } = useNotificationsStore()
+  const settings = useNotificationsStore(s => s.settings)
 
   const toggles: { key: keyof typeof settings; label: string; icon: React.ElementType }[] = [
     { key: 'taskComplete', label: 'Task completions', icon: CheckCircle2 },
@@ -136,7 +135,7 @@ function SettingsPanel() {
           <input
             type="checkbox"
             checked={settings[key] as boolean}
-            onChange={() => updateSettings({ [key]: !settings[key] })}
+            onChange={() => useNotificationsStore.getState().updateSettings({ [key]: !settings[key] })}
             className="accent-blue-500 w-3 h-3"
           />
           <Icon className="w-3 h-3 text-zinc-500" />
@@ -153,8 +152,9 @@ export default function NotificationsSidebar({ groupId }: { groupId: string }): 
   // Start listening for terminal notifications
   useTerminalNotifications()
 
-  const { notifications, settings, updateSettings, markAllRead, clearAll, getUnreadCount } = useNotificationsStore()
-  const unreadCount = getUnreadCount()
+  const notifications = useNotificationsStore(s => s.notifications)
+  const settings = useNotificationsStore(s => s.settings)
+  const unreadCount = notifications.filter(n => !n.read).length
 
   const handleNavigate = useCallback((n: Notification) => {
     if (n.sourceTabId && n.sourceGroupId) {
@@ -166,19 +166,19 @@ export default function NotificationsSidebar({ groupId }: { groupId: string }): 
     {
       icon: settings.enabled ? Bell : BellOff,
       label: settings.enabled ? 'Disable notifications' : 'Enable notifications',
-      onClick: () => updateSettings({ enabled: !settings.enabled }),
+      onClick: () => useNotificationsStore.getState().updateSettings({ enabled: !settings.enabled }),
       className: settings.enabled ? 'text-zinc-400 hover:text-zinc-200' : 'text-red-400 hover:text-red-300',
     },
     {
       icon: CheckCheck,
       label: 'Mark all as read',
-      onClick: markAllRead,
+      onClick: () => useNotificationsStore.getState().markAllRead(),
       disabled: unreadCount === 0,
     },
     {
       icon: Trash2,
       label: 'Clear all',
-      onClick: clearAll,
+      onClick: () => useNotificationsStore.getState().clearAll(),
       disabled: notifications.length === 0,
     },
   ]
