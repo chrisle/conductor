@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: './e2e',
   timeout: 15_000,
   retries: 0,
-  testIgnore: ['**/autopilot-real-claude*', '**/autopilot-e2e*', '**/autopilot-haiku*', '**/claude-start*', '**/claude-tab-real*', '**/perf-real*'],
+  testIgnore: ['**/autopilot-real-claude*', '**/autopilot-e2e*', '**/autopilot-haiku*', '**/claude-start*', '**/claude-tab-real*'],
   use: {
     baseURL: 'http://localhost:5174',
     trace: 'on-first-retry',

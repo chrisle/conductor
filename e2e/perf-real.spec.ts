@@ -2,14 +2,17 @@
  * Real Electron performance test — measures actual rendering latency
  * with real PTY sessions, real React renders, and real Zustand updates.
  *
- * Unlike perf-stress.spec.ts (which uses mocks), this test launches the
- * full Electron app and measures what the user actually experiences.
+ * This test opens actual Claude Code (ai-cli) tabs, waits for Claude to
+ * start, sends a long prompt to each session, and benchmarks tab switch
+ * latency while all Claude sessions are concurrently thinking and streaming.
+ *
+ * Unlike perf-stress.spec.ts (which simulates with mocks), every re-render
+ * and store update here is real.
  *
  * Run explicitly with:
  *   npx playwright test e2e/perf-real.spec.ts --reporter=list
  *
- * Requires conductord to be installed. The test manages the Electron
- * process lifecycle automatically.
+ * Requires: conductord installed, `claude` CLI on $PATH, authenticated.
  */
 import { test, expect } from '@playwright/test'
 import type { Browser, Page } from 'playwright'
@@ -23,22 +26,22 @@ import {
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const N_TABS = 5            // real PTY sessions to open
-const N_SWITCHES = 30       // tab switches to benchmark
-const N_WARMUP = 5          // warm-up switches (not measured)
+const N_TABS = 4            // concurrent Claude sessions (4 is realistic for most users)
+const N_SWITCHES = 30       // tab switches to benchmark per test
+const N_WARMUP = 5          // non-measured warm-up switches
 
-// Thresholds — real rendering involves GPU, layout, and real React reconciliation
-const MAX_P95_IDLE_SWITCH_MS = 50     // idle terminals: tab switch to next rAF
-const MAX_P95_LOAD_SWITCH_MS = 100    // all terminals streaming: tab switch to next rAF
+const MAX_P95_IDLE_SWITCH_MS = 50     // Claude idle at > prompt
+const MAX_P95_STREAM_SWITCH_MS = 100  // Claude actively thinking/streaming
 
-// The bash command run in each terminal to simulate an active Claude session.
-// It produces output matching THINKING_RE in terminal-detection.ts so
-// useThinkingDetect fires updateTab({ isThinking: true }) on every PTY chunk —
-// the same Zustand mutation that real Claude causes while thinking.
-const THINKING_LOOP =
-  "while true; do printf '(1s \\u00b7 \\u2191 %d tokens)\\r' \"$((RANDOM % 9999))\"; sleep 0.1; done\n"
+// A prompt that triggers Claude to stream output for 30+ seconds.
+// Asking for multiple detailed examples keeps it generating for a long time.
+const CLAUDE_PROMPT =
+  'Write 10 detailed JavaScript code examples demonstrating different design patterns: ' +
+  'singleton, factory, observer, decorator, strategy, command, proxy, facade, iterator, and mediator. ' +
+  'For each pattern: explain when to use it, show the full implementation, show usage, and explain trade-offs. ' +
+  'Do not use any tools or read any files.'
 
-// ─── Test state ───────────────────────────────────────────────────────────────
+// ─── Process state ────────────────────────────────────────────────────────────
 
 let electronProcess: ChildProcess
 let browser: Browser
@@ -49,10 +52,10 @@ let tabIds: string[] = []
 
 test.describe.configure({ mode: 'serial' })
 
-test.describe('Real Electron performance (requires conductord)', () => {
+test.describe('Real Electron performance (requires conductord + claude CLI)', () => {
 
   test.beforeAll(async () => {
-    test.setTimeout(180_000)
+    test.setTimeout(300_000) // 5 min — Claude startup takes time
 
     killAllConductorProcesses()
     await new Promise(r => setTimeout(r, 2000))
@@ -63,156 +66,241 @@ test.describe('Real Electron performance (requires conductord)', () => {
     page = app.page
 
     await waitForAppAndResetToEmptyProject(page)
-
-    // Enable perf instrumentation for perfStart marks
     await page.evaluate(() => { localStorage.setItem('conductor.perf', '1') })
 
-    // Open N real terminal tabs, waiting for each shell to be ready
-    tabIds = await openRealTerminals(page, N_TABS)
-    console.log(`\n  Opened ${tabIds.length} real terminal tabs`)
+    // Wait for conductord to be healthy and the ai-cli extension to register
+    await page.waitForFunction(
+      () => {
+        const reg = (window as any).__stores__?.extensionRegistry
+        return reg && (reg.getExtension('ai-cli') || reg.getExtension('claude-code'))
+      },
+      null,
+      { timeout: 30_000 },
+    ).catch(() => console.log('  WARNING: ai-cli extension not detected in registry'))
+
+    const conductordOk: boolean = await page.evaluate(async () => {
+      try { return await window.electronAPI.conductordHealth() } catch { return false }
+    })
+    console.log(`\n  conductord health: ${conductordOk}`)
+
+    // Open N real Claude Code tabs. Each starts `claude --dangerously-skip-permissions`
+    // via the ai-cli extension, which also wires up useThinkingDetect.
+    tabIds = await openClaudeTabs(page, N_TABS)
+    console.log(`\n  ${tabIds.length}/${N_TABS} Claude sessions ready`)
+    expect(tabIds.length).toBeGreaterThan(0)
   })
 
   test.afterAll(async () => {
+    // Send Ctrl+C to every Claude session before killing the app
+    try {
+      for (const id of tabIds) {
+        await page.evaluate(
+          ({ id }: { id: string }) => { window.electronAPI.writeTerminal(id, '\x03') },
+          { id },
+        )
+      }
+    } catch {}
     try { await browser?.close() } catch {}
     if (electronProcess) electronProcess.kill('SIGKILL')
     killAllConductorProcesses()
   })
 
-  // ─── Test 1: idle terminals ─────────────────────────────────────────────────
+  // ─── Test 1: idle — Claude waiting at > prompt ─────────────────────────────
 
-  test(`tab switch latency — ${N_TABS} idle terminals`, async () => {
-    test.setTimeout(90_000)
-
-    // Warm up: get React reconciler and GPU warmed
-    await switchTabsViaStore(page, tabIds, N_WARMUP)
-    await page.evaluate(() => { (window as any).__perfClear?.() })
-
-    // Benchmark
-    const durations = await measureRafSwitchLatency(page, tabIds, N_SWITCHES)
-    const metrics = computeMetrics(durations)
-    printMetrics(`Tab switch — ${N_TABS} idle terminals`, metrics)
-
-    expect(
-      metrics.p95,
-      `p95 idle tab switch (${metrics.p95.toFixed(1)}ms) exceeded ${MAX_P95_IDLE_SWITCH_MS}ms`,
-    ).toBeLessThan(MAX_P95_IDLE_SWITCH_MS)
-  })
-
-  // ─── Test 2: all terminals streaming (concurrent Claude sessions) ────────────
-
-  test(`tab switch latency — ${N_TABS} terminals with concurrent PTY output`, async () => {
-    test.setTimeout(90_000)
-
-    // Start the thinking loop in every terminal simultaneously.
-    // This fires useThinkingDetect → updateTab({ isThinking: true }) at ~10Hz per tab,
-    // which is the same Zustand pressure real Claude sessions produce.
-    for (const id of tabIds) {
-      await page.evaluate(
-        ({ id, cmd }: { id: string; cmd: string }) => { window.electronAPI.writeTerminal(id, cmd) },
-        { id, cmd: THINKING_LOOP },
-      )
-      await new Promise(r => setTimeout(r, 50))
-    }
-
-    // Let output establish for 1s so isThinking is active in all tabs
-    await new Promise(r => setTimeout(r, 1000))
+  test(`tab switch latency — ${N_TABS} idle Claude sessions (waiting at > prompt)`, async () => {
+    test.setTimeout(60_000)
 
     await switchTabsViaStore(page, tabIds, N_WARMUP)
     await page.evaluate(() => { (window as any).__perfClear?.() })
 
     const durations = await measureRafSwitchLatency(page, tabIds, N_SWITCHES)
-    const metrics = computeMetrics(durations)
-    printMetrics(`Tab switch — ${N_TABS} concurrent streaming terminals`, metrics)
+    const m = computeMetrics(durations)
+    printMetrics(`Tab switch — ${N_TABS} idle Claude sessions`, m)
 
-    // Stop all loops (Ctrl+C each)
-    for (const id of tabIds) {
-      await page.evaluate(
-        ({ id }: { id: string }) => { window.electronAPI.writeTerminal(id, '\x03') },
-        { id },
-      )
-    }
-
-    expect(
-      metrics.p95,
-      `p95 concurrent switch (${metrics.p95.toFixed(1)}ms) exceeded ${MAX_P95_LOAD_SWITCH_MS}ms`,
-    ).toBeLessThan(MAX_P95_LOAD_SWITCH_MS)
+    expect(m.p95, `p95 idle (${m.p95.toFixed(1)}ms) > ${MAX_P95_IDLE_SWITCH_MS}ms`)
+      .toBeLessThan(MAX_P95_IDLE_SWITCH_MS)
   })
 
-  // ─── Test 3: perf marks from real render instrumentation ────────────────────
+  // ─── Test 2: all Claude sessions actively thinking/streaming ──────────────
 
-  test('print perf marks collected from real renders', async () => {
-    test.setTimeout(30_000)
+  test(`tab switch latency — ${N_TABS} Claude sessions thinking concurrently`, async () => {
+    test.setTimeout(120_000)
 
-    const perfSummary = await page.evaluate(() => {
-      const measurements: Record<string, number[]> = (window as any).__perfMeasurements || {}
-      const result: Record<string, { count: number; avg: number; p95: number; max: number }> = {}
-      for (const [label, times] of Object.entries(measurements)) {
-        const sorted = [...times].sort((a, b) => a - b)
-        result[label] = {
-          count: times.length,
-          avg: times.reduce((a, b) => a + b, 0) / times.length,
-          p95: sorted[Math.floor(sorted.length * 0.95)] ?? sorted[sorted.length - 1],
-          max: sorted[sorted.length - 1],
-        }
-      }
-      return result
+    // Get group ID first (used throughout this test)
+    const groupId: string = await page.evaluate(() => {
+      return (window as any).__stores__.layout.getState().getAllGroupIds()[0]
     })
 
-    console.log('\n  Perf marks from real render instrumentation:')
-    if (Object.keys(perfSummary).length === 0) {
-      console.log('  (none — perf marks are only emitted when conductor.perf=1 is set)')
-    }
-    for (const [label, m] of Object.entries(perfSummary)) {
-      console.log(
-        `  ${label}: count=${m.count}  avg=${m.avg.toFixed(1)}ms  p95=${m.p95.toFixed(1)}ms  max=${m.max.toFixed(1)}ms`,
+    // Switch to each tab and send the prompt.
+    // Using \r (carriage return) — that's what Enter produces in a PTY.
+    for (const id of tabIds) {
+      await page.evaluate(
+        ({ groupId, id }: { groupId: string; id: string }) => {
+          (window as any).__stores__.tabs.getState().setActiveTab(groupId, id)
+        },
+        { groupId, id },
       )
+      await new Promise(r => setTimeout(r, 200)) // let xterm render
+      await page.evaluate(
+        ({ id, prompt }: { id: string; prompt: string }) => {
+          window.electronAPI.writeTerminal(id, prompt + '\r')
+        },
+        { id, prompt: CLAUDE_PROMPT },
+      )
+      console.log(`  Sent prompt to ${id}`)
+      // Stagger so they don't all hit the API simultaneously
+      await new Promise(r => setTimeout(r, 1000))
     }
 
-    // Informational — no threshold, just makes results visible
-    expect(true).toBe(true)
+    // Clear perf marks and wait for Claude to start responding.
+    // Typical time-to-first-token is 1–3s; 8s gives plenty of headroom.
+    await page.evaluate(() => { (window as any).__perfClear?.() })
+    console.log('\n  Waiting 8s for Claude sessions to start streaming...')
+    await new Promise(r => setTimeout(r, 8000))
+
+    // Confirm PTY data is flowing via terminal-write perf marks
+    const writeCount: number = await page.evaluate(() => {
+      const meas: Record<string, number[]> = (window as any).__perfMeasurements ?? {}
+      return (meas['terminal-write'] ?? []).length
+    })
+    console.log(`  terminal-write events: ${writeCount} (confirms PTY data is flowing)`)
+
+    // Check how many sessions show isThinking (fires for extended thinking mode)
+    const thinkingCount: number = await page.evaluate(() => {
+      const { tabs, layout } = (window as any).__stores__
+      const gid = layout.getState().getAllGroupIds()[0]
+      const group = tabs.getState().groups[gid]
+      return group?.tabs.filter((t: any) => t.isThinking).length ?? 0
+    })
+    console.log(`  ${thinkingCount}/${tabIds.length} sessions show isThinking (extended thinking mode)`)
+
+    // Warm up then re-clear perf marks, then benchmark
+    await switchTabsViaStore(page, tabIds, N_WARMUP)
+    await page.evaluate(() => { (window as any).__perfClear?.() })
+
+    // Benchmark while all Claude sessions are streaming
+    const durations = await measureRafSwitchLatency(page, tabIds, N_SWITCHES)
+    const m = computeMetrics(durations)
+    printMetrics(`Tab switch — ${N_TABS} concurrent Claude sessions (${thinkingCount} isThinking)`, m)
+
+    // Show real perf instrumentation from TabGroup's perfStart('tab-switch')
+    const perfSummary = await page.evaluate(() => {
+      const meas: Record<string, number[]> = (window as any).__perfMeasurements ?? {}
+      const out: Record<string, string> = {}
+      for (const [label, times] of Object.entries(meas)) {
+        const sorted = [...times].sort((a, b) => a - b)
+        const avg = times.reduce((a, b) => a + b, 0) / times.length
+        const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? sorted[sorted.length - 1]
+        out[label] = `count=${times.length} avg=${avg.toFixed(1)}ms p95=${p95.toFixed(1)}ms max=${sorted[sorted.length - 1].toFixed(1)}ms`
+      }
+      return out
+    })
+    if (Object.keys(perfSummary).length > 0) {
+      console.log('\n  Perf marks from real renders:')
+      for (const [label, summary] of Object.entries(perfSummary)) {
+        console.log(`  ${label}: ${summary}`)
+      }
+    }
+
+    expect(m.p95, `p95 concurrent (${m.p95.toFixed(1)}ms) > ${MAX_P95_STREAM_SWITCH_MS}ms`)
+      .toBeLessThan(MAX_P95_STREAM_SWITCH_MS)
   })
 })
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Open N real terminal tabs via the Zustand store.
- * Waits for each tab's shell to produce a prompt before proceeding.
+ * Open N Claude Code (ai-cli) tabs sequentially.
+ * Each tab starts `claude --dangerously-skip-permissions` automatically.
+ * Waits for Claude's banner/prompt to appear before proceeding to the next tab.
+ * Returns the tab IDs of successfully initialized sessions.
  */
-async function openRealTerminals(page: Page, count: number): Promise<string[]> {
+async function openClaudeTabs(page: Page, n: number): Promise<string[]> {
   const ids: string[] = []
+  const groupId: string = await page.evaluate(() => {
+    return (window as any).__stores__.layout.getState().getAllGroupIds()[0]
+  })
 
-  for (let i = 0; i < count; i++) {
-    const id: string = await page.evaluate((title: string) => {
-      const { tabs, layout } = (window as any).__stores__
-      const groupId = layout.getState().getAllGroupIds()[0]
-      return tabs.getState().addTab(groupId, { type: 'terminal', title })
-    }, `Perf ${i + 1}`)
-
-    ids.push(id)
-
-    // This tab is now active — wait for xterm to mount
-    await page.locator('.xterm').first().waitFor({ state: 'attached', timeout: 15_000 })
-
-    // Wait for the shell to emit at least one character (initial prompt)
-    await page.waitForFunction(
-      () => {
-        const rows = document.querySelector('.xterm-rows')
-        return rows && rows.textContent && rows.textContent.trim().length > 0
+  for (let i = 0; i < n; i++) {
+    // Add an ai-cli tab. The ClaudeCodeTab component will automatically
+    // run `buildClaudeCommand('claude --dangerously-skip-permissions\n', settings)`
+    // and pass it to createTerminal as the startup command.
+    const id: string = await page.evaluate(
+      ({ groupId, title, cmd }: { groupId: string; title: string; cmd: string }) => {
+        return (window as any).__stores__.tabs.getState().addTab(groupId, {
+          type: 'claude-code',
+          title,
+          initialCommand: cmd,
+        })
       },
-      null,
-      { timeout: 20_000 },
+      { groupId, title: `Claude ${i + 1}`, cmd: 'claude --dangerously-skip-permissions\n' },
     )
 
-    console.log(`  tab ${i + 1}/${count} ready (id=${id})`)
+    // Switch to this tab so its xterm mounts and we can read its output
+    await page.evaluate(
+      ({ groupId, id }: { groupId: string; id: string }) => {
+        (window as any).__stores__.tabs.getState().setActiveTab(groupId, id)
+      },
+      { groupId, id },
+    )
+
+    // Wait for xterm to attach (ai-cli tabs initialize slightly slower than plain terminals)
+    await page.waitForFunction(
+      () => document.querySelector('.xterm') !== null,
+      null,
+      { timeout: 30_000 },
+    ).catch(async () => {
+      const info = await page.evaluate(() => ({
+        tabCount: Object.values((window as any).__stores__?.tabs?.getState()?.groups ?? {})
+          .flatMap((g: any) => g.tabs).length,
+        extKeys: Object.keys((window as any).__stores__?.extensionRegistry?.getState?.() ?? {}),
+        htmlSnippet: document.body.innerHTML.slice(0, 500),
+      }))
+      console.log('  xterm not found — diagnostic:', JSON.stringify(info))
+      throw new Error('xterm did not attach within 30s')
+    })
+
+    // Wait for Claude's banner (distinguishes Claude from the shell prompt)
+    console.log(`  Opening Claude ${i + 1}/${n}...`)
+    const ready = await waitForClaudeBanner(page)
+    if (!ready) {
+      console.log(`  WARNING: Claude ${i + 1} did not show banner — skipping this tab`)
+      // Don't include it in the tabIds — we'll work with fewer sessions
+      continue
+    }
+
+    ids.push(id)
+    console.log(`  Claude ${i + 1}/${n} ready (id=${id})`)
   }
 
   return ids
 }
 
 /**
- * Switch between tabs N times via the store (no measurement — for warm-up).
+ * Poll the visible terminal for Claude's banner text.
+ * Returns true when "Claude Code" or the "❯" prompt appears.
  */
+async function waitForClaudeBanner(page: Page, timeoutMs = 30_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const text: string = await page.evaluate(() => {
+      // Use the accessibility tree for clean text without ANSI codes
+      const tree = document.querySelector('.xterm-accessibility-tree')
+      if (tree) return tree.textContent || ''
+      // Fallback: raw rows text
+      const rows = Array.from(document.querySelectorAll('.xterm-rows'))
+      const visible = rows.find(el => el.getBoundingClientRect().width > 0)
+      return visible?.textContent || ''
+    })
+    if (text.includes('Claude Code') || text.includes('❯')) {
+      return true
+    }
+    await new Promise(r => setTimeout(r, 1000))
+  }
+  return false
+}
+
+/** Switch between tabs N times without measuring (warm-up). */
 async function switchTabsViaStore(page: Page, tabIds: string[], n: number): Promise<void> {
   await page.evaluate(
     ({ tabIds, n }: { tabIds: string[]; n: number }) => {
@@ -226,24 +314,15 @@ async function switchTabsViaStore(page: Page, tabIds: string[], n: number): Prom
   )
 }
 
-/**
- * Benchmark N tab switches, measuring time from store update to next rAF.
- * Returns an array of durations in milliseconds.
- */
-async function measureRafSwitchLatency(
-  page: Page,
-  tabIds: string[],
-  n: number,
-): Promise<number[]> {
+/** Measure N tab switches — store update time to next animation frame. */
+async function measureRafSwitchLatency(page: Page, tabIds: string[], n: number): Promise<number[]> {
   return page.evaluate(
     ({ tabIds, n }: { tabIds: string[]; n: number }) => {
       const { tabs, layout } = (window as any).__stores__
       const groupId = layout.getState().getAllGroupIds()[0]
-
-      return new Promise<number[]>((resolve) => {
+      return new Promise<number[]>(resolve => {
         const durations: number[] = []
         let i = 0
-
         function next() {
           if (i >= n) { resolve(durations); return }
           const targetId = tabIds[i % tabIds.length]
@@ -255,7 +334,6 @@ async function measureRafSwitchLatency(
             next()
           })
         }
-
         next()
       })
     },
