@@ -288,13 +288,26 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
 
         case 'open-in-claude': {
           const { cwd } = await resolveWorktree(ticketKey)
-          addTab(targetGroup, {
-            id: tmuxName,
-            type: 'claude-code',
-            title: `Claude · ${ticketKey}`,
-            filePath: cwd,
-            initialCommand: `cd ${JSON.stringify(cwd)} && claude\n`,
-          })
+          if (msg.metaKey) {
+            // Cmd+click: open in a new column on the far right
+            const newGroupId = useTabsStore.getState().createGroup()
+            addTab(newGroupId, {
+              id: tmuxName,
+              type: 'claude-code',
+              title: `Claude · ${ticketKey}`,
+              filePath: cwd,
+              initialCommand: `cd ${JSON.stringify(cwd)} && claude\n`,
+            })
+            useLayoutStore.getState().insertAtEdge('east', newGroupId)
+          } else {
+            addTab(targetGroup, {
+              id: tmuxName,
+              type: 'claude-code',
+              title: `Claude · ${ticketKey}`,
+              filePath: cwd,
+              initialCommand: `cd ${JSON.stringify(cwd)} && claude\n`,
+            })
+          }
           break
         }
 

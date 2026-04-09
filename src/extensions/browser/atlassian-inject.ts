@@ -18,6 +18,7 @@ export type ConductorAction =
 export interface ConductorMessage {
   action: ConductorAction
   ticketKey: string
+  metaKey?: boolean
 }
 
 /**
@@ -72,8 +73,10 @@ export function buildAtlassianInjectScript(): string {
   var PREFIX = ${JSON.stringify(CONDUCTOR_MSG_PREFIX)};
 
   // Send a message back to BrowserTab via console.log with a known prefix
-  function sendMessage(action, ticketKey) {
-    console.log(PREFIX + JSON.stringify({ action: action, ticketKey: ticketKey }));
+  function sendMessage(action, ticketKey, opts) {
+    var msg = { action: action, ticketKey: ticketKey };
+    if (opts && opts.metaKey) msg.metaKey = true;
+    console.log(PREFIX + JSON.stringify(msg));
   }
 
   // Extract ticket key from the current URL
@@ -135,7 +138,7 @@ export function buildAtlassianInjectScript(): string {
       e.stopPropagation();
       var key = getTicketKey();
       if (key) {
-        sendMessage(action, key);
+        sendMessage(action, key, { metaKey: e.metaKey });
       }
       // Close the dropdown by clicking the document body
       document.body.click();
