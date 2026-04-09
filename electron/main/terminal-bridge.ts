@@ -6,7 +6,7 @@ import { ipcMain, WebContents, app } from 'electron'
 import { StringDecoder } from 'string_decoder'
 import os from 'os'
 import WebSocket from 'ws'
-import { CONDUCTORD_SOCKET } from './conductord-client'
+import { CONDUCTORD_SOCKET, conductordFetch } from './conductord-client'
 import { isTempDir } from './platform-utils'
 
 interface TerminalSession {
@@ -156,11 +156,13 @@ export function registerTerminalBridge(): void {
     const session = sessions.get(id)
     if (session) {
       session.intentionalClose = true
-      if (session.ws.readyState === WebSocket.OPEN) {
-        session.ws.send(JSON.stringify({ type: 'kill' }))
-      }
       session.ws.close()
       sessions.delete(id)
+    }
+    try {
+      await conductordFetch(`/api/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    } catch {
+      // Session may already be gone
     }
   })
 
