@@ -178,6 +178,9 @@ export function parseUsageOutput(raw: string): Pick<ClaudeUsageData, 'percentUse
   return { percentUsed, sessionPercent, tiers }
 }
 
+/** Overall hard timeout so scrapeOnce can never hang forever (45 seconds) */
+const OVERALL_TIMEOUT_MS = 45_000
+
 /**
  * Run a single usage scrape. Creates a hidden PTY, runs `claude "/usage"`,
  * collects output, parses it, and cleans up.
@@ -190,7 +193,7 @@ async function scrapeOnce(): Promise<void> {
   if (store.scraping) return
 
   store.setScraping(true)
-  lastScrapeTime = now
+  // Only update lastScrapeTime on success — moved from here to after setUsage
 
   const sessionId = `${SESSION_PREFIX}${++scrapeCounter}`
   let dataBuffer = ''
@@ -201,7 +204,14 @@ async function scrapeOnce(): Promise<void> {
     dataBuffer += data
   }
 
+  // Wrap everything in an overall timeout so a hung IPC call can never
+  // leave scraping stuck at true forever.
+  const overallTimeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Overall scrape timeout')), OVERALL_TIMEOUT_MS),
+  )
+
   try {
+    await Promise.race([overallTimeout, (async () => {
     // Listen for PTY data
     termAPI.onTerminalData(dataHandler)
 
@@ -290,11 +300,13 @@ async function scrapeOnce(): Promise<void> {
     }
 
     store.setUsage(usageData)
+    lastScrapeTime = Date.now()
 
     // Persist to localStorage for cross-session availability
     try {
       localStorage.setItem('conductor:claude-usage', JSON.stringify(usageData))
     } catch {}
+    })()])
 
   } catch (err) {
     console.warn('[claude-usage] scrape failed:', err)
@@ -357,8 +369,10 @@ export function stopUsageScraper(): void {
 
 /**
  * Trigger an immediate scrape (e.g. from a "refresh" button).
+ * Force-resets the scraping flag so a stuck scrape can't block manual refresh.
  */
 export function scrapeNow(): void {
-  lastScrapeTime = 0 // Reset gap timer
+  lastScrapeTime = 0
+  useClaudeUsageStore.getState().setScraping(false)
   scrapeOnce().catch(console.warn)
 }
