@@ -179,12 +179,12 @@ webview {
   background-color: rgba(59, 130, 246, 0.2);
 }
 
-/* Prevent SVGs and other child elements from acting as independent drag sources
-   inside any draggable container (e.g. tabs, session rows). Without this, Chromium
-   treats SVG icons as draggable images and intercepts the drag before it reaches
-   the parent draggable div, so you can only drag from the title text. */
-[draggable="true"] * {
-  -webkit-user-drag: none;
+/* Make SVG icons inside draggable containers invisible to pointer events so
+   mousedown always reaches the parent [draggable] div. Without this, Chromium
+   treats SVG icons as independent drag sources and intercepts the drag before
+   it reaches the parent, causing unreliable drag initiation (CON-61). */
+[draggable="true"] svg {
+  pointer-events: none;
 }
 
 /* Split drop zones */
@@ -209,7 +209,7 @@ webview {
 
 .tab-thinking-bar {
   position: relative;
-  border-bottom: 2px solid transparent !important;
+  border-top: 2px solid transparent !important;
 }
 
 .tab-thinking-bar::after {
@@ -217,7 +217,7 @@ webview {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
+  top: 0;
   height: 2px;
   background: linear-gradient(
     90deg,

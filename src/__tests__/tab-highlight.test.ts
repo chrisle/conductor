@@ -21,8 +21,8 @@ function computeTabClasses(opts: {
     opts.isActive
       // Only the focused pane's active tab gets the blue highlight
       ? opts.isFocused
-        ? 'bg-zinc-950 text-zinc-50 border-b-2 border-b-blue-400'
-        : 'bg-zinc-950 text-zinc-400 border-b-2 border-b-zinc-600'
+        ? 'bg-zinc-950 text-zinc-50 border-t-2 border-t-blue-400'
+        : 'bg-zinc-900/80 text-zinc-400'
       : 'bg-zinc-900/60 text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-200',
     opts.isDragOver && 'border-l-2 border-l-blue-400',
     opts.isActive && opts.isThinking && 'tab-thinking-bar',
@@ -33,16 +33,14 @@ function computeTabClasses(opts: {
 describe('Tab highlight classes (CON-47)', () => {
   it('active tab in focused pane gets blue highlight', () => {
     const classes = computeTabClasses({ isActive: true, isFocused: true })
-    expect(classes).toContain('border-b-blue-400')
+    expect(classes).toContain('border-t-blue-400')
     expect(classes).toContain('text-zinc-50')
-    expect(classes).not.toContain('border-b-zinc-600')
   })
 
-  it('active tab in unfocused pane gets muted highlight', () => {
+  it('active tab in unfocused pane gets muted style', () => {
     const classes = computeTabClasses({ isActive: true, isFocused: false })
-    expect(classes).toContain('border-b-zinc-600')
     expect(classes).toContain('text-zinc-400')
-    expect(classes).not.toContain('border-b-blue-400')
+    expect(classes).not.toContain('border-t-blue-400')
     expect(classes).not.toContain('text-zinc-50')
   })
 
@@ -51,8 +49,7 @@ describe('Tab highlight classes (CON-47)', () => {
     const unfocusedClasses = computeTabClasses({ isActive: false, isFocused: false })
     expect(focusedClasses).toBe(unfocusedClasses)
     expect(focusedClasses).toContain('bg-zinc-900/60')
-    expect(focusedClasses).not.toContain('border-b-blue-400')
-    expect(focusedClasses).not.toContain('border-b-zinc-600')
+    expect(focusedClasses).not.toContain('border-t-blue-400')
   })
 
   it('thinking bar only applies to active tabs', () => {
