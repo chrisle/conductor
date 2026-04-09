@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Terminal, GitBranch, FolderOpen } from 'lucide-react'
+import { Terminal, GitBranch, FolderOpen, RefreshCw } from 'lucide-react'
 import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useSidebarStore } from '@/store/sidebar'
@@ -35,6 +35,7 @@ export default function FileExplorerSidebar({ groupId }: FileExplorerSidebarProp
   }
 
   const actions: SidebarAction[] = [
+    { icon: RefreshCw, label: 'Refresh', onClick: () => window.dispatchEvent(new Event('sidebar:refresh')) },
     { icon: Terminal, label: 'New terminal', onClick: openNewTerminal },
   ]
 
