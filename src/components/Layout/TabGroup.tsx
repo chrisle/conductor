@@ -271,6 +271,15 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     return () => document.removeEventListener('keydown', onKeyDown, true)
   }, [floatingMenuOpen, floatingSubmenu, claudeAccounts, rootPath, groupId, extraMenuItems])
 
+  // Global dragend listener — ensures isDraggingTab resets even when the
+  // per-element dragend doesn't fire (e.g. source tab removed from DOM mid-drag).
+  useEffect(() => {
+    if (!isDraggingTab) return
+    const reset = () => setIsDraggingTab(false)
+    window.addEventListener('dragend', reset)
+    return () => window.removeEventListener('dragend', reset)
+  }, [isDraggingTab])
+
   if (!group) return <div className="h-full w-full bg-zinc-950" />
 
   const activeTab = group.tabs.find(t => t.id === group.activeTabId)
@@ -941,12 +950,12 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                   }
                 }}
                 className={cn(
-                  'flex items-center gap-1.5 px-3 h-8 cursor-pointer select-none border-r border-zinc-700/40 shrink-0 max-w-[180px] group/tab transition-colors',
+                  'flex items-center gap-1.5 px-3 h-8 cursor-pointer select-none border-r border-zinc-700/40 shrink-0 max-w-[180px] group/tab',
                   tab.id === group.activeTabId
                     // Only the focused pane's active tab gets the blue highlight
                     ? isFocused
-                      ? 'bg-zinc-950 text-zinc-50 border-b-2 border-b-blue-400'
-                      : 'bg-zinc-950 text-zinc-400 border-b-2 border-b-zinc-600'
+                      ? 'bg-zinc-950 text-zinc-50 border-t-2 border-t-blue-400'
+                      : 'bg-zinc-900/80 text-zinc-400'
                     : 'bg-zinc-900/60 text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-200',
                   dragOverTabIndex === index && 'border-l-2 border-l-blue-400',
                   tab.id === group.activeTabId && tab.isThinking && 'tab-thinking-bar',
@@ -1261,7 +1270,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
             return (
               <div
                 key={`${tab.id}-${tab.refreshKey || 0}`}
-                className={cn('absolute inset-0', tab.id !== group.activeTabId && 'hidden')}
+                className={cn('absolute inset-0', tab.id !== group.activeTabId ? 'invisible pointer-events-none' : 'z-10')}
               >
                 <Component
                   tabId={tab.id}
