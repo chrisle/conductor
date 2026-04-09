@@ -7,10 +7,9 @@ import { describe, expect, it } from 'vitest'
  * Three-part fix:
  * 1. The tab div has `-webkit-user-drag: element` (inline style) so Electron/
  *    Chromium treats the whole element as the drag surface.
- * 2. index.css sets `-webkit-user-drag: none` on all descendants of any
- *    `[draggable="true"]` element. Without this, Chromium treats SVG icons as
- *    draggable images and intercepts the drag before it reaches the parent div,
- *    causing drag to only work from the title text.
+ * 2. index.css sets `pointer-events: none` on SVGs inside any
+ *    `[draggable="true"]` element. This prevents SVG icons from intercepting
+ *    mousedown and ensures it always reaches the parent draggable div.
  * 3. The close button has `draggable={false}` so it is never treated as a drag
  *    source even if the CSS rule were removed.
  */
@@ -28,7 +27,7 @@ describe('tab drag surface area (CON-61)', () => {
     expect(source).toContain("WebkitUserDrag: 'element'")
   })
 
-  it('index.css suppresses child drag sources inside draggable containers', () => {
+  it('index.css makes SVGs inside draggable containers pointer-transparent', () => {
     const fs = require('fs')
     const path = require('path')
     const css = fs.readFileSync(
@@ -36,10 +35,10 @@ describe('tab drag surface area (CON-61)', () => {
       'utf-8',
     )
 
-    // SVG icons (lucide-react) default to draggable in Chromium — this rule
-    // prevents them from intercepting drag before it reaches the parent div
-    expect(css).toContain('[draggable="true"] *')
-    expect(css).toContain('-webkit-user-drag: none')
+    // SVG icons (lucide-react) must not intercept mousedown — pointer-events: none
+    // ensures the event reaches the parent [draggable] div reliably
+    expect(css).toContain('[draggable="true"] svg')
+    expect(css).toContain('pointer-events: none')
   })
 
   it('close button has draggable={false} to avoid blocking parent drag', () => {
