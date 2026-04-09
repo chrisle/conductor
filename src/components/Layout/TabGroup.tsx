@@ -884,7 +884,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     >
       {/* Tab bar */}
       <div
-        className="flex items-end bg-zinc-900/80 border-b border-zinc-700/50 shrink-0 relative"
+        className="no-drag flex items-end bg-zinc-900/80 border-b border-zinc-700/50 shrink-0 relative"
         style={{ height: 36 }}
       >
         <div
