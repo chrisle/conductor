@@ -164,7 +164,7 @@ function getLanguageFromExtension(filename: string): string {
 
 type CreatingType = 'file' | 'folder' | null
 
-export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProps): React.ReactElement {
+function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProps): React.ReactElement {
   const [children, setChildren] = useState<FileEntry[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
@@ -527,3 +527,5 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
     </div>
   )
 }
+
+export default React.memo(FileTreeNode)

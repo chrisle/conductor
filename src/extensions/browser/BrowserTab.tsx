@@ -63,7 +63,7 @@ type WebviewElement = HTMLElement & {
 // Custom data type set during tab drags — must match the key in TabGroup.tsx
 const DRAGGING_TAB_KEY = '__dragging_tab__'
 
-export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
+function BrowserTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
   const initialUrl = tab.url
   // inputUrl drives the address bar display; it updates on navigation events
   // without feeding back into the webview's src attribute.
@@ -547,3 +547,5 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
     </div>
   )
 }
+
+export default React.memo(BrowserTab)

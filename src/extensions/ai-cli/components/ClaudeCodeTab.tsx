@@ -53,7 +53,7 @@ export function formatSpeed(speed: number | null): string {
   return `${speed} t/s`
 }
 
-export default function ClaudeCodeTab({
+function ClaudeCodeTab({
   tabId,
   groupId,
   isActive,
@@ -323,3 +323,5 @@ export default function ClaudeCodeTab({
     />
   );
 }
+
+export default React.memo(ClaudeCodeTab)
