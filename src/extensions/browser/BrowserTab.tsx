@@ -244,7 +244,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
           const { cwd } = await resolveWorktree(ticketKey)
           const prompt = buildPrompt(ticketKey, domain)
           const escaped = prompt.replace(/'/g, "'\\''")
-          const initialCommand = buildClaudeCommand(`cd ${JSON.stringify(cwd)} && claude '${escaped}'\n`, getConfig().config.aiCli.claudeCode)
+          const initialCommand = buildClaudeCommand(`claude '${escaped}'\n`, getConfig().config.aiCli.claudeCode)
 
           // If a tab with this session ID already exists in any group, focus it instead
           // of opening a duplicate. Otherwise, create a new column on the far right.
@@ -279,7 +279,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
           const { cwd } = await resolveWorktree(ticketKey)
           const prompt = buildPrompt(ticketKey, domain)
           const escaped = prompt.replace(/'/g, "'\\''")
-          const command = buildClaudeCommand(`cd ${JSON.stringify(cwd)} && claude '${escaped}'\n`, getConfig().config.aiCli.claudeCode)
+          const command = buildClaudeCommand(`claude '${escaped}'\n`, getConfig().config.aiCli.claudeCode)
 
           await window.electronAPI.createTerminal(tmuxName, cwd, command)
           await window.electronAPI.setAutoPilot(tmuxName, true)
@@ -296,7 +296,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
               type: 'claude-code',
               title: `Claude · ${ticketKey}`,
               filePath: cwd,
-              initialCommand: `cd ${JSON.stringify(cwd)} && claude\n`,
+              initialCommand: `claude\n`,
             })
             useLayoutStore.getState().insertAtEdge('east', newGroupId)
           } else {
@@ -305,7 +305,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
               type: 'claude-code',
               title: `Claude · ${ticketKey}`,
               filePath: cwd,
-              initialCommand: `cd ${JSON.stringify(cwd)} && claude\n`,
+              initialCommand: `claude\n`,
             })
           }
           break

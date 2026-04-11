@@ -20,6 +20,13 @@ export interface TerminalCustomization {
   cursorBlink: boolean
   colorTheme: 'default' | 'monokai' | 'solarized-dark' | 'dracula' | 'nord'
   scrollback: number
+  /**
+   * Shell to launch in new terminals. Empty string or 'default' uses the
+   * platform default. Well-known values: 'powershell', 'pwsh', 'cmd',
+   * 'git-bash' (Windows); 'bash', 'zsh', 'fish' (macOS/Linux). Any other
+   * value is treated as a literal path to a shell binary.
+   */
+  shell: string
 }
 
 export interface EditorCustomization {
@@ -84,6 +91,7 @@ export const DEFAULT_TERMINAL_CUSTOMIZATION: TerminalCustomization = {
   cursorBlink: true,
   colorTheme: 'default',
   scrollback: 10000,
+  shell: 'default',
 }
 
 export const DEFAULT_EDITOR_CUSTOMIZATION: EditorCustomization = {
