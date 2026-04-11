@@ -264,6 +264,28 @@ function AppearanceSection(): React.ReactElement {
           <SettingRow label="Scrollback Lines" description="Max lines kept in terminal history (applies to new terminals)">
             <NumberInput value={termConfig.scrollback} onChange={v => setTerminal({ scrollback: v })} min={1000} max={100000} step={1000} />
           </SettingRow>
+          <SettingRow label="Default Shell" description="Shell to launch in new terminals (applies to new terminals)">
+            <SelectInput
+              value={termConfig.shell || 'default'}
+              onChange={v => setTerminal({ shell: v })}
+              options={
+                window.electronAPI.platform === 'win32'
+                  ? [
+                      { value: 'default', label: 'Default (PowerShell)' },
+                      { value: 'powershell', label: 'Windows PowerShell' },
+                      { value: 'pwsh', label: 'PowerShell 7 (pwsh)' },
+                      { value: 'cmd', label: 'Command Prompt' },
+                      { value: 'git-bash', label: 'Git Bash' },
+                    ]
+                  : [
+                      { value: 'default', label: 'Default ($SHELL)' },
+                      { value: 'bash', label: 'Bash' },
+                      { value: 'zsh', label: 'Zsh' },
+                      { value: 'fish', label: 'Fish' },
+                    ]
+              }
+            />
+          </SettingRow>
         </div>
       </div>
 

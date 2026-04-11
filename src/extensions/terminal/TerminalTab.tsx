@@ -245,6 +245,23 @@ function TerminalTabInner({
       terminalRef.current = term;
       fitAddonRef.current = fitAddon;
       serializeAddonRef.current = serializeAddon;
+
+      // On Windows, make Ctrl+C copy the current selection (matching Windows
+      // Terminal / VS Code). With no selection, fall through so the shell still
+      // receives SIGINT.
+      if (window.electronAPI.platform === 'win32') {
+        term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+          if (e.type !== 'keydown') return true;
+          if (e.ctrlKey && !e.shiftKey && !e.altKey && (e.key === 'c' || e.key === 'C')) {
+            const sel = term.getSelection();
+            if (sel) {
+              navigator.clipboard.writeText(sel).catch(() => {});
+              return false;
+            }
+          }
+          return true;
+        });
+      }
       flushPendingData();
       if (pendingExitRef.current) {
         pendingExitRef.current = false;
@@ -261,7 +278,8 @@ function TerminalTabInner({
         // Pass the initialCommand to conductord so it runs the command
         // immediately after creating the session — far more reliable than
         // waiting for the shell prompt from the renderer side.
-        termAPI.createTerminal(tabId, cwd, initialCommand).then(async ({ isNew, autoPilot: apState }) => {
+        const shellPref = getTerminalCustomization().shell || undefined;
+        termAPI.createTerminal(tabId, cwd, initialCommand, shellPref).then(async ({ isNew, autoPilot: apState }) => {
           console.log(`[terminal] session ready: id=${tabId} isNew=${isNew} autoPilot=${apState} hasInitCmd=${!!initialCommand}`);
           termAPI.resizeTerminal(tabId, cols, rows);
 
