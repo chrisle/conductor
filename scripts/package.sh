@@ -5,6 +5,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Git Bash on Windows sets this, which prevents cmd.exe from finding .bat files
+# in the current directory — breaks node-pty/winpty's gyp build.
+unset NoDefaultCurrentDirectoryInExePath
+
 # ── Detect platform ─────────────────────────────────────────────────────────
 
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -77,10 +81,6 @@ else
 
   echo "    Go $(go version) ready."
 fi
-
-# ── Prepare tmux ────────────────────────────────────────────────────────────
-
-bash "$SCRIPT_DIR/prepare-tmux.sh"
 
 # ── Build conductord ─────────────────────────────────────────────────────────
 
