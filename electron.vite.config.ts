@@ -29,6 +29,11 @@ export default defineConfig({
     root: '.',
     publicDir: 'public',
     server: {
+      // Disable HMR and file watching so saving a file in the editor doesn't
+      // reload the renderer and blow away terminal/tab state. Refresh with
+      // Ctrl+R (or restart the dev server) to pick up changes.
+      hmr: false,
+      watch: null,
       fs: {
         allow: ['..']
       }
