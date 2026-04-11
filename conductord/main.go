@@ -14,13 +14,12 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
-	"github.com/creack/pty"
+	gopty "github.com/aymanbagabas/go-pty"
 	"github.com/gorilla/websocket"
 )
 
@@ -35,8 +34,8 @@ type session struct {
 	cwd     string
 	command string
 	mu      sync.Mutex
-	ptmx    *os.File
-	cmd     *exec.Cmd
+	ptmx    gopty.Pty
+	cmd     *gopty.Cmd
 	dead    bool // true once the PTY process has exited
 
 	// Scrollback ring buffer: stores recent PTY output so reconnecting
@@ -202,24 +201,33 @@ func sessionEnv() []string {
 
 // newSession creates a new conductord session backed by a PTY process.
 // If command is non-empty, it is executed inside a login shell; otherwise
-// a plain login shell is started.
-func newSession(id, cwd, command string) (*session, error) {
-	shell := getShell()
-	var cmd *exec.Cmd
+// a plain login shell is started. `shellPref` selects which shell binary
+// to launch — empty string picks the platform default.
+func newSession(id, cwd, command, shellPref string) (*session, error) {
+	ptmx, err := gopty.New()
+	if err != nil {
+		return nil, err
+	}
+
+	shell := getShell(shellPref)
+	var cmd *gopty.Cmd
 
 	if command != "" {
 		trimmed := strings.TrimRight(command, "\r\n")
-		cmd = exec.Command(shell, "-lic", trimmed+"; exec "+shell)
-		log.Printf("[session %s] starting with command: %s", id, command)
+		args := sessionShellCommandArgs(shell, trimmed)
+		cmd = ptmx.Command(shell, args...)
+		log.Printf("[session %s] starting with command (shell=%s): %s", id, shell, command)
 	} else {
-		cmd = exec.Command(shell, "-l")
+		args := sessionShellLoginArgs(shell)
+		cmd = ptmx.Command(shell, args...)
+		log.Printf("[session %s] starting login shell: %s", id, shell)
 	}
 
 	cmd.Dir = cwd
 	cmd.Env = sessionEnv()
 
-	ptmx, err := pty.Start(cmd)
-	if err != nil {
+	if err := cmd.Start(); err != nil {
+		ptmx.Close()
 		return nil, err
 	}
 
@@ -246,8 +254,8 @@ func newSession(id, cwd, command string) (*session, error) {
 		if err != nil {
 			if exitErr, ok := err.(*exec.ExitError); ok {
 				log.Printf("[session %s] process exited with code %d: %v", id, exitErr.ExitCode(), exitErr)
-				if ws, ok := exitErr.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
-					log.Printf("[session %s] killed by signal: %s", id, ws.Signal())
+				if sig := exitSignal(exitErr); sig != "" {
+					log.Printf("[session %s] killed by signal: %s", id, sig)
 				}
 			} else {
 				log.Printf("[session %s] process exited with error: %v", id, err)
@@ -403,13 +411,13 @@ func (s *session) write(data []byte) {
 }
 
 func (s *session) resize(cols, rows uint16) {
-	pty.Setsize(s.ptmx, &pty.Winsize{Cols: cols, Rows: rows})
+	_ = s.ptmx.Resize(int(cols), int(rows))
 }
 
 func (s *session) kill() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.dead {
+	if !s.dead && s.cmd.Process != nil {
 		s.cmd.Process.Kill()
 	}
 }
@@ -432,16 +440,6 @@ type resizeMsg struct {
 	Rows int `json:"rows"`
 }
 
-func getShell() string {
-	if runtime.GOOS == "windows" {
-		return "powershell.exe"
-	}
-	if s := os.Getenv("SHELL"); s != "" {
-		return s
-	}
-	return "/bin/zsh"
-}
-
 func handleTerminal(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -452,6 +450,7 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	cwd := r.URL.Query().Get("cwd")
 	command := r.URL.Query().Get("command")
+	shellPref := r.URL.Query().Get("shell")
 	if cwd == "" {
 		home, _ := os.UserHomeDir()
 		cwd = home
@@ -481,7 +480,7 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 	}
 	isNew := false
 	if !exists && id != "" {
-		s, err = newSession(id, cwd, command)
+		s, err = newSession(id, cwd, command, shellPref)
 		if err != nil {
 			sessionsMu.Unlock()
 			log.Printf("session create error: %v", err)
@@ -493,7 +492,7 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 		isNew = true
 	} else if !exists {
 		id = fmt.Sprintf("s-%d", time.Now().UnixNano())
-		s, err = newSession(id, cwd, command)
+		s, err = newSession(id, cwd, command, shellPref)
 		if err != nil {
 			sessionsMu.Unlock()
 			log.Printf("session create error: %v", err)
@@ -658,11 +657,6 @@ type execResponse struct {
 	Error    string `json:"error,omitempty"`
 }
 
-// shellQuote wraps a string in single quotes, escaping any embedded single quotes.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
-}
-
 func handleExec(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
@@ -700,20 +694,9 @@ func handleExec(w http.ResponseWriter, r *http.Request) {
 		cwd = home
 	}
 
-	// Run through login shell so we get the user's full PATH, aliases, etc.
-	shell := getShell()
-
-	// Build a single shell command string with proper quoting
-	parts := make([]string, 0, 1+len(req.Args))
-	parts = append(parts, shellQuote(req.Command))
-	for _, a := range req.Args {
-		parts = append(parts, shellQuote(a))
-	}
-	shellCmd := strings.Join(parts, " ")
-
 	log.Printf("[exec] starting: %s (cwd=%s, timeout=%ds)", req.Command, cwd, timeout)
 
-	cmd := exec.Command(shell, "-ilc", shellCmd)
+	cmd := buildExecCommand(req.Command, req.Args)
 	cmd.Dir = cwd
 	cmd.Env = os.Environ()
 
@@ -866,15 +849,6 @@ func startServer(socketPath string, devPort int) {
 
 	log.Printf("conductord listening on %s", socketPath)
 	go http.Serve(ln, nil)
-}
-
-// logFilePath returns the path to the conductord log file.
-func logFilePath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = os.TempDir()
-	}
-	return filepath.Join(home, "Library", "Logs", "conductord.log")
 }
 
 // initLogFile redirects the standard logger to the log file (appending),
