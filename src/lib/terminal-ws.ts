@@ -38,10 +38,10 @@ function ensureIpcListeners(): void {
   })
 }
 
-export function createTerminal(id: string, cwd?: string, command?: string): Promise<{ isNew: boolean; autoPilot?: boolean }> {
+export function createTerminal(id: string, cwd?: string, command?: string, shell?: string): Promise<{ isNew: boolean; autoPilot?: boolean }> {
   ensureIpcListeners()
   activeSessions.add(id)
-  return window.electronAPI.createTerminal(id, cwd, command)
+  return window.electronAPI.createTerminal(id, cwd, command, shell)
 }
 
 export function writeTerminal(id: string, data: string, opts?: { programmatic?: boolean }): Promise<void> {

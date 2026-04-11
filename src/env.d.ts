@@ -64,7 +64,7 @@ interface ElectronAPI {
   invalidateCache: (namespace: string, key: string) => Promise<void>
 
   // Terminal (bridged to conductord Unix socket via main process)
-  createTerminal: (id: string, cwd?: string, command?: string) => Promise<{ isNew: boolean }>
+  createTerminal: (id: string, cwd?: string, command?: string, shell?: string) => Promise<{ isNew: boolean }>
   writeTerminal: (id: string, data: string) => Promise<void>
   resizeTerminal: (id: string, cols: number, rows: number) => Promise<void>
   killTerminal: (id: string) => Promise<void>

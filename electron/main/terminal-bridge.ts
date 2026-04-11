@@ -6,7 +6,7 @@ import { ipcMain, WebContents, app } from 'electron'
 import { StringDecoder } from 'string_decoder'
 import os from 'os'
 import WebSocket from 'ws'
-import { CONDUCTORD_SOCKET, conductordFetch } from './conductord-client'
+import { CONDUCTORD_SOCKET, CONDUCTORD_TCP_HOST, CONDUCTORD_TCP_PORT, IS_WIN, conductordFetch } from './conductord-client'
 import { isTempDir } from './platform-utils'
 
 interface TerminalSession {
@@ -20,7 +20,7 @@ const sessions = new Map<string, TerminalSession>()
 const pendingConnections = new Map<string, Promise<{ isNew: boolean }>>()
 
 export function registerTerminalBridge(): void {
-  ipcMain.handle('terminal:create', async (event, id: string, cwd?: string, command?: string) => {
+  ipcMain.handle('terminal:create', async (event, id: string, cwd?: string, command?: string, shell?: string) => {
     // If already connected, close the stale WebSocket so we get a fresh
     // connection and let conductord decide whether the session is new.
     if (sessions.has(id)) {
@@ -43,8 +43,12 @@ export function registerTerminalBridge(): void {
       params.set('id', id)
       if (safeCwd) params.set('cwd', safeCwd)
       if (command) params.set('command', command)
+      if (shell) params.set('shell', shell)
 
-      const ws = new WebSocket(`ws+unix://${CONDUCTORD_SOCKET}:/ws/terminal?${params}`)
+      const wsUrl = IS_WIN
+        ? `ws://${CONDUCTORD_TCP_HOST}:${CONDUCTORD_TCP_PORT}/ws/terminal?${params}`
+        : `ws+unix://${CONDUCTORD_SOCKET}:/ws/terminal?${params}`
+      const ws = new WebSocket(wsUrl)
 
       let sessionResolved = false
       const session: TerminalSession = {

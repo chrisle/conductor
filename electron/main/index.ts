@@ -4,9 +4,14 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { spawn } from 'child_process'
 import { autoUpdater } from 'electron-updater'
 import { registerIpcHandlers } from './ipc'
-import { conductordHealthCheck, CONDUCTORD_SOCKET } from './conductord-client'
+import { conductordHealthCheck, CONDUCTORD_SOCKET, CONDUCTORD_TCP_PORT } from './conductord-client'
 import { initLogger } from './logger'
+import { installCrashReporter } from './crash-reporter'
 import os from 'os'
+
+// Install crash handlers as early as possible so failures during startup
+// (before app.whenReady) are also captured.
+installCrashReporter()
 
 let mainWindow: BrowserWindow | null = null
 
@@ -73,11 +78,12 @@ async function ensureConductord(): Promise<void> {
     return
   }
 
-  // Spawn conductord with system tray
+  // Spawn conductord with system tray (headless on Windows — no tray yet).
   const isDev = !!process.env['ELECTRON_RENDERER_URL']
+  const binName = process.platform === 'win32' ? 'conductord.exe' : 'conductord'
   const binPath = isDev
-    ? join(__dirname, '../../conductord/conductord')
-    : join(process.resourcesPath!, 'conductord')
+    ? join(__dirname, '../../conductord', binName)
+    : join(process.resourcesPath!, binName)
 
   const binExists = existsSync(binPath)
   console.debug(`[ensureConductord] isDev=${isDev} binPath=${binPath} exists=${binExists}`)
@@ -87,11 +93,17 @@ async function ensureConductord(): Promise<void> {
   }
 
   const spawnArgs = ['-socket', CONDUCTORD_SOCKET, '-tray']
+  if (process.platform === 'win32') {
+    // Node on Windows cannot connect to AF_UNIX socket files via `socketPath`;
+    // have conductord also listen on a TCP loopback port for the client.
+    spawnArgs.push('-dev-port', String(CONDUCTORD_TCP_PORT))
+  }
   console.debug(`[ensureConductord] spawning: ${binPath} ${spawnArgs.join(' ')}`)
 
   const child = spawn(binPath, spawnArgs, {
     stdio: 'inherit',
     detached: true,
+    windowsHide: true,
     env: { ...process.env }
   })
   console.debug(`[ensureConductord] spawn pid=${child.pid}`)
