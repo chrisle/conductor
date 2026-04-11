@@ -18,6 +18,8 @@ export interface Tab {
   autoPilot?: boolean
   hasSession?: boolean
   refreshKey?: number
+  /** Free-form note shown on hover; edited via right-click → Edit Tab Note */
+  note?: string
 }
 
 export interface TabGroup {

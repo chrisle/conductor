@@ -30,6 +30,7 @@ export interface SerializedTab {
   initialCommand?: string
   terminalHistory?: string
   autoPilot?: boolean
+  note?: string
 }
 
 export interface SerializedTabGroup {

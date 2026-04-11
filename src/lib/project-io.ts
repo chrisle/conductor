@@ -46,6 +46,7 @@ export function serializeWorkspace(): Workspace {
           content: tab.content,
           // Persist auto pilot state so it survives app restarts (CON-45)
           autoPilot: tab.autoPilot,
+          note: tab.note,
         }
         if ((tab.type === 'terminal' || tab.type === 'claude-code' || tab.type === 'codex') && terminalBuffers.has(tab.id)) {
           try {
@@ -157,6 +158,7 @@ async function restoreWorkspace(workspace: Workspace): Promise<void> {
         content: tab.content,
         // Restore auto pilot state from persisted data (CON-45)
         autoPilot: tab.autoPilot,
+        note: tab.note,
         _terminalHistory: tab.terminalHistory
       } as any))
 

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { X, Plus, FileText, FolderOpen, FilePlus2, RotateCw, Pencil, Skull, LayoutGrid, Columns3, Rows3, UserCircle, Check } from 'lucide-react'
+import { X, Plus, FileText, FolderOpen, FilePlus2, RotateCw, Pencil, Skull, LayoutGrid, Columns3, Rows3, UserCircle, Check, StickyNote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator as CtxMenuSeparator, ContextMenuTrigger, ContextMenuSub, ContextMenuSubTrigger, ContextMenuSubContent, ContextMenuLabel } from '@/components/ui/context-menu'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useTabsStore, type Tab } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useSidebarStore } from '@/store/sidebar'
@@ -127,6 +129,8 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const renameInputRef = useRef<HTMLInputElement>(null)
+  const [noteEditTabId, setNoteEditTabId] = useState<string | null>(null)
+  const [noteEditValue, setNoteEditValue] = useState('')
   const tabBarRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const dragIndexRef = useRef<number | null>(null)
@@ -531,6 +535,26 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     setRenamingTabId(null)
   }
 
+  function startEditNote(tab: Tab) {
+    setNoteEditTabId(tab.id)
+    setNoteEditValue(tab.note ?? '')
+  }
+
+  function commitNote() {
+    if (!noteEditTabId) return
+    const trimmed = noteEditValue.trim()
+    useTabsStore.getState().updateTab(groupId, noteEditTabId, {
+      note: trimmed === '' ? undefined : trimmed,
+    })
+    setNoteEditTabId(null)
+    setNoteEditValue('')
+  }
+
+  function cancelEditNote() {
+    setNoteEditTabId(null)
+    setNoteEditValue('')
+  }
+
   const friendly = (p: string) => p.replace(/^\/Users\/[^/]+/, '~')
 
   function NumberHint({ n }: { n: number }) {
@@ -905,9 +929,12 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
           onDrop={e => handleTabDrop(e, group.tabs.length)}
         >
         <div className="flex items-end min-w-0">
+          <TooltipProvider delayDuration={600} skipDelayDuration={200}>
           {group.tabs.map((tab, index) => (
             <ContextMenu key={tab.id}>
+              <Tooltip>
               <ContextMenuTrigger asChild>
+              <TooltipTrigger asChild>
               <div
                 draggable
                 // Explicitly enable drag across the entire tab surface in Electron/Chromium,
@@ -986,6 +1013,9 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                     {tab.title}{tab.isDirty ? '*' : ''}
                   </span>
                 )}
+                {tab.note && (
+                  <StickyNote className="w-3 h-3 shrink-0 text-amber-400/80" aria-label="Has note" />
+                )}
                 <TabBadge tabId={tab.id} />
                 <Button
                   variant="ghost"
@@ -1000,7 +1030,18 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                   <X className="w-2.5 h-2.5" />
                 </Button>
               </div>
+              </TooltipTrigger>
               </ContextMenuTrigger>
+              {tab.note && (
+                <TooltipContent
+                  side="bottom"
+                  align="start"
+                  className="max-w-[320px] whitespace-pre-wrap break-words bg-zinc-900 border-zinc-700 text-zinc-200 px-2.5 py-1.5 text-ui-xs"
+                >
+                  {tab.note}
+                </TooltipContent>
+              )}
+              </Tooltip>
               <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
                 {(() => {
                   const sel = getEffectiveSelection(tab.id)
@@ -1075,6 +1116,13 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                       >
                         <Pencil className="w-3.5 h-3.5" />
                         Rename
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        className="gap-2 text-ui-base cursor-pointer"
+                        onClick={() => startEditNote(tab)}
+                      >
+                        <StickyNote className="w-3.5 h-3.5" />
+                        {tab.note ? 'Edit Tab Note' : 'Add Tab Note'}
                       </ContextMenuItem>
                       {tab.type === 'claude-code' && claudeAccounts.length > 0 && (
                         <>
@@ -1160,6 +1208,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
               </ContextMenuContent>
             </ContextMenu>
           ))}
+          </TooltipProvider>
 
           {/* New tab button doubles as drop zone for dragging tabs to the end */}
           <DropdownMenu open={newTabMenuOpen} onOpenChange={setNewTabMenuOpen}>
@@ -1309,6 +1358,36 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
         )}
 
       </div>
+
+      {/* Tab note editor dialog */}
+      <Dialog open={noteEditTabId !== null} onOpenChange={(open) => { if (!open) cancelEditNote() }}>
+        <DialogContent className="bg-zinc-900 border-zinc-700 text-zinc-100 max-w-md">
+          <DialogHeader>
+            <DialogTitle>Tab Note</DialogTitle>
+          </DialogHeader>
+          <textarea
+            autoFocus
+            value={noteEditValue}
+            onChange={(e) => setNoteEditValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault()
+                commitNote()
+              } else if (e.key === 'Escape') {
+                e.preventDefault()
+                cancelEditNote()
+              }
+            }}
+            placeholder="Add a note for this tab. Hover the tab to see it."
+            rows={6}
+            className="w-full resize-y rounded bg-zinc-950 border border-zinc-700 px-2 py-1.5 text-ui-base text-zinc-100 outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-zinc-500"
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={cancelEditNote}>Cancel</Button>
+            <Button onClick={commitNote}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
