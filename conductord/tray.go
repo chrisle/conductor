@@ -32,7 +32,7 @@ func runTray(socketPath string) {
 }
 
 func onTrayReady(socketPath string) {
-	systray.SetTemplateIcon(trayIconBytes, trayIconBytes)
+	setTrayIcon()
 	systray.SetTooltip("Conductor Service")
 
 	mTitle := systray.AddMenuItem("Conductor Service", "")
