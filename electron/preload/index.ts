@@ -47,7 +47,7 @@ const electronAPI = {
   invalidateCache: (namespace: string, key: string) => ipcRenderer.invoke('cache:invalidate', namespace, key),
 
   // Terminal (bridged to conductord Unix socket via main process)
-  createTerminal: (id: string, cwd?: string, command?: string) => ipcRenderer.invoke('terminal:create', id, cwd, command),
+  createTerminal: (id: string, cwd?: string, command?: string, shell?: string) => ipcRenderer.invoke('terminal:create', id, cwd, command, shell),
   writeTerminal: (id: string, data: string) => ipcRenderer.invoke('terminal:write', id, data),
   resizeTerminal: (id: string, cols: number, rows: number) =>
     ipcRenderer.invoke('terminal:resize', id, cols, rows),
