@@ -79,8 +79,10 @@ export function buildAtlassianInjectScript(): string {
     console.log(PREFIX + JSON.stringify(msg));
   }
 
-  // Extract ticket key from the current URL
-  function getTicketKey() {
+  // Extract ticket key from the current URL or from the card that triggered
+  // the context menu (for board view meatball menus where the URL has no
+  // selectedIssue param).
+  function getTicketKey(contextEl) {
     var url = window.location.href;
 
     // /browse/CON-41
@@ -91,6 +93,33 @@ export function buildAtlassianInjectScript(): string {
     var params = new URLSearchParams(window.location.search);
     var selected = params.get('selectedIssue');
     if (selected && /^[A-Z][A-Z0-9]+-\\d+$/.test(selected)) return selected;
+
+    // Board view: look for the ticket key near the menu trigger.
+    // Jira cards typically have a link to /browse/KEY-123 or text matching
+    // a ticket key pattern. We find the focused/active trigger button and
+    // walk up to the card container.
+    if (contextEl) {
+      // The popup is rendered in a portal, but the trigger button that
+      // opened it usually has aria-expanded="true".
+      var trigger = document.querySelector('[aria-expanded="true"][aria-haspopup]');
+      if (trigger) {
+        // Walk up to the card container and look for a ticket key link
+        var card = trigger.closest('[data-testid*="card"], [data-rbd-draggable-id]');
+        if (!card) card = trigger.parentElement && trigger.parentElement.closest('div[class]');
+        if (card) {
+          var links = card.querySelectorAll('a[href*="/browse/"]');
+          for (var li = 0; li < links.length; li++) {
+            var href = links[li].getAttribute('href') || '';
+            var m = href.match(/\\/browse\\/([A-Z][A-Z0-9]+-\\d+)/);
+            if (m) return m[1];
+          }
+          // Fallback: find text matching a ticket key pattern in the card
+          var cardText = card.textContent || '';
+          var textMatch = cardText.match(/\\b([A-Z][A-Z0-9]+-\\d+)\\b/);
+          if (textMatch) return textMatch[1];
+        }
+      }
+    }
 
     return null;
   }
@@ -128,7 +157,7 @@ export function buildAtlassianInjectScript(): string {
     vscode: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
   };
 
-  function createMenuItem(label, iconKey, action) {
+  function createMenuItem(label, iconKey, action, cachedKey) {
     var item = document.createElement('div');
     item.className = 'conductor-menu-item';
     item.setAttribute('role', 'menuitem');
@@ -136,7 +165,7 @@ export function buildAtlassianInjectScript(): string {
     item.innerHTML = ICONS[iconKey] + '<span>' + label + '</span>';
     item.addEventListener('click', function(e) {
       e.stopPropagation();
-      var key = getTicketKey();
+      var key = cachedKey || getTicketKey(item);
       if (key) {
         sendMessage(action, key, { metaKey: e.metaKey });
       }
@@ -150,7 +179,7 @@ export function buildAtlassianInjectScript(): string {
     // Don't inject twice into the same dropdown
     if (dropdown.querySelector('.conductor-menu-group')) return;
 
-    var ticketKey = getTicketKey();
+    var ticketKey = getTicketKey(dropdown);
     if (!ticketKey) return;
 
     var group = document.createElement('div');
@@ -161,10 +190,10 @@ export function buildAtlassianInjectScript(): string {
     heading.innerHTML = ICONS.conductor + ' Conductor';
     group.appendChild(heading);
 
-    group.appendChild(createMenuItem('Start coding in tab', 'play', 'start-coding-in-tab'));
-    group.appendChild(createMenuItem('Start coding in background', 'playBg', 'start-coding-in-background'));
-    group.appendChild(createMenuItem('Open in Claude', 'claude', 'open-in-claude'));
-    group.appendChild(createMenuItem('Open in VSCode', 'vscode', 'open-in-vscode'));
+    group.appendChild(createMenuItem('Start coding in tab', 'play', 'start-coding-in-tab', ticketKey));
+    group.appendChild(createMenuItem('Start coding in background', 'playBg', 'start-coding-in-background', ticketKey));
+    group.appendChild(createMenuItem('Open in Claude', 'claude', 'open-in-claude', ticketKey));
+    group.appendChild(createMenuItem('Open in VSCode', 'vscode', 'open-in-vscode', ticketKey));
 
     dropdown.appendChild(group);
   }
@@ -181,21 +210,27 @@ export function buildAtlassianInjectScript(): string {
         // Jira Cloud uses a popup layer with role="menu" or a section
         // containing menuitems. The "more actions" button (⋯) triggers
         // a dropdown with data-testid containing "action" or a role="menu".
+        // Board card menus use role="group" instead of role="menu".
         var menus = [];
-        if (node.getAttribute && node.getAttribute('role') === 'menu') {
+        if (node.getAttribute && (node.getAttribute('role') === 'menu' || node.getAttribute('role') === 'group')) {
           menus.push(node);
         }
-        // Also check for popup containers that contain role="menu" children
         if (node.querySelectorAll) {
           var nested = node.querySelectorAll('[role="menu"], [role="group"]');
           for (var k = 0; k < nested.length; k++) menus.push(nested[k]);
         }
 
+        // Find the first menu with enough items and inject once per popup.
+        // Dedup against the top-level added node so we don't inject into
+        // multiple role="group" sections within the same popup.
         for (var m = 0; m < menus.length; m++) {
-          // Only inject into menus that have menuitems (not navigation menus)
           var items = menus[m].querySelectorAll('[role="menuitem"]');
           if (items.length >= 2) {
+            // Check if this popup already has a Conductor menu anywhere
+            var popupRoot = node;
+            if (popupRoot.querySelector && popupRoot.querySelector('.conductor-menu-group')) break;
             injectConductorMenu(menus[m]);
+            break;
           }
         }
       }
