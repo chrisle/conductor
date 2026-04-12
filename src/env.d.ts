@@ -159,6 +159,8 @@ interface ElectronAPI {
 }
 
 declare global {
+  const __APP_VERSION__: string
+  const __NP3_JIRA_VERSION__: string
   interface Window {
     electronAPI: ElectronAPI
   }

@@ -1,6 +1,10 @@
 import { resolve } from 'path'
+import { readFileSync } from 'fs'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+
+const appVersion = JSON.parse(readFileSync(resolve('package.json'), 'utf-8')).version
+const jiraExtVersion = JSON.parse(readFileSync(resolve('../np3-jira/package.json'), 'utf-8')).version
 
 export default defineConfig({
   main: {
@@ -51,6 +55,10 @@ export default defineConfig({
         '@np3/jira': resolve('../np3-jira/src/index.ts')
       }
     },
-    plugins: [react()]
+    plugins: [react()],
+    define: {
+      __APP_VERSION__: JSON.stringify(appVersion),
+      __NP3_JIRA_VERSION__: JSON.stringify(jiraExtVersion),
+    }
   }
 })

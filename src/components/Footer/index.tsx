@@ -266,6 +266,8 @@ export default function Footer(): React.ReactElement {
 
   return (
     <div className="flex items-center h-6 bg-zinc-900 border-t border-zinc-800 shrink-0 text-ui-sm select-none overflow-visible">
+      <span className="px-2 text-zinc-600">v{__APP_VERSION__}</span>
+      <Separator orientation="vertical" className="h-3 bg-zinc-800" />
       <button
         onClick={() => useUIStore.getState().setGoToOpen(true)}
         className="flex items-center gap-1.5 text-white hover:text-zinc-300 transition-colors cursor-pointer px-2"
