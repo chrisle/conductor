@@ -6,10 +6,10 @@
  * cleans up the session. Runs on a configurable interval.
  */
 
-import os from 'os'
 import * as termAPI from './terminal-ws'
 import { stripAnsi } from './terminal-detection'
 import { useClaudeUsageStore } from '@/store/claude-usage'
+import { useSidebarStore } from '@/store/sidebar'
 import type { ClaudeUsageData, UsageTier } from '@/store/claude-usage'
 
 /** Prefix for hidden usage-scraper session IDs */
@@ -216,9 +216,11 @@ async function scrapeOnce(): Promise<void> {
     termAPI.onTerminalData(dataHandler)
 
     // Create hidden PTY session with the usage command.
-    // Use os.tmpdir() as cwd so the PTY doesn't fall back to os.homedir(), which
-    // triggers macOS TCC permission prompts for Desktop/Documents access.
-    await termAPI.createTerminal(sessionId, os.tmpdir(), 'claude "/usage"\n')
+    // Use the project root (where the .conductor file lives) so Claude picks up
+    // the right context, or fall back to the user's home directory.
+    const cwd = useSidebarStore.getState().rootPath
+      || await window.electronAPI.getHomeDir()
+    await termAPI.createTerminal(sessionId, cwd, 'claude "/usage"\n')
 
     // Enable autopilot so conductord auto-accepts any permission prompts
     termAPI.setAutoPilot(sessionId, true)
