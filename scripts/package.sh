@@ -99,9 +99,18 @@ if [ -f "$ROOT_DIR/.env" ]; then
   set +a
 fi
 
-# electron-builder uses CSC_LINK / CSC_KEY_PASSWORD for the certificate
-export CSC_LINK="${APPLE_CERTIFICATE_P12:-}"
-export CSC_KEY_PASSWORD="${APPLE_CERTIFICATE_PASSWORD:-}"
+# electron-builder uses CSC_LINK / CSC_KEY_PASSWORD for the certificate.
+# Only export when set — an empty CSC_LINK makes electron-builder treat the
+# current directory as a cert path and fail with "<cwd> not a file".
+if [ -n "${APPLE_CERTIFICATE_P12:-}" ]; then
+  export CSC_LINK="$APPLE_CERTIFICATE_P12"
+  export CSC_KEY_PASSWORD="${APPLE_CERTIFICATE_PASSWORD:-}"
+  echo "    Signing with Apple certificate from \$APPLE_CERTIFICATE_P12."
+else
+  # Disable keychain auto-discovery so unsigned builds don't grab a random identity.
+  export CSC_IDENTITY_AUTO_DISCOVERY=false
+  echo "    No APPLE_CERTIFICATE_P12 set — building with ad-hoc signature."
+fi
 # APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID are read by electron-builder directly
 
 # ── Build + package Electron app ─────────────────────────────────────────────
