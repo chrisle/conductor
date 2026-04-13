@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "main": "./out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "npm run build --prefix ../np3-jira && electron-vite dev",
     "dev-web": "vite --config vite.web.config.ts",
     "build": "electron-vite build",
     "preview": "electron-vite preview",

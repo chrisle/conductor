@@ -1,20 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { FilePlus, FolderPlus, Bot, Terminal } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from '@/components/ui/context-menu'
 import FileTreeNode from './FileTreeNode'
 import { useSidebarStore, type FileEntry } from '@/store/sidebar'
-import { useTabsStore } from '@/store/tabs'
-import { useLayoutStore } from '@/store/layout'
-import { nextSessionId } from '@/lib/session-id'
-import { resolveTerminalCwd, saveTerminalCwd } from '@/lib/terminal-cwd'
 
 interface FileTreeProps {
   groupId: string
@@ -29,34 +17,6 @@ export default function FileTree({ groupId }: FileTreeProps): React.ReactElement
   const [newName, setNewName] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const { rootPath, setRootPath } = useSidebarStore()
-  const { addTab } = useTabsStore()
-  const { focusedGroupId } = useLayoutStore()
-
-  function openClaudeHere() {
-    const cwd = rootPath || '/'
-    const layoutGroupIds = useLayoutStore.getState().getAllGroupIds()
-    const targetGroupId = (focusedGroupId && layoutGroupIds.includes(focusedGroupId))
-      ? focusedGroupId
-      : groupId
-    const id = nextSessionId('claude-code')
-    addTab(targetGroupId, {
-      id,
-      type: 'claude-code',
-      title: id,
-      filePath: cwd,
-      initialCommand: 'claude\n',
-    })
-  }
-
-  function openTerminalHere() {
-    const cwd = rootPath || resolveTerminalCwd()
-    saveTerminalCwd(cwd)
-    const layoutGroupIds = useLayoutStore.getState().getAllGroupIds()
-    const targetGroupId = (focusedGroupId && layoutGroupIds.includes(focusedGroupId))
-      ? focusedGroupId
-      : groupId
-    addTab(targetGroupId, { type: 'terminal', title: 'Terminal', filePath: cwd })
-  }
 
   useEffect(() => {
     async function init() {
@@ -141,8 +101,6 @@ export default function FileTree({ groupId }: FileTreeProps): React.ReactElement
   }
 
   return (
-    <ContextMenu>
-    <ContextMenuTrigger asChild>
     <ScrollArea className="flex-1 h-full">
       <div className="py-1">
         {rootPath && rootPath !== '/' && (
@@ -187,38 +145,5 @@ export default function FileTree({ groupId }: FileTreeProps): React.ReactElement
         ))}
       </div>
     </ScrollArea>
-    </ContextMenuTrigger>
-    <ContextMenuContent className="bg-zinc-900 border-zinc-700 min-w-[140px]">
-      <ContextMenuItem
-        className="gap-2 text-xs cursor-pointer"
-        onClick={() => { setCreating('file'); setNewName('') }}
-      >
-        <FilePlus className="w-3.5 h-3.5" />
-        New File
-      </ContextMenuItem>
-      <ContextMenuItem
-        className="gap-2 text-xs cursor-pointer"
-        onClick={() => { setCreating('folder'); setNewName('') }}
-      >
-        <FolderPlus className="w-3.5 h-3.5" />
-        New Folder
-      </ContextMenuItem>
-      <ContextMenuSeparator className="bg-zinc-700" />
-      <ContextMenuItem
-        className="gap-2 text-xs cursor-pointer"
-        onClick={openClaudeHere}
-      >
-        <Bot className="w-3.5 h-3.5" />
-        Open Claude here
-      </ContextMenuItem>
-      <ContextMenuItem
-        className="gap-2 text-xs cursor-pointer"
-        onClick={openTerminalHere}
-      >
-        <Terminal className="w-3.5 h-3.5" />
-        Open Terminal here
-      </ContextMenuItem>
-    </ContextMenuContent>
-    </ContextMenu>
   )
 }

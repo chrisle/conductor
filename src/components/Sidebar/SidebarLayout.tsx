@@ -17,7 +17,7 @@ export default function SidebarLayout({
       <div className="flex flex-col h-full overflow-hidden min-w-0 text-zinc-300">
         <SidebarHeader {...headerProps} />
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 flex flex-col overflow-y-auto">
           {children}
         </div>
 
