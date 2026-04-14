@@ -12,10 +12,9 @@ import (
 	"fyne.io/systray"
 )
 
-// setTrayIcon uses the PNG as a template image so macOS can recolor it
-// automatically for light/dark menu bars.
+// setTrayIcon sets the full-color app logo as the menu bar icon.
 func setTrayIcon() {
-	systray.SetTemplateIcon(trayIconPNG, trayIconPNG)
+	systray.SetIcon(trayIconPNG2x)
 }
 
 // getShell resolves the shell preference to an absolute path. An empty `pref`
