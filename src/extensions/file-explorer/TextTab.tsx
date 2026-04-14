@@ -23,6 +23,7 @@ function getLanguage(filePath?: string): string {
 
 export default function TextTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
   const filePath = tab.filePath
+  const isVirtual = !!(tab.gitRef && tab.gitRepoRoot)
   const [content, setContent] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -33,14 +34,16 @@ export default function TextTab({ tabId, groupId, isActive, tab }: TabProps): Re
     if (filePath) {
       loadFile()
     }
-  }, [filePath])
+  }, [filePath, tab.gitRef])
 
   async function loadFile() {
     if (!filePath) return
     setIsLoading(true)
     setError(null)
     try {
-      const result = await window.electronAPI.readFile(filePath)
+      const result = isVirtual
+        ? await window.electronAPI.gitShowFile(tab.gitRepoRoot!, tab.gitRef!, filePath)
+        : await window.electronAPI.readFile(filePath)
       if (result.success) {
         setContent(result.content || '')
       } else {
@@ -53,13 +56,14 @@ export default function TextTab({ tabId, groupId, isActive, tab }: TabProps): Re
   }
 
   function handleChange(value: string | undefined) {
+    if (isVirtual) return
     const newContent = value || ''
     setContent(newContent)
     updateTab(groupId, tabId, { isDirty: true, content: newContent })
   }
 
   async function handleSave() {
-    if (!filePath || !content) return
+    if (isVirtual || !filePath || !content) return
     const result = await window.electronAPI.writeFile(filePath, content)
     if (result.success) {
       updateTab(groupId, tabId, { isDirty: false })
@@ -115,12 +119,19 @@ export default function TextTab({ tabId, groupId, isActive, tab }: TabProps): Re
   }
 
   return (
-    <div className="h-full w-full" onKeyDown={e => {
+    <div className="h-full w-full flex flex-col" onKeyDown={e => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault()
         handleSave()
       }
     }}>
+      {isVirtual && (
+        <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-900/20 border-b border-amber-700/30 shrink-0">
+          <span className="text-ui-xs text-amber-400">
+            Read-only: viewing <span className="font-medium">{tab.gitRef}:{filePath}</span>
+          </span>
+        </div>
+      )}
       <Editor
         height="100%"
         language={getLanguage(filePath)}
@@ -146,6 +157,7 @@ export default function TextTab({ tabId, groupId, isActive, tab }: TabProps): Re
           glyphMargin: false,
           folding: true,
           overviewRulerBorder: false,
+          readOnly: isVirtual,
           scrollbar: {
             verticalScrollbarSize: 6,
             horizontalScrollbarSize: 6
