@@ -9,8 +9,8 @@ function resetStore() {
     workspaceNames: [],
     dirtyWorkspaces: new Set(),
     recentProjects: [],
-    jiraSpaceKeys: [],
-    jiraConnectionId: null,
+    providerProjectKeys: [],
+    providerConnectionId: null,
     projectSettings: undefined,
     workspaceSettings: undefined,
     sessionTitles: {},
@@ -64,7 +64,7 @@ describe('useProjectStore', () => {
     it('resets all project state', () => {
       useProjectStore.getState().setProject('/path', 'Proj')
       useProjectStore.getState().setActiveWorkspace('ws1')
-      useProjectStore.getState().setJiraConfig(['KEY'], 'conn-1')
+      useProjectStore.getState().setProviderConfig(['KEY'], 'conn-1')
       useProjectStore.getState().clearProject()
 
       const state = useProjectStore.getState()
@@ -73,8 +73,8 @@ describe('useProjectStore', () => {
       expect(state.activeWorkspace).toBeNull()
       expect(state.workspaceNames).toEqual([])
       expect(state.dirtyWorkspaces.size).toBe(0)
-      expect(state.jiraSpaceKeys).toEqual([])
-      expect(state.jiraConnectionId).toBeNull()
+      expect(state.providerProjectKeys).toEqual([])
+      expect(state.providerConnectionId).toBeNull()
       expect(state.projectSettings).toBeUndefined()
       expect(state.workspaceSettings).toBeUndefined()
       expect(state.sessionTitles).toEqual({})
@@ -82,16 +82,16 @@ describe('useProjectStore', () => {
     })
   })
 
-  describe('setJiraConfig', () => {
+  describe('setProviderConfig', () => {
     it('sets space keys and connection id', () => {
-      useProjectStore.getState().setJiraConfig(['PROJ', 'DEV'], 'conn-1')
-      expect(useProjectStore.getState().jiraSpaceKeys).toEqual(['PROJ', 'DEV'])
-      expect(useProjectStore.getState().jiraConnectionId).toBe('conn-1')
+      useProjectStore.getState().setProviderConfig(['PROJ', 'DEV'], 'conn-1')
+      expect(useProjectStore.getState().providerProjectKeys).toEqual(['PROJ', 'DEV'])
+      expect(useProjectStore.getState().providerConnectionId).toBe('conn-1')
     })
 
     it('sets connectionId to null when not provided', () => {
-      useProjectStore.getState().setJiraConfig(['KEY'])
-      expect(useProjectStore.getState().jiraConnectionId).toBeNull()
+      useProjectStore.getState().setProviderConfig(['KEY'])
+      expect(useProjectStore.getState().providerConnectionId).toBeNull()
     })
   })
 

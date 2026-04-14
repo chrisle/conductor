@@ -102,7 +102,7 @@ const mock: typeof window.electronAPI = {
   forceClose: noopAsync,
   isMaximized: async () => false,
   openNewWindow: noopAsync,
-  onCloseRequested: noop,
+  onCloseRequested: () => noop,
   offCloseRequested: noop,
 
   // File system
@@ -182,11 +182,11 @@ const mock: typeof window.electronAPI = {
   // Claude
   generateTicket: async () => ({ success: false, error: 'Not available in web mode' }),
 
-  // Jira
-  jiraFetch: async () => ({ ok: false, status: 0, body: null, error: 'Not available in web mode' }),
-  jiraPost: async () => ({ ok: false, status: 0, body: null, error: 'Not available in web mode' }),
-  jiraPut: async () => ({ ok: false, status: 0, body: null, error: 'Not available in web mode' }),
-  jiraDelete: async () => ({ ok: false, status: 0, body: null, error: 'Not available in web mode' }),
+  // HTTP proxy
+  httpFetch: async () => ({ ok: false, status: 0, body: null, error: 'Not available in web mode' }),
+  httpPost: async () => ({ ok: false, status: 0, body: null, error: 'Not available in web mode' }),
+  httpPut: async () => ({ ok: false, status: 0, body: null, error: 'Not available in web mode' }),
+  httpDelete: async () => ({ ok: false, status: 0, body: null, error: 'Not available in web mode' }),
 
   // Extensions
   getExtensionsDir: async () => '/tmp/extensions',
@@ -222,8 +222,12 @@ const mock: typeof window.electronAPI = {
   conductordKillTmuxSession: noopAsync,
 
   // Close tab
-  onCloseTabRequested: noop,
+  onCloseTabRequested: () => noop,
   offCloseTabRequested: noop,
+
+  // Open file association
+  onOpenFile: () => null,
+  offOpenFile: noop,
 
   // Session metrics
   getSessionMetrics: async () => null,
@@ -231,6 +235,7 @@ const mock: typeof window.electronAPI = {
   // Debug / shell
   logDebug: noop,
   openExternal: noopAsync,
+  showItemInFolder: noopAsync,
 
   // Webview GPU throttling
   suspendWebview: noopAsync,

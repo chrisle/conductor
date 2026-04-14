@@ -237,7 +237,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
         await sessionsStore.createSession({
           projectPath: useProjectStore.getState().filePath || '',
           ticketKey,
-          jiraConnectionId: '',
+          providerConnectionId: '',
           worktree,
           sessionId: tmuxName,
           claudeSessionId: null,
@@ -257,7 +257,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
         await sessionsStore.createSession({
           projectPath: useProjectStore.getState().filePath || '',
           ticketKey,
-          jiraConnectionId: '',
+          providerConnectionId: '',
           worktree,
           sessionId: tmuxName,
           claudeSessionId: null,

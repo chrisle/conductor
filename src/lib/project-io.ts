@@ -101,9 +101,9 @@ export function serializeProject(): ConductorProject {
       expandedPaths: Array.from(sidebar.expandedPaths)
     },
     activeExtensionId: activityBar.activeExtensionId,
-    jira: project.jiraSpaceKeys.length > 0 ? {
-      spaceKeys: project.jiraSpaceKeys,
-      connectionId: project.jiraConnectionId ?? undefined,
+    provider: project.providerProjectKeys.length > 0 ? {
+      projectKeys: project.providerProjectKeys,
+      connectionId: project.providerConnectionId ?? undefined,
     } : undefined,
     settings: project.projectSettings,
     sessionTitles: Object.keys(project.sessionTitles).length > 0 ? project.sessionTitles : undefined,
@@ -246,9 +246,10 @@ export async function restoreProject(project: ConductorProject, projectDir?: str
   projectStore.setActiveWorkspace(wsName)
   projectStore.setWorkspaceNames(workspaceNames)
 
-  // Restore Jira config (v3+)
-  if (project.jira) {
-    projectStore.setJiraConfig(project.jira.spaceKeys, project.jira.connectionId)
+  // Restore provider config (v3+)
+  const providerData = project.provider ?? (project as any).jira
+  if (providerData) {
+    projectStore.setProviderConfig(providerData.projectKeys ?? providerData.spaceKeys, providerData.connectionId)
   }
 
   // Restore settings
@@ -312,9 +313,9 @@ export async function saveProject(filePath: string): Promise<void> {
       expandedPaths: Array.from(sidebar.expandedPaths)
     },
     activeExtensionId: activityBar.activeExtensionId,
-    jira: project.jiraSpaceKeys.length > 0 ? {
-      spaceKeys: project.jiraSpaceKeys,
-      connectionId: project.jiraConnectionId ?? undefined,
+    provider: project.providerProjectKeys.length > 0 ? {
+      projectKeys: project.providerProjectKeys,
+      connectionId: project.providerConnectionId ?? undefined,
     } : undefined,
     settings: project.projectSettings,
     sessionTitles: Object.keys(project.sessionTitles).length > 0 ? project.sessionTitles : undefined,

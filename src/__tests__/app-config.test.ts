@@ -23,8 +23,8 @@ describe('DEFAULT_APP_CONFIG', () => {
     expect(DEFAULT_APP_CONFIG.defaultClaudeAccountId).toBeNull()
   })
 
-  it('has empty jira connections', () => {
-    expect(DEFAULT_APP_CONFIG.jiraConnections).toEqual([])
+  it('has empty provider connections', () => {
+    expect(DEFAULT_APP_CONFIG.providerConnections).toEqual([])
   })
 
   it('has claude code default settings', () => {

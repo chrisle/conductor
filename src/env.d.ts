@@ -22,10 +22,12 @@ interface ElectronAPI {
   forceClose: () => Promise<void>
   isMaximized: () => Promise<boolean>
   openNewWindow: () => Promise<void>
-  onCloseRequested: (callback: () => void) => void
-  offCloseRequested: (callback: () => void) => void
-  onCloseTabRequested: (callback: () => void) => void
-  offCloseTabRequested: (callback: () => void) => void
+  onCloseRequested: (callback: () => void) => any
+  offCloseRequested: (handler: any) => void
+  onCloseTabRequested: (callback: () => void) => any
+  offCloseTabRequested: (handler: any) => void
+  onOpenFile: (callback: (filePath: string) => void) => any
+  offOpenFile: (handler: any) => void
 
   // File system
   readDir: (path: string) => Promise<Array<{
@@ -123,11 +125,11 @@ interface ElectronAPI {
   generateTicket: (description: string, projectKey: string, epicSummary?: string) =>
     Promise<{ success: boolean; summary?: string; description?: string; issueType?: string; error?: string }>
 
-  // Jira
-  jiraFetch: (url: string, headers: Record<string, string>) => Promise<{ ok: boolean; status: number; body: unknown; error?: string }>
-  jiraPost: (url: string, headers: Record<string, string>, body: string) => Promise<{ ok: boolean; status: number; body: unknown; error?: string }>
-  jiraPut: (url: string, headers: Record<string, string>, body: string) => Promise<{ ok: boolean; status: number; body: unknown; error?: string }>
-  jiraDelete: (url: string, headers: Record<string, string>) => Promise<{ ok: boolean; status: number; body: unknown; error?: string }>
+  // HTTP proxy
+  httpFetch: (url: string, headers: Record<string, string>) => Promise<{ ok: boolean; status: number; body: unknown; error?: string }>
+  httpPost: (url: string, headers: Record<string, string>, body: string) => Promise<{ ok: boolean; status: number; body: unknown; error?: string }>
+  httpPut: (url: string, headers: Record<string, string>, body: string) => Promise<{ ok: boolean; status: number; body: unknown; error?: string }>
+  httpDelete: (url: string, headers: Record<string, string>) => Promise<{ ok: boolean; status: number; body: unknown; error?: string }>
 
   // Extensions
   getExtensionsDir: () => Promise<string>
@@ -157,6 +159,7 @@ interface ElectronAPI {
 
   // Shell
   openExternal: (url: string) => Promise<void>
+  showItemInFolder: (fullPath: string) => Promise<void>
 
   // Webview GPU throttling
   suspendWebview: (webContentsId: number) => Promise<void>
@@ -168,7 +171,7 @@ interface ElectronAPI {
 
 declare global {
   const __APP_VERSION__: string
-  const __NP3_JIRA_VERSION__: string
+  const __KANBAN_EXTENSION_VERSION__: string
   interface Window {
     electronAPI: ElectronAPI
   }

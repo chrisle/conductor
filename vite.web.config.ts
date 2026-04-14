@@ -11,7 +11,7 @@ export default defineConfig({
       '@renderer': resolve('src'),
       '@': resolve('src'),
       '@conductor/extension-sdk': resolve('../conductor-extension-sdk/src/index.ts'),
-      '@np3/jira': resolve('../np3-jira/src/index.ts')
+      '@kanban-extension': resolve('../kanban-extension/src/index.ts')
     }
   },
   server: {

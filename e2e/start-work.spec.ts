@@ -1,5 +1,5 @@
 /**
- * Temporary E2E test: Jira Start Work → Claude tab with autopilot
+ * Temporary E2E test: Start Work → Claude tab with autopilot
  *
  * Connects to real Electron via CDP. Opens the CON board, waits for
  * tickets to load, then triggers Start Work on CON-4 via the UI.
@@ -17,7 +17,7 @@ import {
   readTerminalRows,
 } from './real-helpers'
 
-test.describe('Jira Start Work – CON-4', () => {
+test.describe('Start Work – CON-4', () => {
   let electronProcess: ChildProcess
   let browser: Browser
   let page: Page
@@ -68,14 +68,14 @@ test.describe('Jira Start Work – CON-4', () => {
       sidebar.getState().setRootPath('/Users/chrisle/code/conductor')
     })
     await new Promise(r => setTimeout(r, 300))
-    await page.screenshot({ path: 'e2e/screenshots/jira-start-work-01-ready.png' })
+    await page.screenshot({ path: 'e2e/screenshots/start-work-01-ready.png' })
 
     // 3. Open the CON board tab
     await page.evaluate(() => {
       const { tabs, layout } = (window as any).__stores__
       const groupId = layout.getState().getAllGroupIds()[0]
       tabs.getState().addTab(groupId, {
-        type: 'jira-board',
+        type: 'kanban-board',
         title: 'CON Board',
         content: 'CON',
       })
@@ -84,7 +84,7 @@ test.describe('Jira Start Work – CON-4', () => {
     // 4. Wait for board to load (CON-4 appears)
     const con4Btn = page.locator('button', { hasText: 'CON-4' }).first()
     await con4Btn.waitFor({ state: 'visible', timeout: 30_000 })
-    await page.screenshot({ path: 'e2e/screenshots/jira-start-work-02-board.png' })
+    await page.screenshot({ path: 'e2e/screenshots/start-work-02-board.png' })
 
     // 5. Click Worktree > Start Work on CON-4
     //    Scroll CON-4 into view first
@@ -115,12 +115,12 @@ test.describe('Jira Start Work – CON-4', () => {
     // Wait for and click "Start work" menu item
     const startWorkItem = page.locator('[role="menuitem"]', { hasText: 'Start work' })
     await startWorkItem.waitFor({ state: 'visible', timeout: 5_000 })
-    await page.screenshot({ path: 'e2e/screenshots/jira-start-work-03-menu.png' })
+    await page.screenshot({ path: 'e2e/screenshots/start-work-03-menu.png' })
     await startWorkItem.click()
 
     // 6. Wait for Claude tab to appear in the store
     await new Promise(r => setTimeout(r, 2000))
-    await page.screenshot({ path: 'e2e/screenshots/jira-start-work-04-clicked.png' })
+    await page.screenshot({ path: 'e2e/screenshots/start-work-04-clicked.png' })
 
     const claudeTab = await page.waitForFunction(() => {
       const { tabs } = (window as any).__stores__
@@ -151,7 +151,7 @@ test.describe('Jira Start Work – CON-4', () => {
     expect(tabData.autoPilot).toBe(true)
     expect(tabData.initialCommand).toContain('claude')
     expect(tabData.initialCommand).toContain('--dangerously-skip-permissions')
-    await page.screenshot({ path: 'e2e/screenshots/jira-start-work-05-tab.png' })
+    await page.screenshot({ path: 'e2e/screenshots/start-work-05-tab.png' })
 
     // 8. Wait for xterm to mount
     await page.locator('.xterm').first().waitFor({ state: 'attached', timeout: 15_000 })
@@ -178,7 +178,7 @@ test.describe('Jira Start Work – CON-4', () => {
       }
       if (combined.includes('number expected') || combined.includes('Process exited')) {
         console.error('FAIL: Process crashed. Terminal:', combined.slice(0, 300))
-        await page.screenshot({ path: 'e2e/screenshots/jira-start-work-FAIL.png' })
+        await page.screenshot({ path: 'e2e/screenshots/start-work-FAIL.png' })
         break
       }
       if (i % 10 === 9) {
@@ -187,7 +187,7 @@ test.describe('Jira Start Work – CON-4', () => {
       }
     }
 
-    await page.screenshot({ path: 'e2e/screenshots/jira-start-work-06-final.png' })
+    await page.screenshot({ path: 'e2e/screenshots/start-work-06-final.png' })
     expect(claudeStarted).toBe(true)
     console.log('SUCCESS: Claude Code started with autopilot for CON-4')
   })

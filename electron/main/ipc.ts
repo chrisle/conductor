@@ -744,8 +744,8 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
     }
   })
 
-  // Jira proxy (avoids CORS in renderer)
-  ipcMain.handle('jira:fetch', async (_event, url: string, headers: Record<string, string>) => {
+  // HTTP proxy (avoids CORS in renderer)
+  ipcMain.handle('http:fetch', async (_event, url: string, headers: Record<string, string>) => {
     try {
       const res = await fetch(url, { headers })
       const contentType = res.headers.get('content-type') || ''
@@ -756,7 +756,7 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
     }
   })
 
-  ipcMain.handle('jira:post', async (_event, url: string, headers: Record<string, string>, body: string) => {
+  ipcMain.handle('http:post', async (_event, url: string, headers: Record<string, string>, body: string) => {
     try {
       const res = await fetch(url, { method: 'POST', headers, body })
       const contentType = res.headers.get('content-type') || ''
@@ -767,7 +767,7 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
     }
   })
 
-  ipcMain.handle('jira:put', async (_event, url: string, headers: Record<string, string>, body: string) => {
+  ipcMain.handle('http:put', async (_event, url: string, headers: Record<string, string>, body: string) => {
     try {
       const res = await fetch(url, { method: 'PUT', headers, body })
       const contentType = res.headers.get('content-type') || ''
@@ -778,7 +778,7 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
     }
   })
 
-  ipcMain.handle('jira:delete', async (_event, url: string, headers: Record<string, string>) => {
+  ipcMain.handle('http:delete', async (_event, url: string, headers: Record<string, string>) => {
     try {
       const res = await fetch(url, { method: 'DELETE', headers })
       const contentType = res.headers.get('content-type') || ''
@@ -1078,6 +1078,10 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
     } catch (err) {
       console.error('[ipc] Failed to open external URL:', url, err)
     }
+  })
+
+  ipcMain.handle('shell:showItemInFolder', (_event, fullPath: string) => {
+    shell.showItemInFolder(fullPath)
   })
 
   // Webview GPU throttling — reduce compositing when browser tab is hidden

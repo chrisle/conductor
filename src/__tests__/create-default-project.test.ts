@@ -18,8 +18,8 @@ function seedProjectState() {
     activeWorkspace: 'dev',
     workspaceNames: ['default', 'dev'],
     dirtyWorkspaces: new Set(['dev']),
-    jiraSpaceKeys: ['PROJ'],
-    jiraConnectionId: 'conn-1',
+    providerProjectKeys: ['PROJ'],
+    providerConnectionId: 'conn-1',
     projectSettings: { terminal: {} },
     workspaceSettings: { terminal: {} },
     sessionTitles: { 'tab-1': 'My Session' },
@@ -39,8 +39,8 @@ describe('createDefaultProject', () => {
       workspaceNames: [],
       dirtyWorkspaces: new Set(),
       recentProjects: [],
-      jiraSpaceKeys: [],
-      jiraConnectionId: null,
+      providerProjectKeys: [],
+      providerConnectionId: null,
       projectSettings: undefined,
       workspaceSettings: undefined,
       sessionTitles: {},
@@ -76,11 +76,11 @@ describe('createDefaultProject', () => {
     expect(useProjectStore.getState().dirtyWorkspaces.size).toBe(0)
   })
 
-  it('clears Jira config', () => {
+  it('clears provider config', () => {
     seedProjectState()
     createDefaultProject()
-    expect(useProjectStore.getState().jiraSpaceKeys).toEqual([])
-    expect(useProjectStore.getState().jiraConnectionId).toBeNull()
+    expect(useProjectStore.getState().providerProjectKeys).toEqual([])
+    expect(useProjectStore.getState().providerConnectionId).toBeNull()
   })
 
   it('clears project and workspace settings', () => {

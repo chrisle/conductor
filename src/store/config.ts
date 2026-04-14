@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import type { AppConfig, ClaudeAccount, JiraConnection, DeepPartial, TerminalCustomization, EditorCustomization, KeyboardShortcut } from '../types/app-config'
-import { DEFAULT_APP_CONFIG, DEFAULT_TERMINAL_CUSTOMIZATION, DEFAULT_EDITOR_CUSTOMIZATION, DEFAULT_KEYBOARD_SHORTCUTS } from '../types/app-config'
+import type { AppConfig, ClaudeAccount, ProviderConnection, ProviderType, DeepPartial, TerminalCustomization, EditorCustomization, MarkdownCustomization, KeyboardShortcut } from '../types/app-config'
+import { DEFAULT_APP_CONFIG, DEFAULT_TERMINAL_CUSTOMIZATION, DEFAULT_EDITOR_CUSTOMIZATION, DEFAULT_MARKDOWN_CUSTOMIZATION, DEFAULT_KEYBOARD_SHORTCUTS } from '../types/app-config'
 
 export interface ConfigState {
   config: AppConfig
@@ -25,15 +25,17 @@ export interface ConfigState {
   removeClaudeAccount: (id: string) => Promise<void>
   setDefaultClaudeAccountId: (id: string | null) => Promise<void>
 
-  // Jira connection management
-  addJiraConnection: (connection: JiraConnection) => Promise<void>
-  updateJiraConnection: (id: string, patch: Partial<JiraConnection>) => Promise<void>
-  removeJiraConnection: (id: string) => Promise<void>
-  getActiveJiraConnection: () => JiraConnection | null
+  // Provider connection management
+  addProviderConnection: (connection: ProviderConnection) => Promise<void>
+  updateProviderConnection: (id: string, patch: Partial<ProviderConnection>) => Promise<void>
+  removeProviderConnection: (id: string) => Promise<void>
+  getActiveConnection: (providerType?: ProviderType) => ProviderConnection | null
+  getConnectionById: (id: string) => ProviderConnection | null
 
   // Customization
   setTerminalCustomization: (patch: Partial<TerminalCustomization>) => Promise<void>
   setEditorCustomization: (patch: Partial<EditorCustomization>) => Promise<void>
+  setMarkdownCustomization: (patch: Partial<MarkdownCustomization>) => Promise<void>
   setKeyboardShortcuts: (shortcuts: KeyboardShortcut[]) => Promise<void>
   updateKeyboardShortcut: (id: string, keys: string) => Promise<void>
   resetCustomization: () => Promise<void>
@@ -54,7 +56,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
           ui: { ...DEFAULT_APP_CONFIG.ui, ...loaded.ui },
           claudeAccounts: loaded.claudeAccounts ?? DEFAULT_APP_CONFIG.claudeAccounts,
           defaultClaudeAccountId: loaded.defaultClaudeAccountId ?? DEFAULT_APP_CONFIG.defaultClaudeAccountId,
-          jiraConnections: loaded.jiraConnections ?? DEFAULT_APP_CONFIG.jiraConnections,
+          providerConnections: loaded.providerConnections ?? (loaded as any).jiraConnections?.map((c: any) => ({ ...c, providerType: 'jira' })) ?? DEFAULT_APP_CONFIG.providerConnections,
           aiCli: {
             claudeCode: { ...DEFAULT_APP_CONFIG.aiCli.claudeCode, ...loaded.aiCli?.claudeCode },
             codex: { ...DEFAULT_APP_CONFIG.aiCli.codex, ...loaded.aiCli?.codex },
@@ -63,6 +65,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
           customization: {
             terminal: { ...DEFAULT_TERMINAL_CUSTOMIZATION, ...(loaded as any).customization?.terminal },
             editor: { ...DEFAULT_EDITOR_CUSTOMIZATION, ...(loaded as any).customization?.editor },
+            markdown: { ...DEFAULT_MARKDOWN_CUSTOMIZATION, ...(loaded as any).customization?.markdown },
             keyboardShortcuts: (loaded as any).customization?.keyboardShortcuts ?? [...DEFAULT_KEYBOARD_SHORTCUTS],
           },
         }
@@ -180,34 +183,40 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     await window.electronAPI.patchConfig({ defaultClaudeAccountId: id } as any)
   },
 
-  addJiraConnection: async (connection) => {
-    const connections = [...get().config.jiraConnections, connection]
+  addProviderConnection: async (connection) => {
+    const connections = [...get().config.providerConnections, connection]
     set(state => ({
-      config: { ...state.config, jiraConnections: connections },
+      config: { ...state.config, providerConnections: connections },
     }))
-    await window.electronAPI.patchConfig({ jiraConnections: connections } as any)
+    await window.electronAPI.patchConfig({ providerConnections: connections } as any)
   },
 
-  updateJiraConnection: async (id, patch) => {
-    const connections = get().config.jiraConnections.map(c =>
-      c.id === id ? { ...c, ...patch } : c
+  updateProviderConnection: async (id, patch) => {
+    const connections = get().config.providerConnections.map(c =>
+      c.id === id ? { ...c, ...patch } as ProviderConnection : c
     )
     set(state => ({
-      config: { ...state.config, jiraConnections: connections },
+      config: { ...state.config, providerConnections: connections },
     }))
-    await window.electronAPI.patchConfig({ jiraConnections: connections } as any)
+    await window.electronAPI.patchConfig({ providerConnections: connections } as any)
   },
 
-  removeJiraConnection: async (id) => {
-    const connections = get().config.jiraConnections.filter(c => c.id !== id)
+  removeProviderConnection: async (id) => {
+    const connections = get().config.providerConnections.filter(c => c.id !== id)
     set(state => ({
-      config: { ...state.config, jiraConnections: connections },
+      config: { ...state.config, providerConnections: connections },
     }))
-    await window.electronAPI.patchConfig({ jiraConnections: connections } as any)
+    await window.electronAPI.patchConfig({ providerConnections: connections } as any)
   },
 
-  getActiveJiraConnection: () => {
-    return get().config.jiraConnections[0] ?? null
+  getActiveConnection: (providerType?) => {
+    const connections = get().config.providerConnections
+    if (providerType) return connections.find(c => c.providerType === providerType) ?? null
+    return connections[0] ?? null
+  },
+
+  getConnectionById: (id) => {
+    return get().config.providerConnections.find(c => c.id === id) ?? null
   },
 
   setTerminalCustomization: async (patch) => {
@@ -230,6 +239,17 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       },
     }))
     await window.electronAPI.patchConfig({ customization: { editor } } as any)
+  },
+
+  setMarkdownCustomization: async (patch) => {
+    const markdown = { ...get().config.customization.markdown, ...patch }
+    set(state => ({
+      config: {
+        ...state.config,
+        customization: { ...state.config.customization, markdown },
+      },
+    }))
+    await window.electronAPI.patchConfig({ customization: { markdown } } as any)
   },
 
   setKeyboardShortcuts: async (shortcuts) => {
@@ -259,6 +279,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     const customization = {
       terminal: { ...DEFAULT_TERMINAL_CUSTOMIZATION },
       editor: { ...DEFAULT_EDITOR_CUSTOMIZATION },
+      markdown: { ...DEFAULT_MARKDOWN_CUSTOMIZATION },
       keyboardShortcuts: [...DEFAULT_KEYBOARD_SHORTCUTS],
     }
     set(state => ({
@@ -299,9 +320,10 @@ function migrateFromLocalStorage(): AppConfig {
       const jira = JSON.parse(jiraRaw)
       // Skip migration if it's the hardcoded default config
       if (jira.domain && jira.email && jira.apiToken && jira.domain !== 'triodeofficial') {
-        config.jiraConnections = [{
+        config.providerConnections = [{
           id: 'migrated-' + jira.domain,
           name: jira.domain,
+          providerType: 'jira' as const,
           domain: jira.domain,
           email: jira.email,
           apiToken: jira.apiToken,

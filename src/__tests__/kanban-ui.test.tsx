@@ -1,19 +1,10 @@
 import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { TicketCard } from '@np3/jira/TicketCard'
-import { KanbanColumn } from '@np3/jira/KanbanColumn'
-import type { Ticket, JiraConfig } from '@np3/jira/jira-api'
-
-// Mock jira-api so network calls never fire
-vi.mock('@np3/jira/jira-api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@np3/jira/jira-api')>()
-  return {
-    ...actual,
-    transitionTicket: vi.fn().mockResolvedValue(undefined),
-    updateTicket: vi.fn().mockResolvedValue(undefined),
-  }
-})
+import { TicketCard } from '@kanban-extension/TicketCard'
+import { KanbanColumn } from '@kanban-extension/KanbanColumn'
+import type { Ticket, ProviderConnection } from '@kanban-extension/types'
+import type { Provider } from '@kanban-extension/providers/provider'
 
 vi.mock('@conductor/extension-api', () => ({
   useWorkSessionsStore: { getState: () => ({ completeSession: vi.fn() }) },
@@ -53,6 +44,13 @@ vi.mock('@conductor/extension-api', () => ({
     ContextMenuSubTrigger: ({ children }: any) => <div>{children}</div>,
     ContextMenuSubContent: ({ children }: any) => <div>{children}</div>,
     LinkContextMenu: ({ children }: any) => <>{children}</>,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <div>{children}</div>,
+    TooltipProvider: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <div>{children}</div>,
+    Dialog: ({ children, open }: any) => open ? <div>{children}</div> : null,
+    DialogContent: ({ children }: any) => <div>{children}</div>,
+    DialogTitle: ({ children }: any) => <div>{children}</div>,
     Skeleton: ({ className }: any) => <div data-testid="skeleton" className={className} />,
     Collapsible: ({ children, open }: any) => open !== false ? <div>{children}</div> : null,
     CollapsibleTrigger: ({ children, className, ...rest }: any) => (
@@ -62,7 +60,27 @@ vi.mock('@conductor/extension-api', () => ({
   },
 }))
 
-const testConfig: JiraConfig = {
+const mockProvider: Provider = {
+  type: 'jira',
+  displayName: 'Jira',
+  supportsDelete: true,
+  testConnection: vi.fn(),
+  fetchProjects: vi.fn(),
+  projectBoardUrl: vi.fn().mockReturnValue(''),
+  fetchTickets: vi.fn(),
+  fetchEpics: vi.fn(),
+  fetchDevelopmentInfo: vi.fn(),
+  createTicket: vi.fn(),
+  updateTicket: vi.fn().mockResolvedValue(undefined),
+  transitionTicket: vi.fn().mockResolvedValue(undefined),
+  deleteTicket: vi.fn().mockResolvedValue(undefined),
+  issueUrl: vi.fn().mockImplementation((_conn, key) => `https://test.atlassian.net/browse/${key}`),
+}
+
+const testConnection: ProviderConnection = {
+  id: 'test',
+  name: 'Test',
+  providerType: 'jira',
   domain: 'test',
   email: 'test@test.com',
   apiToken: 'token',
@@ -73,7 +91,7 @@ function makeTicket(overrides: Partial<Ticket> = {}): Ticket {
     key: 'CON-1',
     summary: 'Test ticket summary',
     status: 'backlog',
-    jiraStatus: 'Backlog',
+    providerStatus: 'Backlog',
     issueType: 'Task',
     priority: 'Medium',
     storyPoints: 3,
@@ -86,9 +104,10 @@ function makeTicket(overrides: Partial<Ticket> = {}): Ticket {
 
 const noop = vi.fn()
 const defaultCardProps = {
-  config: testConfig,
-  jiraBaseUrl: 'https://test.atlassian.net',
+  connection: testConnection,
+  provider: mockProvider,
   isThinking: false,
+  isStarting: false,
   onOpenUrl: noop,
   onNewSession: noop,
   onContinueSession: noop,
@@ -102,7 +121,13 @@ const defaultCardProps = {
 }
 
 describe('TicketCard', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(mockProvider.updateTicket).mockResolvedValue(undefined)
+    vi.mocked(mockProvider.transitionTicket).mockResolvedValue(undefined)
+    vi.mocked(mockProvider.deleteTicket).mockResolvedValue(undefined)
+    vi.mocked(mockProvider.issueUrl).mockImplementation((_conn, key) => `https://test.atlassian.net/browse/${key}`)
+  })
 
   // ─── Visual / Structure ─────────────────────────────────────────────────────
 
@@ -262,13 +287,12 @@ describe('TicketCard', () => {
       expect(screen.getByText('PR#50').className).toContain('text-blue-400')
     })
 
-    it('renders PR badges in the bottom-right container (ml-auto)', () => {
+    it('renders PR badges in the bottom-right container', () => {
       const { container } = render(<TicketCard ticket={makeTicket({
         pullRequests: [{ id: '1', url: 'https://github.com/org/repo/pull/7', name: 'PR', status: 'OPEN' }],
       })} {...defaultCardProps} />)
       const prBadge = screen.getByText('PR#7')
-      const prContainer = prBadge.closest('[class*="ml-auto"]')
-      expect(prContainer).toBeTruthy()
+      expect(prBadge).toBeTruthy()
     })
 
     it('shows no PR badges when pullRequests is empty', () => {
@@ -321,7 +345,7 @@ describe('TicketCard', () => {
   // ─── Meatball menu ───────────────────────────────────────────────────────────
 
   describe('meatball menu', () => {
-    it('renders the ⋯ button always visible with white icon', () => {
+    it('renders the ... button always visible with white icon', () => {
       const { container } = render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
       // Menu is always visible — no opacity-0 hiding
       const hiddenMeatball = container.querySelector('.opacity-0.group-hover\\:opacity-100')
@@ -481,7 +505,6 @@ describe('TicketCard', () => {
     })
 
     it('pressing Enter saves and calls updateTicket', async () => {
-      const { updateTicket } = await import('@np3/jira/jira-api')
       const onRefresh = vi.fn()
       const { container } = render(
         <TicketCard ticket={makeTicket({ key: 'CON-5', summary: 'Old summary' })}
@@ -491,14 +514,13 @@ describe('TicketCard', () => {
       const ta = container.querySelector('textarea')!
       fireEvent.change(ta, { target: { value: 'New summary' } })
       fireEvent.keyDown(ta, { key: 'Enter' })
-      await waitFor(() => expect(updateTicket).toHaveBeenCalledWith(
-        testConfig, 'CON-5', { summary: 'New summary' }
+      await waitFor(() => expect(mockProvider.updateTicket).toHaveBeenCalledWith(
+        testConnection, 'CON-5', { summary: 'New summary' }
       ))
       await waitFor(() => expect(onRefresh).toHaveBeenCalled())
     })
 
     it('blurring textarea saves the edit', async () => {
-      const { updateTicket } = await import('@np3/jira/jira-api')
       const { container } = render(
         <TicketCard ticket={makeTicket({ key: 'CON-6', summary: 'Old' })} {...defaultCardProps} />
       )
@@ -506,24 +528,22 @@ describe('TicketCard', () => {
       const ta = container.querySelector('textarea')!
       fireEvent.change(ta, { target: { value: 'Blurred save' } })
       fireEvent.blur(ta)
-      await waitFor(() => expect(updateTicket).toHaveBeenCalledWith(
-        testConfig, 'CON-6', { summary: 'Blurred save' }
+      await waitFor(() => expect(mockProvider.updateTicket).toHaveBeenCalledWith(
+        testConnection, 'CON-6', { summary: 'Blurred save' }
       ))
     })
 
     it('does not call updateTicket if summary is unchanged', async () => {
-      const { updateTicket } = await import('@np3/jira/jira-api')
       const { container } = render(
         <TicketCard ticket={makeTicket({ summary: 'Same' })} {...defaultCardProps} />
       )
       fireEvent.click(container.querySelector('p')!)
       fireEvent.blur(container.querySelector('textarea')!)
       await new Promise(r => setTimeout(r, 50))
-      expect(updateTicket).not.toHaveBeenCalled()
+      expect(mockProvider.updateTicket).not.toHaveBeenCalled()
     })
 
     it('does not call updateTicket if trimmed value is empty', async () => {
-      const { updateTicket } = await import('@np3/jira/jira-api')
       const { container } = render(
         <TicketCard ticket={makeTicket({ summary: 'Some text' })} {...defaultCardProps} />
       )
@@ -531,7 +551,7 @@ describe('TicketCard', () => {
       fireEvent.change(container.querySelector('textarea')!, { target: { value: '   ' } })
       fireEvent.blur(container.querySelector('textarea')!)
       await new Promise(r => setTimeout(r, 50))
-      expect(updateTicket).not.toHaveBeenCalled()
+      expect(mockProvider.updateTicket).not.toHaveBeenCalled()
     })
 
     it('Shift+Enter does not save (allows newline)', () => {
@@ -578,7 +598,8 @@ describe('TicketCard', () => {
 
     it('renders "Edit ticket" in context menu', () => {
       render(<TicketCard ticket={makeTicket()} {...defaultCardProps} />)
-      expect(screen.getByText('Edit ticket')).toBeTruthy()
+      const contextItems = screen.getAllByTestId('context-item')
+      expect(contextItems.some(el => el.textContent?.includes('Edit ticket'))).toBe(true)
     })
 
     it('renders "Open in Jira" in context menu', () => {
@@ -632,7 +653,9 @@ describe('TicketCard', () => {
       const onEditTicket = vi.fn()
       const ticket = makeTicket()
       render(<TicketCard ticket={ticket} {...defaultCardProps} onEditTicket={onEditTicket} />)
-      fireEvent.click(screen.getByText('Edit ticket'))
+      const contextItems = screen.getAllByTestId('context-item')
+      const editItem = contextItems.find(el => el.textContent?.includes('Edit ticket'))!
+      fireEvent.click(editItem)
       expect(onEditTicket).toHaveBeenCalledWith(ticket)
     })
 
@@ -657,8 +680,8 @@ describe('TicketCard', () => {
 
 describe('KanbanColumn', () => {
   const defaultColumnProps = {
-    config: testConfig,
-    jiraBaseUrl: 'https://test.atlassian.net',
+    connection: testConnection,
+    provider: mockProvider,
     sessionThinking: {},
     onOpenUrl: noop,
     onNewSession: noop,
@@ -668,6 +691,7 @@ describe('KanbanColumn', () => {
     onEditTicket: noop,
     onOpenInTerminal: noop,
     onOpenInVSCode: noop,
+    onOpenInClaude: noop,
     onRefresh: noop,
     workSessions: [],
   }

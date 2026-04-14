@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "main": "./out/main/index.js",
   "scripts": {
-    "dev": "npm run build --prefix ../np3-jira && electron-vite dev",
+    "dev": "npm run build --prefix ../kanban-extension && electron-vite dev",
     "dev-web": "vite --config vite.web.config.ts",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
@@ -86,14 +86,34 @@
     "files": [
       "out/**/*"
     ],
+    "fileAssociations": [
+      {
+        "ext": "conductor",
+        "name": "Conductor Project",
+        "role": "Editor",
+        "mimeType": "application/x-conductor-project"
+      }
+    ],
     "mac": {
       "target": "dmg",
       "hardenedRuntime": true,
       "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extraResources": [
+        { "from": "conductord/conductord", "to": "conductord" }
+      ]
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "fileAssociations": [
+        {
+          "ext": "conductor",
+          "name": "Conductor Project"
+        }
+      ],
+      "extraResources": [
+        { "from": "conductord/conductord.exe", "to": "conductord.exe" }
+      ]
     }
   }
 }

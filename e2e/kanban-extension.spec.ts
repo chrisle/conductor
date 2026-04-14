@@ -1,8 +1,8 @@
 /**
- * E2E tests for the np3-jira extension install (Load Unpacked) and uninstall workflow.
+ * E2E tests for the kanban-extension extension install (Load Unpacked) and uninstall workflow.
  *
  * Success criteria:
- *  - Extension loads from the local np3-jira directory via "Load Unpacked"
+ *  - Extension loads from the local kanban-extension directory via "Load Unpacked"
  *  - It appears in the Dev (Unpacked) section of the Extensions settings panel
  *  - A 4th toolbar icon (Jira / SquareKanban) appears in the activity bar
  *  - Unloading removes it from the list and from the activity bar
@@ -12,9 +12,9 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { installTestMocks, waitForApp } from './helpers'
 
-const JIRA_EXT_DIR = join(__dirname, '../../np3-jira')
+const JIRA_EXT_DIR = join(__dirname, '../../kanban-extension')
 
-/** Read the np3-jira files from disk and inject readFile mocks, then call loadExtension. */
+/** Read the kanban-extension files from disk and inject readFile mocks, then call loadExtension. */
 async function loadJiraExtension(page: any) {
   const manifest = readFileSync(join(JIRA_EXT_DIR, 'manifest.json'), 'utf-8')
   const bundle = readFileSync(join(JIRA_EXT_DIR, 'dist/index.js'), 'utf-8')
@@ -40,7 +40,7 @@ async function loadJiraExtension(page: any) {
   )
 
   await page.waitForFunction(
-    () => (window as any).__stores__.extensionRegistry.getExtension('jira'),
+    () => (window as any).__stores__.extensionRegistry.getExtension('kanban'),
     null,
     { timeout: 5000 },
   )
@@ -57,7 +57,7 @@ async function setupLoadUnpackedMocks(page: any) {
       window.electronAPI.selectExtensionDir = async () => dir
       window.electronAPI.installUnpackedExtension = async () => ({
         success: true,
-        extensionId: 'jira',
+        extensionId: 'kanban',
         dirPath: dir,
       })
       const orig = window.electronAPI.readFile.bind(window.electronAPI)
@@ -82,7 +82,7 @@ async function openExtensionsSettings(page: any) {
   await expect(page.locator('text=Extensions').first()).toBeVisible({ timeout: 3000 })
 }
 
-test.describe('np3-jira Extension – Install & Uninstall', () => {
+test.describe('kanban-extension Extension – Install & Uninstall', () => {
   test.beforeEach(async ({ page }) => {
     await installTestMocks(page)
     await waitForApp(page)
@@ -94,12 +94,12 @@ test.describe('np3-jira Extension – Install & Uninstall', () => {
     await loadJiraExtension(page)
 
     const ext = await page.evaluate(() => {
-      const e = (window as any).__stores__.extensionRegistry.getExtension('jira')
+      const e = (window as any).__stores__.extensionRegistry.getExtension('kanban')
       return e ? { id: e.id, name: e.name, version: e.version } : null
     })
 
     expect(ext).not.toBeNull()
-    expect(ext!.id).toBe('jira')
+    expect(ext!.id).toBe('kanban')
     expect(ext!.name).toBe('Jira')
     expect(ext!.version).toBe('1.0.0') // version from bundle src/index.ts
   })
@@ -128,14 +128,14 @@ test.describe('np3-jira Extension – Install & Uninstall', () => {
         .getSidebarExtensions()
         .map((e: any) => e.id),
     )
-    expect(sidebarIds).toContain('jira')
+    expect(sidebarIds).toContain('kanban')
   })
 
   test('load unpacked: jira sidebar renders when icon toggled', async ({ page }) => {
     await loadJiraExtension(page)
 
     await page.evaluate(() =>
-      (window as any).__stores__.activityBar.getState().toggleExtension('jira'),
+      (window as any).__stores__.activityBar.getState().toggleExtension('kanban'),
     )
 
     // JiraSidebar uses <SidebarLayout title="Jira"> — CSS uppercases it visually
@@ -152,13 +152,13 @@ test.describe('np3-jira Extension – Install & Uninstall', () => {
 
     // Wait for the extension to register
     await page.waitForFunction(
-      () => (window as any).__stores__.extensionRegistry.getExtension('jira'),
+      () => (window as any).__stores__.extensionRegistry.getExtension('kanban'),
       null,
       { timeout: 5000 },
     )
 
-    // The "np3-jira" folder name should appear in the Dev (Unpacked) section
-    await expect(page.locator('text=np3-jira').first()).toBeVisible({ timeout: 3000 })
+    // The "kanban-extension" folder name should appear in the Dev (Unpacked) section
+    await expect(page.locator('text=kanban-extension').first()).toBeVisible({ timeout: 3000 })
   })
 
   // ── Uninstall ──────────────────────────────────────────────────────────────
@@ -178,12 +178,12 @@ test.describe('np3-jira Extension – Install & Uninstall', () => {
     await page.evaluate(() => {
       const stores = (window as any).__stores__
       const ab = stores.activityBar.getState()
-      if (ab.activeExtensionId === 'jira') ab.toggleExtension('jira')
-      stores.extensionRegistry.unregister('jira')
+      if (ab.activeExtensionId === 'kanban') ab.toggleExtension('kanban')
+      stores.extensionRegistry.unregister('kanban')
     })
 
     const ext = await page.evaluate(() =>
-      (window as any).__stores__.extensionRegistry.getExtension('jira'),
+      (window as any).__stores__.extensionRegistry.getExtension('kanban'),
     )
     expect(ext).toBeUndefined()
 
@@ -203,13 +203,13 @@ test.describe('np3-jira Extension – Install & Uninstall', () => {
     // Click Load Unpacked
     await page.getByRole('button', { name: 'Load Unpacked' }).click()
 
-    // Wait for registration and "np3-jira" to appear in the list
+    // Wait for registration and "kanban-extension" to appear in the list
     await page.waitForFunction(
-      () => (window as any).__stores__.extensionRegistry.getExtension('jira'),
+      () => (window as any).__stores__.extensionRegistry.getExtension('kanban'),
       null,
       { timeout: 5000 },
     )
-    await expect(page.locator('text=np3-jira').first()).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('text=kanban-extension').first()).toBeVisible({ timeout: 3000 })
 
     // Verify 4th icon is present
     const countAfterInstall = await page.evaluate(() => {
@@ -220,14 +220,14 @@ test.describe('np3-jira Extension – Install & Uninstall', () => {
     })
     expect(countAfterInstall).toBe(4)
 
-    // Hover the np3-jira row to reveal the Unload button and click it
-    const row = page.locator('text=np3-jira').first().locator('../..')
+    // Hover the kanban-extension row to reveal the Unload button and click it
+    const row = page.locator('text=kanban-extension').first().locator('../..')
     await row.hover()
     await page.getByRole('button', { name: 'Unload' }).click()
 
     // Extension should be gone from registry
     await page.waitForFunction(
-      () => !(window as any).__stores__.extensionRegistry.getExtension('jira'),
+      () => !(window as any).__stores__.extensionRegistry.getExtension('kanban'),
       null,
       { timeout: 3000 },
     )
@@ -241,7 +241,7 @@ test.describe('np3-jira Extension – Install & Uninstall', () => {
     })
     expect(countAfterUnload).toBe(3)
 
-    // np3-jira entry should be gone from the list
-    await expect(page.locator('text=np3-jira')).toHaveCount(0)
+    // kanban-extension entry should be gone from the list
+    await expect(page.locator('text=kanban-extension')).toHaveCount(0)
   })
 })

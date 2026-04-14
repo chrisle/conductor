@@ -12,12 +12,15 @@ export default defineConfig({
       '@renderer': resolve(__dirname, 'src'),
       '@conductor/extension-sdk': resolve(__dirname, '../conductor-extension-sdk/src/index.ts'),
       '@conductor/extension-api': resolve(__dirname, 'src/__tests__/extension-api-shim.ts'),
-      '@np3/jira/jira-api': resolve(__dirname, '../np3-jira/src/jira-api.ts'),
-      '@np3/jira/TicketCard': resolve(__dirname, '../np3-jira/src/TicketCard.tsx'),
-      '@np3/jira/KanbanColumn': resolve(__dirname, '../np3-jira/src/KanbanColumn.tsx'),
-      '@np3/jira/KanbanBoard': resolve(__dirname, '../np3-jira/src/KanbanBoard.tsx'),
-      '@np3/jira/EditTicketDialog': resolve(__dirname, '../np3-jira/src/EditTicketDialog.tsx'),
-      '@np3/jira': resolve(__dirname, '../np3-jira/src/index.ts')
+      '@kanban-extension/types': resolve(__dirname, '../kanban-extension/src/types.ts'),
+      '@kanban-extension/providers/jira/jira-provider': resolve(__dirname, '../kanban-extension/src/providers/jira/jira-provider.ts'),
+      '@kanban-extension/providers/jira/jira-api': resolve(__dirname, '../kanban-extension/src/providers/jira/jira-api.ts'),
+      '@kanban-extension/providers/provider': resolve(__dirname, '../kanban-extension/src/providers/provider.ts'),
+      '@kanban-extension/TicketCard': resolve(__dirname, '../kanban-extension/src/TicketCard.tsx'),
+      '@kanban-extension/KanbanColumn': resolve(__dirname, '../kanban-extension/src/KanbanColumn.tsx'),
+      '@kanban-extension/KanbanBoard': resolve(__dirname, '../kanban-extension/src/KanbanBoard.tsx'),
+      '@kanban-extension/EditTicketDialog': resolve(__dirname, '../kanban-extension/src/EditTicketDialog.tsx'),
+      '@kanban-extension': resolve(__dirname, '../kanban-extension/src/index.ts')
     }
   },
   test: {

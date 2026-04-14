@@ -62,8 +62,8 @@ export interface ConductorProject {
     expandedPaths: string[]
   }
   activeExtensionId: string | null
-  jira?: {
-    spaceKeys: string[]
+  provider?: {
+    projectKeys: string[]
     connectionId?: string
   }
   settings?: ProjectSettings
@@ -83,15 +83,15 @@ export interface ProjectState {
   workspaceNames: string[]
   dirtyWorkspaces: Set<string>
   recentProjects: Array<{ name: string; path: string }>
-  jiraSpaceKeys: string[]
-  jiraConnectionId: string | null
+  providerProjectKeys: string[]
+  providerConnectionId: string | null
   projectSettings: ProjectSettings | undefined
   workspaceSettings: ProjectSettings | undefined
   sessionTitles: Record<string, string>
   sessionFolders: SessionFolder[]
 
   setProject: (filePath: string, name: string) => void
-  setJiraConfig: (spaceKeys: string[], connectionId?: string) => void
+  setProviderConfig: (projectKeys: string[], connectionId?: string) => void
   setProjectSettings: (settings: ProjectSettings | undefined) => void
   setWorkspaceSettings: (settings: ProjectSettings | undefined) => void
   setName: (name: string) => void
@@ -131,8 +131,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   workspaceNames: [],
   dirtyWorkspaces: new Set<string>(),
   recentProjects: [],
-  jiraSpaceKeys: [],
-  jiraConnectionId: null,
+  providerProjectKeys: [],
+  providerConnectionId: null,
   projectSettings: undefined,
   workspaceSettings: undefined,
   sessionTitles: {},
@@ -146,8 +146,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     get().addRecentProject(name, filePath)
   },
 
-  setJiraConfig: (spaceKeys, connectionId) => {
-    set({ jiraSpaceKeys: spaceKeys, jiraConnectionId: connectionId ?? null })
+  setProviderConfig: (projectKeys, connectionId) => {
+    set({ providerProjectKeys: projectKeys, providerConnectionId: connectionId ?? null })
   },
 
   setName: (name) => {
@@ -159,7 +159,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   clearProject: () => set({
     filePath: null, name: null, activeWorkspace: null,
     workspaceNames: [], dirtyWorkspaces: new Set(),
-    jiraSpaceKeys: [], jiraConnectionId: null,
+    providerProjectKeys: [], providerConnectionId: null,
     projectSettings: undefined, workspaceSettings: undefined,
     sessionTitles: {}, sessionFolders: [],
   }),

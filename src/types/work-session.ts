@@ -2,7 +2,7 @@ export interface WorkSession {
   id: string
   projectPath: string
   ticketKey: string
-  jiraConnectionId: string
+  providerConnectionId: string
   worktree: {
     path: string
     branch: string

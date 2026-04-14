@@ -193,44 +193,45 @@ describe('useConfigStore', () => {
     })
   })
 
-  describe('Jira connections', () => {
+  describe('Provider connections', () => {
     const conn = {
       id: 'jira-1',
       name: 'Test Jira',
+      providerType: 'jira' as const,
       domain: 'test.atlassian.net',
       email: 'test@test.com',
       apiToken: 'token-123',
     }
 
-    it('addJiraConnection adds a connection', async () => {
-      await useConfigStore.getState().addJiraConnection(conn)
-      expect(useConfigStore.getState().config.jiraConnections).toHaveLength(1)
-      expect(useConfigStore.getState().config.jiraConnections[0]).toEqual(conn)
+    it('addProviderConnection adds a connection', async () => {
+      await useConfigStore.getState().addProviderConnection(conn)
+      expect(useConfigStore.getState().config.providerConnections).toHaveLength(1)
+      expect(useConfigStore.getState().config.providerConnections[0]).toEqual(conn)
     })
 
-    it('updateJiraConnection updates matching connection', async () => {
-      await useConfigStore.getState().addJiraConnection(conn)
-      await useConfigStore.getState().updateJiraConnection('jira-1', { name: 'Updated Jira' })
-      expect(useConfigStore.getState().config.jiraConnections[0].name).toBe('Updated Jira')
-      expect(useConfigStore.getState().config.jiraConnections[0].domain).toBe('test.atlassian.net')
+    it('updateProviderConnection updates matching connection', async () => {
+      await useConfigStore.getState().addProviderConnection(conn)
+      await useConfigStore.getState().updateProviderConnection('jira-1', { name: 'Updated Jira' })
+      expect(useConfigStore.getState().config.providerConnections[0].name).toBe('Updated Jira')
+      expect((useConfigStore.getState().config.providerConnections[0] as any).domain).toBe('test.atlassian.net')
     })
 
-    it('removeJiraConnection removes matching connection', async () => {
-      await useConfigStore.getState().addJiraConnection(conn)
-      await useConfigStore.getState().addJiraConnection({ ...conn, id: 'jira-2', name: 'Other' })
-      await useConfigStore.getState().removeJiraConnection('jira-1')
-      expect(useConfigStore.getState().config.jiraConnections).toHaveLength(1)
-      expect(useConfigStore.getState().config.jiraConnections[0].id).toBe('jira-2')
+    it('removeProviderConnection removes matching connection', async () => {
+      await useConfigStore.getState().addProviderConnection(conn)
+      await useConfigStore.getState().addProviderConnection({ ...conn, id: 'jira-2', name: 'Other' })
+      await useConfigStore.getState().removeProviderConnection('jira-1')
+      expect(useConfigStore.getState().config.providerConnections).toHaveLength(1)
+      expect(useConfigStore.getState().config.providerConnections[0].id).toBe('jira-2')
     })
 
-    it('getActiveJiraConnection returns first connection', async () => {
-      await useConfigStore.getState().addJiraConnection(conn)
-      await useConfigStore.getState().addJiraConnection({ ...conn, id: 'jira-2', name: 'Second' })
-      expect(useConfigStore.getState().getActiveJiraConnection()?.id).toBe('jira-1')
+    it('getActiveConnection returns first connection', async () => {
+      await useConfigStore.getState().addProviderConnection(conn)
+      await useConfigStore.getState().addProviderConnection({ ...conn, id: 'jira-2', name: 'Second' })
+      expect(useConfigStore.getState().getActiveConnection()?.id).toBe('jira-1')
     })
 
-    it('getActiveJiraConnection returns null when no connections', () => {
-      expect(useConfigStore.getState().getActiveJiraConnection()).toBeNull()
+    it('getActiveConnection returns null when no connections', () => {
+      expect(useConfigStore.getState().getActiveConnection()).toBeNull()
     })
   })
 })

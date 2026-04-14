@@ -9,14 +9,27 @@ const electronAPI = {
   forceClose: () => ipcRenderer.invoke('window:forceClose'),
   isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
   openNewWindow: () => ipcRenderer.invoke('window:openNew'),
-  onCloseRequested: (callback: () => void) =>
-    ipcRenderer.on('window:closeRequested', callback),
-  offCloseRequested: (callback: () => void) =>
-    ipcRenderer.removeListener('window:closeRequested', callback),
-  onCloseTabRequested: (callback: () => void) =>
-    ipcRenderer.on('tab:closeRequested', callback),
-  offCloseTabRequested: (callback: () => void) =>
-    ipcRenderer.removeListener('tab:closeRequested', callback),
+  onCloseRequested: (callback: () => void) => {
+    const handler = (_event: IpcRendererEvent) => callback()
+    ipcRenderer.on('window:closeRequested', handler)
+    return handler
+  },
+  offCloseRequested: (handler: any) =>
+    ipcRenderer.removeListener('window:closeRequested', handler),
+  onCloseTabRequested: (callback: () => void) => {
+    const handler = (_event: IpcRendererEvent) => callback()
+    ipcRenderer.on('tab:closeRequested', handler)
+    return handler
+  },
+  offCloseTabRequested: (handler: any) =>
+    ipcRenderer.removeListener('tab:closeRequested', handler),
+  onOpenFile: (callback: (filePath: string) => void) => {
+    const handler = (_event: IpcRendererEvent, filePath: string) => callback(filePath)
+    ipcRenderer.on('project:openFile', handler)
+    return handler
+  },
+  offOpenFile: (handler: any) =>
+    ipcRenderer.removeListener('project:openFile', handler),
 
   // File system
   readDir: (path: string) => ipcRenderer.invoke('fs:readDir', path),
@@ -108,11 +121,11 @@ const electronAPI = {
   generateTicket: (description: string, projectKey: string, epicSummary?: string) =>
     ipcRenderer.invoke('claude:generateTicket', description, projectKey, epicSummary),
 
-  // Jira
-  jiraFetch: (url: string, headers: Record<string, string>) => ipcRenderer.invoke('jira:fetch', url, headers),
-  jiraPost: (url: string, headers: Record<string, string>, body: string) => ipcRenderer.invoke('jira:post', url, headers, body),
-  jiraPut: (url: string, headers: Record<string, string>, body: string) => ipcRenderer.invoke('jira:put', url, headers, body),
-  jiraDelete: (url: string, headers: Record<string, string>) => ipcRenderer.invoke('jira:delete', url, headers),
+  // HTTP proxy
+  httpFetch: (url: string, headers: Record<string, string>) => ipcRenderer.invoke('http:fetch', url, headers),
+  httpPost: (url: string, headers: Record<string, string>, body: string) => ipcRenderer.invoke('http:post', url, headers, body),
+  httpPut: (url: string, headers: Record<string, string>, body: string) => ipcRenderer.invoke('http:put', url, headers, body),
+  httpDelete: (url: string, headers: Record<string, string>) => ipcRenderer.invoke('http:delete', url, headers),
 
   // Extensions
   getExtensionsDir: () => ipcRenderer.invoke('extensions:getDir'),
@@ -148,6 +161,7 @@ const electronAPI = {
 
   // Shell
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
+  showItemInFolder: (fullPath: string) => ipcRenderer.invoke('shell:showItemInFolder', fullPath),
 
   // Webview GPU throttling
   suspendWebview: (webContentsId: number) => ipcRenderer.invoke('webview:suspend', webContentsId),

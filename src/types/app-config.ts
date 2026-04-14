@@ -1,10 +1,26 @@
-export interface JiraConnection {
+export type ProviderType = 'jira' | 'gitea'
+
+export interface ProviderConnectionBase {
   id: string
   name: string
+  providerType: ProviderType
+}
+
+export interface JiraProviderConnection extends ProviderConnectionBase {
+  providerType: 'jira'
   domain: string
   email: string
   apiToken: string
 }
+
+export interface GiteaProviderConnection extends ProviderConnectionBase {
+  providerType: 'gitea'
+  baseUrl: string
+  token: string
+  ownerFilter?: string
+}
+
+export type ProviderConnection = JiraProviderConnection | GiteaProviderConnection
 
 export interface ClaudeAccount {
   id: string
@@ -39,6 +55,11 @@ export interface EditorCustomization {
   renderWhitespace: 'none' | 'selection' | 'all'
 }
 
+export interface MarkdownCustomization {
+  includeFrontmatter: boolean
+  background: 'light' | 'dark'
+}
+
 export interface KeyboardShortcut {
   id: string
   label: string
@@ -57,7 +78,7 @@ export interface AppConfig {
   claudeAccounts: ClaudeAccount[]
   /** ID of the account to use by default for new AI tabs. null = system default (ANTHROPIC_API_KEY env var) */
   defaultClaudeAccountId: string | null
-  jiraConnections: JiraConnection[]
+  providerConnections: ProviderConnection[]
   aiCli: {
     claudeCode: {
       allowYoloMode: boolean
@@ -79,6 +100,7 @@ export interface AppConfig {
   customization: {
     terminal: TerminalCustomization
     editor: EditorCustomization
+    markdown: MarkdownCustomization
     keyboardShortcuts: KeyboardShortcut[]
   }
 }
@@ -92,6 +114,11 @@ export const DEFAULT_TERMINAL_CUSTOMIZATION: TerminalCustomization = {
   colorTheme: 'default',
   scrollback: 10000,
   shell: 'default',
+}
+
+export const DEFAULT_MARKDOWN_CUSTOMIZATION: MarkdownCustomization = {
+  includeFrontmatter: false,
+  background: 'light',
 }
 
 export const DEFAULT_EDITOR_CUSTOMIZATION: EditorCustomization = {
@@ -139,7 +166,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   },
   claudeAccounts: [],
   defaultClaudeAccountId: null,
-  jiraConnections: [],
+  providerConnections: [],
   aiCli: {
     claudeCode: {
       allowYoloMode: false,
@@ -160,6 +187,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   customization: {
     terminal: { ...DEFAULT_TERMINAL_CUSTOMIZATION },
     editor: { ...DEFAULT_EDITOR_CUSTOMIZATION },
+    markdown: { ...DEFAULT_MARKDOWN_CUSTOMIZATION },
     keyboardShortcuts: [...DEFAULT_KEYBOARD_SHORTCUTS],
   },
 }

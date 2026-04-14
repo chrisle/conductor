@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Server, Download, Trash2,
   Package, RefreshCw, Puzzle, Monitor, Palette, Keyboard, RotateCcw, FolderOpen, FolderCode, X,
+  ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -17,8 +18,8 @@ import { useConfigStore } from '@/store/config'
 import { extensionRegistry } from '@/extensions'
 import { loadExtension } from '@/extensions/loader'
 import { ConductorDaemonPanel } from '@/extensions/settings/TerminalServiceTab'
-import { DEFAULT_TERMINAL_CUSTOMIZATION, DEFAULT_EDITOR_CUSTOMIZATION, DEFAULT_KEYBOARD_SHORTCUTS } from '@/types/app-config'
-import type { TerminalCustomization, EditorCustomization } from '@/types/app-config'
+import { DEFAULT_TERMINAL_CUSTOMIZATION, DEFAULT_EDITOR_CUSTOMIZATION, DEFAULT_MARKDOWN_CUSTOMIZATION, DEFAULT_KEYBOARD_SHORTCUTS } from '@/types/app-config'
+import type { TerminalCustomization, EditorCustomization, MarkdownCustomization } from '@/types/app-config'
 
 interface InstalledExtension {
   id: string
@@ -207,8 +208,10 @@ function TextInput({ value, onChange, placeholder }: { value: string; onChange: 
 function AppearanceSection(): React.ReactElement {
   const termConfig = useConfigStore(s => s.config.customization.terminal)
   const editorConfig = useConfigStore(s => s.config.customization.editor)
+  const markdownConfig = useConfigStore(s => s.config.customization.markdown)
   const setTerminal = useConfigStore(s => s.setTerminalCustomization)
   const setEditor = useConfigStore(s => s.setEditorCustomization)
+  const setMarkdown = useConfigStore(s => s.setMarkdownCustomization)
   const resetCustomization = useConfigStore(s => s.resetCustomization)
 
   return (
@@ -327,6 +330,26 @@ function AppearanceSection(): React.ReactElement {
                 { value: 'none', label: 'None' },
                 { value: 'selection', label: 'Selection' },
                 { value: 'all', label: 'All' },
+              ]}
+            />
+          </SettingRow>
+        </div>
+      </div>
+
+      {/* Markdown settings */}
+      <div className="mt-6">
+        <div className="text-ui-sm text-zinc-500 uppercase tracking-wider mb-3">Markdown</div>
+        <div className="divide-y divide-zinc-800">
+          <SettingRow label="Include Frontmatter in Preview" description="Show YAML frontmatter in the rendered preview">
+            <Switch checked={markdownConfig.includeFrontmatter} onCheckedChange={v => setMarkdown({ includeFrontmatter: v })} />
+          </SettingRow>
+          <SettingRow label="Preview Background" description="Background color for the markdown preview pane">
+            <SelectInput
+              value={markdownConfig.background}
+              onChange={v => setMarkdown({ background: v as MarkdownCustomization['background'] })}
+              options={[
+                { value: 'light', label: 'Light' },
+                { value: 'dark', label: 'Dark' },
               ]}
             />
           </SettingRow>
@@ -470,6 +493,7 @@ function ExtensionsSection(): React.ReactElement {
   const [installedExtensions, setInstalledExtensions] = useState<InstalledExtension[]>([])
   const [extLoading, setExtLoading] = useState(false)
   const [extMessage, setExtMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const devPaths = useConfigStore(s => s.config.extensions.devPaths)
   const setExtensionDevPaths = useConfigStore(s => s.setExtensionDevPaths)
@@ -586,9 +610,69 @@ function ExtensionsSection(): React.ReactElement {
     }
   }
 
-  const builtinExtensions = extensionRegistry.getAllExtensions().filter(
-    e => extensionRegistry.isBuiltin(e.id)
-  )
+  // Collect all extensions into a unified list with metadata
+  const allExtensions: {
+    id: string
+    name: string
+    description?: string
+    version?: string
+    icon: React.ElementType
+    builtin: boolean
+    devPath?: string
+    installed: boolean
+    configPanel?: React.ComponentType
+  }[] = []
+
+  // Built-in extensions
+  for (const ext of extensionRegistry.getAllExtensions()) {
+    if (!extensionRegistry.isBuiltin(ext.id)) continue
+    allExtensions.push({
+      id: ext.id,
+      name: ext.name,
+      description: ext.description,
+      version: ext.version,
+      icon: ext.icon || Puzzle,
+      builtin: true,
+      installed: false,
+      configPanel: ext.configPanel,
+    })
+  }
+
+  // Installed extensions (ZIP)
+  for (const ext of installedExtensions) {
+    const registered = extensionRegistry.getExtension(ext.id)
+    allExtensions.push({
+      id: ext.id,
+      name: ext.name,
+      description: ext.description,
+      version: ext.version,
+      icon: registered?.icon || Package,
+      builtin: false,
+      installed: true,
+      configPanel: registered?.configPanel,
+    })
+  }
+
+  // Dev/unpacked extensions
+  for (const dirPath of devPaths) {
+    // Find the registered extension for this dev path
+    const registeredExt = extensionRegistry.getAllExtensions().find(e =>
+      !extensionRegistry.isBuiltin(e.id) && !installedExtensions.some(i => i.id === e.id)
+    )
+    if (registeredExt && !allExtensions.some(e => e.id === registeredExt.id)) {
+      allExtensions.push({
+        id: registeredExt.id,
+        name: registeredExt.name,
+        description: registeredExt.description,
+        version: registeredExt.version,
+        icon: registeredExt.icon || FolderCode,
+        builtin: false,
+        devPath: dirPath,
+        installed: false,
+        configPanel: registeredExt.configPanel,
+      })
+    }
+  }
 
   return (
     <TooltipProvider delayDuration={400}>
@@ -631,78 +715,55 @@ function ExtensionsSection(): React.ReactElement {
           </div>
         )}
 
-        {/* Dev (unpacked) extensions */}
-        {devPaths.length > 0 && (
-          <div className="mb-4">
-            <div className="text-ui-sm text-zinc-500 uppercase tracking-wider mb-2">Dev (Unpacked)</div>
-            <div className="space-y-1">
-              {devPaths.map(dirPath => (
-                <div
-                  key={dirPath}
-                  className="flex items-center gap-3 px-3 py-2 rounded-md bg-zinc-800/50 hover:bg-zinc-800 transition-colors group"
-                >
-                  <FolderCode className="w-4 h-4 text-yellow-400 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-ui-base text-zinc-200 truncate">{dirPath.split('/').pop()}</div>
-                    <div className="text-ui-xs text-zinc-500 truncate">{dirPath}</div>
-                  </div>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Unload"
-                        onClick={() => handleUnloadDev(dirPath)}
-                        disabled={extLoading}
-                        className="h-6 w-6 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 transition-all"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Unload</TooltipContent>
-                  </Tooltip>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Unified extension list */}
+        <div className="space-y-1">
+          {allExtensions.map(ext => {
+            const Icon = ext.icon
+            const enabled = extensionRegistry.isEnabled(ext.id)
+            const isExpanded = expandedId === ext.id
+            const hasConfigPanel = !!ext.configPanel
+            const ConfigPanel = ext.configPanel
 
-        {/* Installed extensions (ZIP) */}
-        {installedExtensions.length > 0 && (
-          <div className="mb-4">
-            <div className="text-ui-sm text-zinc-500 uppercase tracking-wider mb-2">Installed</div>
-            <div className="space-y-1">
-              {installedExtensions.map(ext => {
-                const enabled = extensionRegistry.isEnabled(ext.id)
-                return (
-                  <div
-                    key={ext.id}
-                    className={cn(
-                      'flex items-center gap-3 px-3 py-2 rounded-md bg-zinc-800/50 hover:bg-zinc-800 transition-colors group',
-                      !enabled && 'opacity-50',
-                    )}
-                  >
-                    <Package className="w-4 h-4 text-zinc-400 group-hover:text-zinc-300 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-ui-base text-zinc-200 truncate">{ext.name}</div>
-                      {ext.description && (
-                        <div className="text-ui-xs text-zinc-500 truncate">{ext.description}</div>
-                      )}
+            return (
+              <div key={ext.id} className="rounded-md bg-zinc-800/50 overflow-hidden">
+                {/* Extension header row */}
+                <div
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2 transition-colors group',
+                    hasConfigPanel ? 'hover:bg-zinc-800 cursor-pointer' : 'hover:bg-zinc-800',
+                    !enabled && 'opacity-50',
+                  )}
+                  onClick={hasConfigPanel ? () => setExpandedId(isExpanded ? null : ext.id) : undefined}
+                >
+                  {/* Expand chevron or spacer */}
+                  {hasConfigPanel ? (
+                    isExpanded
+                      ? <ChevronDown className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                      : <ChevronRight className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                  ) : (
+                    <span className="w-3.5 shrink-0" />
+                  )}
+
+                  <Icon className="w-4 h-4 text-zinc-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-ui-base text-zinc-200 truncate">{ext.name}</span>
+                      {ext.version && <span className="text-ui-xs text-zinc-600">v{ext.version}</span>}
+                      {ext.builtin && <span className="text-ui-xs text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded">built-in</span>}
+                      {ext.devPath && <span className="text-ui-xs text-yellow-500 bg-yellow-950/30 px-1.5 py-0.5 rounded">dev</span>}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => extensionRegistry.setEnabled(ext.id, !enabled)}
-                        className={cn(
-                          'relative w-8 h-4.5 rounded-full transition-colors',
-                          enabled ? 'bg-blue-600' : 'bg-zinc-700',
-                        )}
-                        title={enabled ? 'Disable' : 'Enable'}
-                      >
-                        <span className={cn(
-                          'absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white transition-transform',
-                          enabled ? 'left-4' : 'left-0.5',
-                        )} />
-                      </button>
+                    {ext.description && (
+                      <div className="text-ui-xs text-zinc-500 truncate">{ext.description}</div>
+                    )}
+                  </div>
+
+                  {/* Actions: enable/disable + uninstall/unload */}
+                  <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                    <Switch
+                      checked={enabled}
+                      onCheckedChange={v => extensionRegistry.setEnabled(ext.id, v)}
+                    />
+                    {ext.installed && (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
@@ -717,38 +778,43 @@ function ExtensionsSection(): React.ReactElement {
                         </TooltipTrigger>
                         <TooltipContent>Uninstall</TooltipContent>
                       </Tooltip>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Built-in extensions */}
-        <div>
-          <div className="text-ui-sm text-zinc-500 uppercase tracking-wider mb-2">Built-in</div>
-          <div className="space-y-1">
-            {builtinExtensions.map(ext => {
-              const Icon = ext.icon || Puzzle
-              return (
-                <div
-                  key={ext.id}
-                  className="flex items-center gap-3 px-3 py-2 rounded-md bg-zinc-800/30"
-                >
-                  <Icon className="w-4 h-4 text-zinc-500 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-ui-base text-zinc-300 truncate">{ext.name}</div>
-                    {ext.description && (
-                      <div className="text-ui-xs text-zinc-500 truncate">{ext.description}</div>
+                    )}
+                    {ext.devPath && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Unload"
+                            onClick={() => handleUnloadDev(ext.devPath!)}
+                            disabled={extLoading}
+                            className="h-6 w-6 opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 transition-all"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Unload</TooltipContent>
+                      </Tooltip>
                     )}
                   </div>
-                  <span className="text-ui-xs text-zinc-600 shrink-0">v{ext.version}</span>
                 </div>
-              )
-            })}
-          </div>
+
+                {/* Expanded config panel */}
+                {isExpanded && ConfigPanel && enabled && (
+                  <div className="border-t border-zinc-700/50 px-4 py-3 bg-zinc-800/30">
+                    <ConfigPanel />
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
+
+        {allExtensions.length === 0 && (
+          <div className="px-3 py-8 text-center text-ui-base text-zinc-600">
+            No extensions installed
+          </div>
+        )}
       </div>
     </TooltipProvider>
   )
