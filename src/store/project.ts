@@ -28,6 +28,7 @@ export interface SerializedTab {
   url?: string
   content?: string
   initialCommand?: string
+  apiKey?: string
   terminalHistory?: string
   autoPilot?: boolean
   note?: string

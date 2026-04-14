@@ -44,6 +44,8 @@ export function serializeWorkspace(): Workspace {
           filePath: tab.filePath,
           url: tab.url,
           content: tab.content,
+          initialCommand: tab.initialCommand,
+          apiKey: tab.apiKey,
           // Persist auto pilot state so it survives app restarts (CON-45)
           autoPilot: tab.autoPilot,
           note: tab.note,
@@ -156,6 +158,8 @@ async function restoreWorkspace(workspace: Workspace): Promise<void> {
         filePath: tab.filePath,
         url: tab.url,
         content: tab.content,
+        initialCommand: tab.initialCommand,
+        apiKey: tab.apiKey,
         // Restore auto pilot state from persisted data (CON-45)
         autoPilot: tab.autoPilot,
         note: tab.note,

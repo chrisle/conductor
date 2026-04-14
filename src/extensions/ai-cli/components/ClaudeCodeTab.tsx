@@ -303,9 +303,9 @@ export default function ClaudeCodeTab({
       isActive={isActive}
       tab={{
         ...tab,
-        // Only transform if an initialCommand was explicitly set by the caller.
-        // Restored tabs (from project file) have no initialCommand and should
-        // not auto-launch claude — the process is already running.
+        // Transform the initialCommand to inject settings flags and env vars.
+        // For restored tabs reattaching to a running session, conductord
+        // returns isNew=false so the command is not re-sent.
         initialCommand: tab.initialCommand
           ? buildClaudeCommand(tab.initialCommand, settings, tab.apiKey)
           : undefined,
