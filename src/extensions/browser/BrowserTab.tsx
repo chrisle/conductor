@@ -63,6 +63,13 @@ type WebviewElement = HTMLElement & {
 // Custom data type set during tab drags — must match the key in TabGroup.tsx
 const DRAGGING_TAB_KEY = '__dragging_tab__'
 
+// Webview persistence cache — keeps webview DOM elements alive across React
+// remounts (e.g. when a split pane is removed and the layout tree restructures,
+// causing TabGroup components to unmount/remount).  On unmount the webview is
+// detached from the DOM but kept in this map; on remount it is re-attached
+// instead of being recreated, avoiding a full page reload.
+const webviewCache = new Map<string, HTMLElement>()
+
 export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
   const initialUrl = tab.url
   // inputUrl drives the address bar display; it updates on navigation events
@@ -72,6 +79,7 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
   const [canGoBack, setCanGoBack] = useState(false)
   const [canGoForward, setCanGoForward] = useState(false)
   const webviewRef = useRef<WebviewElement | null>(null)
+  const webviewContainerRef = useRef<HTMLDivElement | null>(null)
   // initialSrc is set once and never changes — prevents React re-renders
   // from resetting the webview's src and causing full-page reloads.
   const [initialSrc] = useState(initialUrl || 'about:blank')
@@ -81,6 +89,62 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
   const getConfig = useConfigStore.getState
   const getRootPath = () => useSidebarStore.getState().rootPath
   const getFocusedGroupId = () => useLayoutStore.getState().focusedGroupId
+
+  // Attach a cached or new webview element to the container imperatively so it
+  // survives React remounts (layout tree restructuring).
+  useEffect(() => {
+    const container = webviewContainerRef.current
+    if (!container) return
+
+    let wv = webviewCache.get(tabId) as WebviewElement | undefined
+    const isCached = !!wv
+    if (wv) {
+      // Re-attach cached webview
+      container.prepend(wv)
+    } else {
+      // Create a fresh webview
+      wv = document.createElement('webview') as unknown as WebviewElement
+      wv.setAttribute('src', initialSrc)
+      wv.setAttribute('partition', 'persist:browser')
+      wv.setAttribute('nodeintegration', 'false')
+      wv.setAttribute('webpreferences', 'contextIsolation=yes')
+      wv.setAttribute('allowpopups', 'true')
+      wv.className = 'w-full h-full'
+      Object.assign((wv as HTMLElement).style, { display: 'flex', width: '100%', height: '100%' })
+      container.prepend(wv)
+    }
+    webviewRef.current = wv
+
+    // Cached webviews won't fire dom-ready again, so sync nav state now.
+    if (isCached) {
+      try {
+        setInputUrl(wv!.getURL())
+        setCanGoBack(wv!.canGoBack())
+        setCanGoForward(wv!.canGoForward())
+      } catch { /* webview not ready yet */ }
+    }
+
+    return () => {
+      // Detach but keep alive in cache so a remount can reuse it
+      if (wv && wv.parentElement) {
+        wv.parentElement.removeChild(wv)
+      }
+      if (wv) webviewCache.set(tabId, wv as unknown as HTMLElement)
+      webviewRef.current = null
+
+      // If the tab was actually closed (no longer in any group), destroy the
+      // cached webview after a short delay to allow remount to claim it first.
+      setTimeout(() => {
+        const groups = useTabsStore.getState().groups
+        const stillExists = Object.values(groups).some(g => g.tabs.some(t => t.id === tabId))
+        if (!stillExists) {
+          webviewCache.delete(tabId)
+        }
+      }, 500)
+    }
+  // initialSrc is stable (never changes) and tabId identifies this tab
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabId])
 
   // Overlay shown during tab drags and pane resizes to intercept mouse/drag
   // events that the native <webview> element would otherwise swallow.
@@ -335,16 +399,13 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
     const handleDomReady = () => {
       const wv = webviewRef.current
       if (!wv) return
-      // Inject CSS
-      wv.insertCSS(INJECT_CSS).catch(() => {})
-      // Inject JS bridge
-      wv.executeJavaScript(INJECT_JS).catch(() => {})
-
-      // Inject Atlassian-specific script when on an atlassian.net page
       const currentUrl = wv.getURL()
-      if (isAtlassianUrl(currentUrl)) {
-        wv.executeJavaScript(buildAtlassianInjectScript()).catch(() => {})
-      }
+
+      // Skip all injections on Atlassian pages to avoid interfering with Jira's UI
+      if (isAtlassianUrl(currentUrl)) return
+
+      wv.insertCSS(INJECT_CSS).catch(() => {})
+      wv.executeJavaScript(INJECT_JS).catch(() => {})
     }
 
     // Listen for console messages from the webview to receive Conductor
@@ -533,18 +594,9 @@ export default function BrowserTab({ tabId, groupId, isActive, tab }: TabProps):
         </form>
       </div>
 
-      {/* Webview */}
-      <div className="flex-1 overflow-hidden relative">
-        {React.createElement('webview', {
-          ref: webviewRef,
-          src: initialSrc,
-          className: 'w-full h-full',
-          partition: 'persist:browser',
-          nodeintegration: 'false',
-          webpreferences: 'contextIsolation=yes',
-          allowpopups: 'true',
-          style: { display: 'flex', width: '100%', height: '100%' }
-        })}
+      {/* Webview — managed imperatively via webviewCache to survive React remounts */}
+      <div ref={webviewContainerRef} className="flex-1 overflow-hidden relative">
+        {/* The webview element is prepended here by the useEffect above */}
         {/* Transparent overlay shown during tab drags and pane resizes to
             intercept mouse/drag events that the native <webview> element would
             otherwise swallow, allowing TabGroup's NESW drop zone logic and
