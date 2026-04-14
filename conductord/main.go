@@ -20,6 +20,7 @@ import (
 	"time"
 
 	gopty "github.com/aymanbagabas/go-pty"
+	"github.com/charmbracelet/x/vt"
 	"github.com/gorilla/websocket"
 )
 
@@ -43,6 +44,12 @@ type session struct {
 	scrollback []byte
 	sbPos      int  // write cursor in ring buffer
 	sbFull     bool // true once we've wrapped around
+
+	// Virtual terminal emulator: interprets raw PTY output so reconnecting
+	// clients receive the rendered screen state (with proper ANSI formatting)
+	// instead of a raw byte replay that can produce garbled output.
+	vterm *vt.Emulator
+	vtMu  sync.RWMutex
 
 	// Currently attached WebSocket (nil if detached)
 	conn *websocket.Conn
@@ -231,6 +238,9 @@ func newSession(id, cwd, command, shellPref string) (*session, error) {
 		return nil, err
 	}
 
+	emu := vt.NewEmulator(80, 24)
+	emu.SetScrollbackSize(1000)
+
 	s := &session{
 		id:         id,
 		cwd:        cwd,
@@ -238,6 +248,7 @@ func newSession(id, cwd, command, shellPref string) (*session, error) {
 		ptmx:       ptmx,
 		cmd:        cmd,
 		scrollback: make([]byte, scrollbackSize),
+		vterm:      emu,
 	}
 
 	go s.readLoop()
@@ -334,6 +345,11 @@ func (s *session) readLoop() {
 			}
 			s.mu.Unlock()
 
+			// Feed data to VT emulator for rendered state capture
+			s.vtMu.Lock()
+			s.vterm.Write(data)
+			s.vtMu.Unlock()
+
 			// Forward to attached client
 			if conn != nil {
 				if werr := conn.WriteMessage(websocket.BinaryMessage, data); werr != nil {
@@ -387,6 +403,34 @@ func (s *session) getScrollback() []byte {
 	return out
 }
 
+// renderState returns the terminal's rendered state (scrollback + visible
+// screen) as ANSI-formatted text. The VT emulator interprets the raw PTY
+// byte stream so the output is a clean cell-grid snapshot rather than a
+// raw replay of escape sequences.
+func (s *session) renderState() string {
+	s.vtMu.RLock()
+	defer s.vtMu.RUnlock()
+
+	var buf strings.Builder
+
+	// Render scrollback lines (oldest first)
+	sb := s.vterm.Scrollback()
+	if sb != nil {
+		for i := 0; i < sb.Len(); i++ {
+			line := sb.Line(i)
+			if line != nil {
+				buf.WriteString(line.Render())
+			}
+			buf.WriteByte('\n')
+		}
+	}
+
+	// Render visible screen
+	buf.WriteString(s.vterm.Render())
+
+	return buf.String()
+}
+
 func (s *session) attach(conn *websocket.Conn) {
 	s.mu.Lock()
 	old := s.conn
@@ -412,6 +456,9 @@ func (s *session) write(data []byte) {
 
 func (s *session) resize(cols, rows uint16) {
 	_ = s.ptmx.Resize(int(cols), int(rows))
+	s.vtMu.Lock()
+	s.vterm.Resize(int(cols), int(rows))
+	s.vtMu.Unlock()
 }
 
 func (s *session) kill() {
