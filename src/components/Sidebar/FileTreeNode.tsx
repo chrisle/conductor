@@ -4,7 +4,7 @@ import {
   FileCode, FileJson, FileText, FileImage, FileArchive,
   Terminal, Settings, Globe, Palette, Package, Database,
   Film, Music, File, Lock, GitBranch,
-  FileUp, FilePlus, FolderPlus, Star, StarOff, Pencil, Trash2, Bot, Copy
+  FileUp, FilePlus, FolderPlus, Star, StarOff, Pencil, Trash2, Bot, Copy, ExternalLink
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
@@ -185,6 +185,30 @@ export default function FileTreeNode({ entry, depth, groupId, gitRef, gitRepoRoo
   // For directories, check if any child file has a git status
   const dirHasChanges = entry.isDirectory && !gitRef && Array.from(gitStatusMap.keys()).some(p => p.startsWith(relativePath + '/'))
 
+  // Check if this directory is a git repo root and get its branch
+  const [branchName, setBranchName] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!entry.isDirectory || gitRef) return
+    let cancelled = false
+    async function check() {
+      try {
+        const [root, branch] = await Promise.all([
+          window.electronAPI.gitRepoRoot(entry.path),
+          window.electronAPI.gitBranch(entry.path),
+        ])
+        if (!cancelled) {
+          setBranchName(root === entry.path && branch ? branch : null)
+        }
+      } catch {
+        if (!cancelled) setBranchName(null)
+      }
+    }
+    check()
+    const id = setInterval(check, 10_000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [entry.path, entry.isDirectory, gitRef])
+
   const expanded = isExpanded(entry.path)
   const isSelected = selectedPath === entry.path
   const renameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -227,15 +251,8 @@ export default function FileTreeNode({ entry, depth, groupId, gitRef, gitRepoRoo
       if (!expanded && children.length === 0) loadChildren()
       setSelectedPath(entry.path)
     } else {
-      // If already selected, start a delayed rename (not in virtual mode)
-      if (!gitRef && isSelected && !isRenaming) {
-        if (renameTimerRef.current) clearTimeout(renameTimerRef.current)
-        renameTimerRef.current = setTimeout(() => {
-          setIsRenaming(true)
-          setRenameValue(entry.name)
-        }, 400)
-      }
       setSelectedPath(entry.path)
+      openFile()
     }
   }
 
@@ -375,7 +392,7 @@ export default function FileTreeNode({ entry, depth, groupId, gitRef, gitRepoRoo
         <ContextMenuTrigger>
           <div
             className={cn(
-              'flex items-center gap-1 px-2 py-[3px] cursor-pointer select-none text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100 transition-colors group',
+              'flex items-center gap-1 px-2 py-[3px] cursor-pointer select-none text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100 transition-colors group min-w-0',
               'text-ui-base',
               isSelected && 'bg-zinc-800 text-zinc-100',
               entry.name.startsWith('.') && 'opacity-50'
@@ -423,21 +440,27 @@ export default function FileTreeNode({ entry, depth, groupId, gitRef, gitRepoRoo
               />
             ) : (
               <span className={cn(
-                'truncate',
+                'truncate min-w-0',
                 fileGitStatus === 'untracked' && 'text-green-400',
                 fileGitStatus === 'modified' && 'text-amber-400',
                 fileGitStatus === 'deleted' && 'text-red-400 line-through',
                 !fileGitStatus && dirHasChanges && 'text-amber-400/70',
               )}>{entry.name}</span>
             )}
+            {branchName && (
+              <span className="shrink-0 text-[9px] text-zinc-500 ml-auto flex items-center gap-0.5">
+                <GitBranch className="w-2.5 h-2.5" />
+                <span className="max-w-[80px] truncate">{branchName}</span>
+              </span>
+            )}
             {fileGitStatus === 'untracked' && (
-              <span className="shrink-0 text-[9px] font-bold text-green-400 ml-auto">U</span>
+              <span className={cn('shrink-0 text-[9px] font-bold text-green-400', !branchName && 'ml-auto')}>U</span>
             )}
             {fileGitStatus === 'modified' && (
-              <span className="shrink-0 text-[9px] font-bold text-amber-400 ml-auto">M</span>
+              <span className={cn('shrink-0 text-[9px] font-bold text-amber-400', !branchName && 'ml-auto')}>M</span>
             )}
             {fileGitStatus === 'deleted' && (
-              <span className="shrink-0 text-[9px] font-bold text-red-400 ml-auto">D</span>
+              <span className={cn('shrink-0 text-[9px] font-bold text-red-400', !branchName && 'ml-auto')}>D</span>
             )}
           </div>
         </ContextMenuTrigger>
@@ -483,6 +506,15 @@ export default function FileTreeNode({ entry, depth, groupId, gitRef, gitRepoRoo
             <Terminal className="w-3.5 h-3.5 mr-2" />
             Open Terminal here
           </ContextMenuItem>
+          {!gitRef && (
+            <ContextMenuItem
+              className="text-ui-base text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100"
+              onClick={() => window.electronAPI.showItemInFolder(entry.path)}
+            >
+              <ExternalLink className="w-3.5 h-3.5 mr-2" />
+              {window.electronAPI.platform === 'darwin' ? 'Reveal in Finder' : 'Reveal in File Explorer'}
+            </ContextMenuItem>
+          )}
           <ContextMenuSeparator className="bg-zinc-700" />
           <ContextMenuItem className="text-ui-base text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => navigator.clipboard.writeText(entry.path)}>
             <Copy className="w-3.5 h-3.5 mr-2" />

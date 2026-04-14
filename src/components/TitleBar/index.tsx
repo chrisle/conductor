@@ -54,14 +54,14 @@ export default function TitleBar(): React.ReactElement {
   }, [])
 
   useEffect(() => {
-    const handler = () => {
+    const callback = () => {
       if (useProjectStore.getState().isAnyDirty()) {
         setDialog({ type: 'unsaved', action: { type: 'close' } })
       } else {
         window.electronAPI.forceClose()
       }
     }
-    window.electronAPI.onCloseRequested(handler)
+    const handler = window.electronAPI.onCloseRequested(callback)
     return () => window.electronAPI.offCloseRequested(handler)
   }, [])
 

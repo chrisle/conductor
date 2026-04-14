@@ -309,11 +309,25 @@ function TerminalTabInner({
                 flushPendingData();
               });
             } else {
-              // No saved buffer — show terminal and resume immediately
-              containerEl.style.visibility = "visible";
-              term.focus();
-              hydratingRef.current = false;
-              flushPendingData();
+              // No saved buffer (e.g. Electron restarted, sessionStorage wiped).
+              // Ask conductord for the scrollback so we can restore output.
+              const scrollback = await termAPI.captureScrollback(tabId);
+              if (disposed) return;
+              if (scrollback) {
+                term.write(scrollback, () => {
+                  if (disposed) return;
+                  containerEl.style.visibility = "visible";
+                  term.focus();
+                  term.scrollToBottom();
+                  hydratingRef.current = false;
+                  flushPendingData();
+                });
+              } else {
+                containerEl.style.visibility = "visible";
+                term.focus();
+                hydratingRef.current = false;
+                flushPendingData();
+              }
             }
             setTimeout(() => doFit(), 100);
           } else {

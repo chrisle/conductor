@@ -22,9 +22,10 @@ import { getSessionTitle, setSessionTitle, clearSessionTitle } from '@/lib/sessi
 import { useWorkSessionsStore } from '@/store/work-sessions'
 import { useTabsStore } from '@/store/tabs'
 import { useConfigStore } from '@/store/config'
-import { useLayoutStore, type LayoutNode } from '@/store/layout'
+import { useLayoutStore, type LayoutNode, type LayoutChild } from '@/store/layout'
 import { buildTileLayout, type TileMode } from '@/lib/tile-layout'
 import { useProjectStore, type SessionFolder } from '@/store/project'
+import { useSidebarStore } from '@/store/sidebar'
 import type { WorkSession } from '@/types/work-session'
 import { useSessionInfoRegistry, type SessionInfoContext } from './session-info-registry'
 import TerminalPreview from './TerminalPreview'
@@ -90,6 +91,7 @@ function useConductorSessions(intervalMs = 5_000) {
   const [sessions, setSessions] = useState<ConductorSession[]>([])
   const workSessions = useWorkSessionsStore(s => s.sessions)
   const groups = useTabsStore(s => s.groups)
+  const rootPath = useSidebarStore(s => s.rootPath)
 
   const refresh = useCallback(async () => {
     try {
@@ -147,17 +149,42 @@ function useConductorSessions(intervalMs = 5_000) {
     if (ws.sessionId) wsMap.set(ws.sessionId, ws)
   }
 
-  const enriched: EnrichedSession[] = sessions.map(s => ({
+  const allEnriched: EnrichedSession[] = sessions.map(s => ({
     session: s,
     workSession: wsMap.get(s.name) ?? null,
     ticketKey: ticketKeyFromSessionName(s.name),
     hasOpenTab: openTabIds.has(s.name),
   }))
 
+  // Filter to sessions belonging to the current project
+  const enriched = rootPath
+    ? allEnriched.filter(s => {
+        const cwd = s.session.cwd
+        if (cwd === rootPath || cwd.startsWith(rootPath + '/')) return true
+        const projectPath = s.workSession?.projectPath
+        if (projectPath && (projectPath === rootPath || projectPath.startsWith(rootPath + '/'))) return true
+        return false
+      })
+    : allEnriched
+
   return { enriched, refresh }
 }
 
 // ── Tile helper ───────────────────────────────────────
+
+/** Remove leaf nodes for the given group IDs from a layout tree, collapsing empty containers. */
+function pruneGroups(node: LayoutNode, ids: Set<string>): LayoutNode | null {
+  if (node.type === 'leaf') return ids.has(node.groupId) ? null : node
+  const children = node.children
+    .map(c => {
+      const pruned = pruneGroups(c.node, ids)
+      return pruned ? { ...c, node: pruned } as LayoutChild : null
+    })
+    .filter((c): c is LayoutChild => c !== null)
+  if (children.length === 0) return null
+  if (children.length === 1) return children[0].node
+  return { ...node, children }
+}
 
 export function tileSessions(sessions: EnrichedSession[], mode: TileMode = 'grid') {
   if (sessions.length === 0) return
@@ -168,12 +195,18 @@ export function tileSessions(sessions: EnrichedSession[], mode: TileMode = 'grid
   if (!currentRoot) return
 
   const newGroupIds: string[] = []
+  const emptiedGroupIds: string[] = []
   for (const s of sessions) {
     for (const [gid, group] of Object.entries(tabsStore.groups)) {
       if (group.tabs.find(t => t.id === s.session.name)) {
         const newGid = tabsStore.createGroup()
         tabsStore.moveTab(gid, s.session.name, newGid)
         newGroupIds.push(newGid)
+        // Track groups that became empty after the move
+        const updated = useTabsStore.getState().groups[gid]
+        if (!updated || updated.tabs.length === 0) {
+          emptiedGroupIds.push(gid)
+        }
         break
       }
     }
@@ -181,13 +214,23 @@ export function tileSessions(sessions: EnrichedSession[], mode: TileMode = 'grid
   if (newGroupIds.length === 0) return
 
   const tileTree = buildTileLayout(newGroupIds, mode)
-  layoutStore.setRoot({
-    type: 'row',
-    children: [
-      { node: tileTree, size: 1 },
-      { node: currentRoot, size: 1 },
-    ],
-  })
+
+  // Prune groups that are now empty from the old layout
+  const prunedRoot = emptiedGroupIds.length > 0
+    ? pruneGroups(currentRoot, new Set(emptiedGroupIds))
+    : currentRoot
+
+  if (prunedRoot) {
+    layoutStore.setRoot({
+      type: 'row',
+      children: [
+        { node: tileTree, size: 1 },
+        { node: prunedRoot, size: 1 },
+      ],
+    })
+  } else {
+    layoutStore.setRoot(tileTree)
+  }
   layoutStore.setFocusedGroup(newGroupIds[0])
 }
 
@@ -201,6 +244,7 @@ function SessionTreeNode({
   onRowClick,
   onDragStateChange,
   onKillSelected,
+  onKillInactive,
   onRefresh,
   filter,
   allFolders,
@@ -213,6 +257,7 @@ function SessionTreeNode({
   onRowClick: (name: string, e: React.MouseEvent) => void
   onDragStateChange: (dragging: boolean) => void
   onKillSelected: () => void
+  onKillInactive: () => void
   onRefresh: () => void
   filter: string
   allFolders: SessionFolder[]
@@ -340,7 +385,16 @@ function SessionTreeNode({
         <ContextMenuTrigger>
           <div
             draggable
-            onClick={e => onRowClick(session.session.name, e)}
+            onClick={e => {
+              onRowClick(session.session.name, e)
+              if (!e.metaKey && !e.ctrlKey && !e.shiftKey && openTab) {
+                const layoutGroupIds = new Set(useLayoutStore.getState().getAllGroupIds())
+                if (layoutGroupIds.has(openTab.groupId)) {
+                  useTabsStore.getState().setActiveTab(openTab.groupId, openTab.tab.id)
+                  useLayoutStore.getState().setFocusedGroup(openTab.groupId)
+                }
+              }
+            }}
             onDoubleClick={() => openInTab()}
             onDragStart={e => {
               const names = isSelected && selectedIds.size > 1
@@ -503,6 +557,10 @@ function SessionTreeNode({
               Kill session
             </ContextMenuItem>
           )}
+          <ContextMenuItem className="gap-2 text-xs cursor-pointer text-red-400 focus:text-red-300" onSelect={onKillInactive}>
+            <Trash2 className="w-3.5 h-3.5" />
+            Kill inactive sessions
+          </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
 
@@ -612,6 +670,7 @@ function FolderTreeNode({
   onRowClick,
   onDragStateChange,
   onKillSelected,
+  onKillInactive,
   isDraggingActive,
   filter,
   onRefresh,
@@ -624,6 +683,7 @@ function FolderTreeNode({
   onRowClick: (name: string, e: React.MouseEvent) => void
   onDragStateChange: (dragging: boolean) => void
   onKillSelected: () => void
+  onKillInactive: () => void
   isDraggingActive: boolean
   filter: string
   onRefresh: () => void
@@ -837,6 +897,7 @@ function FolderTreeNode({
               onRowClick={onRowClick}
               onDragStateChange={onDragStateChange}
               onKillSelected={onKillSelected}
+              onKillInactive={onKillInactive}
               isDraggingActive={isDraggingActive}
               filter={filter}
               onRefresh={onRefresh}
@@ -852,6 +913,7 @@ function FolderTreeNode({
               onRowClick={onRowClick}
               onDragStateChange={onDragStateChange}
               onKillSelected={onKillSelected}
+              onKillInactive={onKillInactive}
               onRefresh={onRefresh}
               filter={filter}
               allFolders={allFolders}
@@ -873,6 +935,7 @@ function DefaultFolderNode({
   onRowClick,
   onDragStateChange,
   onKillSelected,
+  onKillInactive,
   isDraggingActive,
   filter,
   allFolders,
@@ -884,6 +947,7 @@ function DefaultFolderNode({
   onRowClick: (name: string, e: React.MouseEvent) => void
   onDragStateChange: (dragging: boolean) => void
   onKillSelected: () => void
+  onKillInactive: () => void
   isDraggingActive: boolean
   filter: string
   allFolders: SessionFolder[]
@@ -975,6 +1039,7 @@ function DefaultFolderNode({
               onRowClick={onRowClick}
               onDragStateChange={onDragStateChange}
               onKillSelected={onKillSelected}
+              onKillInactive={onKillInactive}
               onRefresh={onRefresh}
               filter={filter}
               allFolders={allFolders}
@@ -1081,6 +1146,26 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
       lastClickedRef.current = name
     }
   }, [flatSessionOrder])
+
+  async function killInactive() {
+    const sessionsStore = useWorkSessionsStore.getState()
+    const inactive = enriched.filter(s => !s.hasOpenTab)
+
+    for (const s of inactive) {
+      const name = s.session.name
+      await window.electronAPI.killTerminal(name)
+      clearSessionTitle(name)
+
+      if (s.workSession?.status === 'active') {
+        await sessionsStore.completeSession(s.workSession.id)
+      }
+
+      useProjectStore.getState().removeSessionFromAllFolders(name)
+    }
+
+    setSelectedIds(new Set())
+    setTimeout(refresh, 500)
+  }
 
   async function killSelected() {
     const sessionsStore = useWorkSessionsStore.getState()
@@ -1196,6 +1281,7 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
                   onRowClick={handleRowClick}
                   onDragStateChange={setIsDraggingActive}
                   onKillSelected={killSelected}
+                  onKillInactive={killInactive}
                   isDraggingActive={isDraggingActive}
                   filter={filter}
                   onRefresh={refresh}
@@ -1210,6 +1296,7 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
                 onRowClick={handleRowClick}
                 onDragStateChange={setIsDraggingActive}
                 onKillSelected={killSelected}
+                onKillInactive={killInactive}
                 isDraggingActive={isDraggingActive}
                 filter={filter}
                 allFolders={sessionFolders}

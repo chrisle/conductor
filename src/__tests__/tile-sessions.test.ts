@@ -67,7 +67,7 @@ describe('tileSessions', () => {
     expect(useLayoutStore.getState().root).toBeNull()
   })
 
-  it('tiles two sessions with open tabs into a row beside the existing layout', () => {
+  it('tiles two sessions and prunes the now-empty original layout', () => {
     // Set up: existing layout with a single group containing two tabs (sessions)
     const existingGroupId = 'existing-group'
     useTabsStore.setState({
@@ -97,15 +97,65 @@ describe('tileSessions', () => {
     tileSessions(sessions)
 
     const root = useLayoutStore.getState().root!
-    // Root should be a row with the tile tree on the left and existing layout on the right
+    // Both tabs moved out → existing group is empty → pruned
+    // Root should be just the tile tree (a row of 2 new group leaves)
     expect(root.type).toBe('row')
     if (root.type === 'row') {
       expect(root.children).toHaveLength(2)
-      // First child is the tile tree (a row of 2 leaves)
+      // Both children are leaves pointing to new groups (not the old existing-group)
+      for (const child of root.children) {
+        expect(child.node.type).toBe('leaf')
+        if (child.node.type === 'leaf') {
+          expect(child.node.groupId).not.toBe(existingGroupId)
+        }
+      }
+    }
+  })
+
+  it('preserves old layout when it still has remaining tabs', () => {
+    const existingGroupId = 'existing-group'
+    useTabsStore.setState({
+      groups: {
+        [existingGroupId]: {
+          id: existingGroupId,
+          tabs: [
+            { id: 'sess1', type: 'terminal', title: 'Session 1' },
+            { id: 'sess2', type: 'terminal', title: 'Session 2' },
+            { id: 'other-tab', type: 'terminal', title: 'Other Tab' },
+          ],
+          activeTabId: 'sess1',
+          tabHistory: ['sess1', 'sess2', 'other-tab'],
+        },
+      },
+      selectedTabIds: {},
+      selectionAnchor: {},
+    })
+
+    const existingRoot: LayoutNode = { type: 'leaf', groupId: existingGroupId }
+    useLayoutStore.getState().setRoot(existingRoot)
+
+    // Only tile sess1 and sess2, leaving other-tab behind
+    const sessions = [
+      { session: { name: 'sess1', connected: true, command: 'bash', cwd: '/' }, workSession: null, ticketKey: null, hasOpenTab: true },
+      { session: { name: 'sess2', connected: true, command: 'bash', cwd: '/' }, workSession: null, ticketKey: null, hasOpenTab: true },
+    ]
+
+    tileSessions(sessions)
+
+    const root = useLayoutStore.getState().root!
+    // existing-group still has other-tab → old layout preserved alongside tile tree
+    expect(root.type).toBe('row')
+    if (root.type === 'row') {
+      expect(root.children).toHaveLength(2)
+      // First child is the tile tree
       const tileNode = root.children[0].node
       expect(tileNode.type).toBe('row')
-      // Second child is the original root
-      // (the original group may still exist or be modified)
+      // Second child is the original root (still has a tab)
+      const oldNode = root.children[1].node
+      expect(oldNode.type).toBe('leaf')
+      if (oldNode.type === 'leaf') {
+        expect(oldNode.groupId).toBe(existingGroupId)
+      }
     }
   })
 
@@ -138,13 +188,11 @@ describe('tileSessions', () => {
     tileSessions(sessions)
 
     const root = useLayoutStore.getState().root!
-    // Should still tile since sess1 has an open tab and gets moved to a new group
-    expect(root.type).toBe('row')
-    if (root.type === 'row') {
-      expect(root.children).toHaveLength(2)
-      // Tile tree has only 1 session, so it's a leaf
-      const tileNode = root.children[0].node
-      expect(tileNode.type).toBe('leaf')
+    // sess1 moved out → existing group empty → pruned
+    // Only 1 session tiled, so root is just a leaf for the new group
+    expect(root.type).toBe('leaf')
+    if (root.type === 'leaf') {
+      expect(root.groupId).not.toBe(existingGroupId)
     }
   })
 

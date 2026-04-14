@@ -14,7 +14,7 @@ import { useActivityBarStore } from './store/activityBar'
 import { useUIStore } from './store/ui'
 import { useConfigStore } from './store/config'
 import { useWorkSessionsStore } from './store/work-sessions'
-import { initializeDefaultProject, createDefaultProject, saveProject, autosaveLayout } from './lib/project-io'
+import { initializeDefaultProject, createDefaultProject, saveProject, autosaveLayout, openProject } from './lib/project-io'
 import { startUsageScraper, stopUsageScraper } from './lib/claude-usage-scraper'
 import { initHomeDir } from './lib/terminal-cwd'
 import { loadExtensionsFromDevPaths } from './extensions/loader'
@@ -100,8 +100,14 @@ function App(): React.ReactElement {
 
   // Listen for Cmd+W routed from the Electron menu as "close tab" instead of "close window".
   // Closes the active tab in the focused group; if no tabs remain, closes the window.
+  // Guard against duplicate IPC events within a short window (macOS can fire twice).
   useEffect(() => {
-    const handler = () => {
+    let lastCloseTime = 0
+    const callback = () => {
+      const now = Date.now()
+      if (now - lastCloseTime < 100) return
+      lastCloseTime = now
+
       const { focusedGroupId } = useLayoutStore.getState()
       if (!focusedGroupId) {
         window.electronAPI.close()
@@ -125,8 +131,16 @@ function App(): React.ReactElement {
         }
       }
     }
-    window.electronAPI.onCloseTabRequested(handler)
+    const handler = window.electronAPI.onCloseTabRequested(callback)
     return () => window.electronAPI.offCloseTabRequested(handler)
+  }, [])
+
+  // Listen for .conductor files opened via Finder / file manager
+  useEffect(() => {
+    const handler = window.electronAPI.onOpenFile((filePath: string) => {
+      openProject(filePath)
+    })
+    return () => window.electronAPI.offOpenFile(handler)
   }, [])
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {

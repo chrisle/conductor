@@ -15,6 +15,23 @@ installCrashReporter()
 
 let mainWindow: BrowserWindow | null = null
 
+// ── .conductor file association ───────────────────────────
+// Tracks the file path to open once the renderer is ready.
+let pendingOpenFile: string | null = null
+
+// macOS: open-file fires when a .conductor file is double-clicked in Finder.
+// It may fire before the app is ready (cold launch) or while it's running.
+app.on('open-file', (e, filePath) => {
+  e.preventDefault()
+  if (!filePath.endsWith('.conductor')) return
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('project:openFile', filePath)
+    mainWindow.focus()
+  } else {
+    pendingOpenFile = filePath
+  }
+})
+
 // ── Window bounds persistence ──────────────────────────
 
 const BOUNDS_FILE = join(os.homedir(), '.conductor', 'window-bounds.json')
@@ -90,6 +107,7 @@ async function ensureConductord(): Promise<void> {
 
   if (!binExists) {
     console.error(`[ensureConductord] conductord binary not found at ${binPath}`)
+    return
   }
 
   const spawnArgs = ['-socket', CONDUCTORD_SOCKET, '-tray']
@@ -158,6 +176,12 @@ function createWindow(): void {
       }
     }
     mainWindow?.show()
+
+    // If a .conductor file was opened before the window was ready, send it now.
+    if (pendingOpenFile) {
+      mainWindow?.webContents.send('project:openFile', pendingOpenFile)
+      pendingOpenFile = null
+    }
   })
 
   // Persist bounds on move/resize (debounced)
@@ -239,6 +263,27 @@ function buildAppMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
+// Windows/Linux: check argv for a .conductor file passed at launch
+function findConductorFileInArgs(argv: string[]): string | null {
+  return argv.find(a => a.endsWith('.conductor') && !a.startsWith('-')) || null
+}
+
+// Single instance lock — if a second instance launches with a .conductor file,
+// forward it to the existing window instead of opening a duplicate app.
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (_event, argv) => {
+    const file = findConductorFileInArgs(argv)
+    if (file && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('project:openFile', file)
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
+  })
+}
+
 app.whenReady().then(async () => {
   initLogger()
   console.log('[main] app ready, electron version:', process.versions.electron, 'node:', process.versions.node)
@@ -247,6 +292,12 @@ app.whenReady().then(async () => {
   }
   registerIpcHandlers()
   buildAppMenu()
+
+  // Windows/Linux: check if a .conductor file was passed on the command line
+  if (process.platform !== 'darwin' && !pendingOpenFile) {
+    pendingOpenFile = findConductorFileInArgs(process.argv)
+  }
+
   createWindow()
 
   // Check for updates in production only (dev builds have no publish config).

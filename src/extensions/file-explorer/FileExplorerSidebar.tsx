@@ -1,17 +1,25 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Terminal, GitBranch, FolderOpen, RefreshCw, FilePlus, FolderPlus, Bot, ExternalLink, Eye, X, ChevronDown } from 'lucide-react'
+import { Terminal, GitBranch, FolderOpen, RefreshCw, FilePlus, FolderPlus, ExternalLink, Eye, X, ChevronDown, Plus, Check, UserCircle } from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuLabel,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { useSidebarStore } from '@/store/sidebar'
+import { useConfigStore } from '@/store/config'
+import { useProjectStore } from '@/store/project'
+import { useSettingsDialogStore } from '@/store/settingsDialog'
 import { resolveTerminalCwd, saveTerminalCwd } from '@/lib/terminal-cwd'
 import { nextSessionId } from '@/lib/session-id'
+import ClaudeIcon from '@/components/ui/ClaudeIcon'
 import SidebarLayout from '@/components/Sidebar/SidebarLayout'
 import type { SidebarAction } from '@/components/Sidebar/SidebarHeader'
 import FileTree from '@/components/Sidebar/FileTree'
@@ -33,6 +41,13 @@ export default function FileExplorerSidebar({ groupId }: FileExplorerSidebarProp
   const { addTab } = useTabsStore()
   const { focusedGroupId } = useLayoutStore()
   const { rootPath, gitRef, virtualPath, exitVirtualMode } = useSidebarStore()
+  const claudeAccounts = useConfigStore(s => s.config.claudeAccounts)
+  const defaultClaudeAccountId = useConfigStore(s => s.config.defaultClaudeAccountId)
+  const projectSettings = useProjectStore(s => s.projectSettings)
+  const setProjectSettings = useProjectStore(s => s.setProjectSettings)
+  const effectiveDefaultAccountId = projectSettings?.defaultClaudeAccountId !== undefined
+    ? projectSettings.defaultClaudeAccountId
+    : defaultClaudeAccountId
   const [isGitRepo, setIsGitRepo] = useState(false)
   const [currentBranch, setCurrentBranch] = useState<string | null>(null)
   const [shortstat, setShortstat] = useState<{ insertions: number; deletions: number }>({ insertions: 0, deletions: 0 })
@@ -58,17 +73,32 @@ export default function FileExplorerSidebar({ groupId }: FileExplorerSidebarProp
     return () => window.removeEventListener('sidebar:refresh', handler)
   }, [loadGitInfo])
 
-  function openClaudeHere() {
+  function addClaudeTab(apiKey?: string, accountName?: string) {
     const cwd = rootPath || '/'
     const targetGroup = focusedGroupId || groupId
     const id = nextSessionId('claude-code')
+    let resolvedApiKey = apiKey
+    let resolvedName = accountName
+    if (resolvedApiKey === undefined && effectiveDefaultAccountId) {
+      const defaultAccount = claudeAccounts.find(a => a.id === effectiveDefaultAccountId)
+      if (defaultAccount) {
+        resolvedApiKey = defaultAccount.apiKey
+        resolvedName = defaultAccount.name
+      }
+    }
     addTab(targetGroup, {
       id,
       type: 'claude-code',
-      title: id,
+      title: resolvedName ? `${id} (${resolvedName})` : id,
       filePath: cwd,
       initialCommand: 'claude\n',
+      apiKey: resolvedApiKey,
     })
+  }
+
+  function setProjectDefaultAccount(id: string | null) {
+    setProjectSettings({ ...projectSettings, defaultClaudeAccountId: id })
+    useProjectStore.getState().markWorkspaceDirty()
   }
 
   function openTerminalHere() {
@@ -168,13 +198,75 @@ export default function FileExplorerSidebar({ groupId }: FileExplorerSidebarProp
               <ContextMenuSeparator className="bg-zinc-700" />
             </>
           )}
-          <ContextMenuItem
-            className="gap-2 text-xs cursor-pointer"
-            onClick={openClaudeHere}
-          >
-            <Bot className="w-3.5 h-3.5" />
-            Open Claude here
-          </ContextMenuItem>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger className="gap-2 text-xs cursor-pointer">
+              <ClaudeIcon className="w-3.5 h-3.5 text-[#D97757] shrink-0" />
+              <span>Claude</span>
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
+              <ContextMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5">Claude Accounts</ContextMenuLabel>
+              <ContextMenuSeparator className="bg-zinc-700" />
+              <ContextMenuItem
+                onClick={() => addClaudeTab()}
+                className="gap-2 text-ui-base cursor-pointer"
+              >
+                Default
+              </ContextMenuItem>
+              {claudeAccounts.length > 0 && <ContextMenuSeparator className="bg-zinc-700" />}
+              {claudeAccounts.map(account => (
+                <ContextMenuItem
+                  key={account.id}
+                  onClick={() => addClaudeTab(account.apiKey, account.name)}
+                  className="gap-2 text-ui-base cursor-pointer"
+                >
+                  {account.name}
+                </ContextMenuItem>
+              ))}
+              <ContextMenuSeparator className="bg-zinc-700" />
+              <ContextMenuItem
+                onClick={() => useSettingsDialogStore.getState().openToSection('ai-cli')}
+                className="gap-2 text-ui-base cursor-pointer text-zinc-400"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Account</span>
+              </ContextMenuItem>
+              {claudeAccounts.length > 0 && (
+                <>
+                  <ContextMenuSeparator className="bg-zinc-700" />
+                  <ContextMenuSub>
+                    <ContextMenuSubTrigger className="gap-2 text-ui-base cursor-pointer text-zinc-400">
+                      <UserCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Project Default</span>
+                    </ContextMenuSubTrigger>
+                    <ContextMenuSubContent className="bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
+                      <ContextMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5">Default for this project</ContextMenuLabel>
+                      <ContextMenuSeparator className="bg-zinc-700" />
+                      <ContextMenuItem
+                        onClick={() => setProjectDefaultAccount(null)}
+                        className="gap-2 text-ui-base cursor-pointer"
+                      >
+                        {effectiveDefaultAccountId == null && <Check className="w-3.5 h-3.5 text-blue-400" />}
+                        {effectiveDefaultAccountId != null && <span className="w-3.5" />}
+                        Use Global Default
+                      </ContextMenuItem>
+                      <ContextMenuSeparator className="bg-zinc-700" />
+                      {claudeAccounts.map(account => (
+                        <ContextMenuItem
+                          key={account.id}
+                          onClick={() => setProjectDefaultAccount(account.id)}
+                          className="gap-2 text-ui-base cursor-pointer"
+                        >
+                          {effectiveDefaultAccountId === account.id && <Check className="w-3.5 h-3.5 text-blue-400" />}
+                          {effectiveDefaultAccountId !== account.id && <span className="w-3.5" />}
+                          {account.name}
+                        </ContextMenuItem>
+                      ))}
+                    </ContextMenuSubContent>
+                  </ContextMenuSub>
+                </>
+              )}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
           <ContextMenuItem
             className="gap-2 text-xs cursor-pointer"
             onClick={openTerminalHere}

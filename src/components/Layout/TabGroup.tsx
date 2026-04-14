@@ -40,7 +40,7 @@ function RecentProjects() {
 
   useEffect(() => { loadRecentProjects() }, [])
 
-  const filtered = recentProjects.filter(p => p.path !== currentPath)
+  const filtered = recentProjects.filter(p => p.path !== currentPath).slice(0, 5)
   if (filtered.length === 0) return null
 
   const friendly = (p: string) => p.replace(/^\/Users\/[^/]+/, '~')
@@ -67,7 +67,21 @@ function EmptyState({ groupId, renderContextMenuItems }: { groupId: string, rend
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div className="flex flex-col items-center justify-center h-full gap-6">
-          <div className="text-ui-xl font-light text-zinc-300 tracking-wide">Conductor</div>
+          <div className="flex flex-col items-center gap-3">
+            <svg viewBox="0 0 375 375" className="w-16 h-16" aria-hidden="true">
+              <defs>
+                <clipPath id="logo-mask">
+                  <rect width="375" height="375" rx="84" ry="84"/>
+                </clipPath>
+              </defs>
+              <g clipPath="url(#logo-mask)">
+                <rect width="375" height="375" fill="#0c0157"/>
+                <circle cx="187.5" cy="188" r="165.7" fill="#ffc126"/>
+                <path fill="#0c0157" d="M 274.49 281.98 C 301.57 259.26 316.13 229.46 317.41 201.15 L 247.26 188.81 C 244.81 200.53 239.85 213.48 227.74 223.65 C 207.62 240.53 180.12 240.76 160.21 217.01 C 140.73 193.81 144.96 167.42 165.85 149.90 C 178.49 139.29 192.73 137.43 204.93 137.31 L 207.32 66.31 C 177.98 60.62 145.15 69.70 116.52 93.73 C 61.60 139.82 51.52 208.48 100.65 267.01 C 149.76 325.56 219.57 328.07 274.49 281.98 Z"/>
+              </g>
+            </svg>
+            <div className="text-ui-xl font-light text-zinc-300 tracking-wide">Conductor</div>
+          </div>
           <div className="flex gap-4">
             <button
               onClick={() => openProjectDialog()}
@@ -1020,9 +1034,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                   <StickyNote className="w-3 h-3 shrink-0 text-amber-400/80" aria-label="Has note" />
                 )}
                 <TabBadge tabId={tab.id} />
-                {isLocked ? (
-                  <Lock className="shrink-0 w-2.5 h-2.5 text-zinc-600" />
-                ) : (
+                {!isLocked && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -1248,6 +1260,30 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
           </DropdownMenu>
         </div>
         </div>
+
+        {/* Lock pane toggle */}
+        <TooltipProvider delayDuration={400}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  'w-8 h-8 shrink-0 rounded-none ml-auto',
+                  isLocked
+                    ? 'text-amber-400 hover:text-amber-300 hover:bg-zinc-800/50'
+                    : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+                )}
+                onClick={() => setGroupLocked(groupId, !isLocked)}
+              >
+                {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="bg-zinc-900 border-zinc-700 text-zinc-200 text-ui-xs">
+              {isLocked ? 'Unlock Pane' : 'Lock Pane'}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         {/* Close pane button — only visible when the pane is empty and not the last group */}
         {group.tabs.length === 0 && getAllGroupIds().length > 1 && (

@@ -4,7 +4,7 @@ module.exports = {
   content: [
     './src/**/*.{ts,tsx,js,jsx}',
     './index.html',
-    '../np3-jira/src/**/*.{ts,tsx}'
+    '../kanban-extension/src/**/*.{ts,tsx}'
   ],
   theme: {
     extend: {

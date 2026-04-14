@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { useTabsStore } from '@/store/tabs'
+import { useConfigStore } from '@/store/config'
 import type { TabProps } from '@/extensions/types'
 
 export default function MarkdownTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
@@ -16,6 +17,7 @@ export default function MarkdownTab({ tabId, groupId, isActive, tab }: TabProps)
   const [error, setError] = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(true)
   const { updateTab } = useTabsStore()
+  const markdownConfig = useConfigStore(s => s.config.customization.markdown)
 
   useEffect(() => {
     if (filePath) loadFile()
@@ -97,7 +99,7 @@ export default function MarkdownTab({ tabId, groupId, isActive, tab }: TabProps)
       }
     }}>
       {/* Toolbar */}
-      <div className="flex items-center justify-end px-2 py-1 border-b border-zinc-800 shrink-0">
+      <div className="flex items-center justify-end px-2 py-1 border-b border-zinc-800 shrink-0 bg-zinc-900">
         <Button
           variant="ghost"
           size="icon"
@@ -147,21 +149,45 @@ export default function MarkdownTab({ tabId, groupId, isActive, tab }: TabProps)
 
         {/* Preview */}
         {showPreview && (
-          <div className="h-full w-1/2 overflow-auto p-8">
-            <div className="max-w-3xl mx-auto prose prose-invert prose-zinc prose-base
-              prose-headings:text-zinc-100 prose-headings:font-semibold
-              prose-p:text-zinc-300 prose-p:leading-relaxed
-              prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline
-              prose-strong:text-zinc-200
-              prose-code:text-pink-400 prose-code:bg-zinc-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none
-              prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800 prose-pre:rounded-lg
-              prose-blockquote:border-zinc-700 prose-blockquote:text-zinc-400
-              prose-li:text-zinc-300
-              prose-th:text-zinc-200 prose-td:text-zinc-300
-              prose-hr:border-zinc-800
-              prose-img:rounded-lg
-            ">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+          <div className={cn(
+            'h-full w-1/2 overflow-auto p-8',
+            markdownConfig.background === 'dark' ? 'bg-zinc-900' : 'bg-white',
+          )}>
+            <div className={cn(
+              'max-w-3xl mx-auto prose prose-base prose-img:rounded-lg',
+              markdownConfig.background === 'dark'
+                ? [
+                    'prose-invert',
+                    'prose-headings:text-zinc-100 prose-headings:font-semibold',
+                    'prose-p:text-zinc-300 prose-p:leading-relaxed',
+                    'prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline',
+                    'prose-strong:text-zinc-100',
+                    'prose-code:text-pink-400 prose-code:bg-zinc-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none',
+                    'prose-pre:bg-zinc-800 prose-pre:border prose-pre:border-zinc-700 prose-pre:rounded-lg',
+                    'prose-blockquote:border-zinc-600 prose-blockquote:text-zinc-400',
+                    'prose-li:text-zinc-300',
+                    'prose-th:text-zinc-100 prose-td:text-zinc-300',
+                    'prose-hr:border-zinc-700',
+                  ].join(' ')
+                : [
+                    'prose-zinc',
+                    'prose-headings:text-zinc-900 prose-headings:font-semibold',
+                    'prose-p:text-zinc-700 prose-p:leading-relaxed',
+                    'prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline',
+                    'prose-strong:text-zinc-900',
+                    'prose-code:text-pink-600 prose-code:bg-zinc-100 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none',
+                    'prose-pre:bg-zinc-50 prose-pre:border prose-pre:border-zinc-200 prose-pre:rounded-lg',
+                    'prose-blockquote:border-zinc-300 prose-blockquote:text-zinc-500',
+                    'prose-li:text-zinc-700',
+                    'prose-th:text-zinc-900 prose-td:text-zinc-700',
+                    'prose-hr:border-zinc-200',
+                  ].join(' '),
+            )}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{
+                markdownConfig.includeFrontmatter
+                  ? content
+                  : content.replace(/^---\n[\s\S]*?\n---\n/, '')
+              }</ReactMarkdown>
             </div>
           </div>
         )}
