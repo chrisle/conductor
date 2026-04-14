@@ -314,6 +314,9 @@ function TerminalTabInner({
               const scrollback = await termAPI.captureScrollback(tabId);
               if (disposed) return;
               if (scrollback) {
+                // Discard queued raw binary replay — the VT-rendered snapshot
+                // from conductord is authoritative and already includes it.
+                pendingDataRef.current = [];
                 term.write(scrollback, () => {
                   if (disposed) return;
                   containerEl.style.visibility = "visible";
