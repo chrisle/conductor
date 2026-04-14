@@ -6,6 +6,10 @@ module.exports = {
     notarize: process.env.APPLE_TEAM_ID
       ? { teamId: process.env.APPLE_TEAM_ID }
       : false,
+    extraResources: [{ from: 'conductord/conductord', to: 'conductord' }],
+  },
+  win: {
+    extraResources: [{ from: 'conductord/conductord.exe', to: 'conductord.exe' }],
   },
 
   // Publish artifacts to Backblaze B2 via its S3-compatible API.

@@ -9,6 +9,7 @@
     "preview": "electron-vite preview",
     "prepare-tmux": "bash scripts/prepare-tmux.sh",
     "package": "bash scripts/package.sh",
+    "package:ci": "electron-builder",
     "typecheck": "tsc --build --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -64,6 +65,7 @@
     "autoprefixer": "^10.4.20",
     "electron": "^41.1.0",
     "electron-builder": "^26.8.1",
+    "@electron/rebuild": "^3.6.0",
     "electron-vite": "^3.1.0",
     "jsdom": "^27.0.1",
     "playwright": "^1.58.2",
@@ -82,12 +84,6 @@
     },
     "files": [
       "out/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "conductord/conductord",
-        "to": "conductord"
-      }
     ],
     "mac": {
       "target": "dmg",
