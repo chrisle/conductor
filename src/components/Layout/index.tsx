@@ -143,11 +143,9 @@ export default function MainLayout(): React.ReactElement {
       <ActivityBar />
       <Sidebar defaultGroupId={getFirstGroupId(root)} />
       <div className="flex-1 min-w-0 overflow-hidden relative">
-        <EdgeDropZone side="north" dragging={dragging} />
         <EdgeDropZone side="west" dragging={dragging} />
         <SplitPane node={root} />
         <EdgeDropZone side="east" dragging={dragging} />
-        <EdgeDropZone side="south" dragging={dragging} />
       </div>
       <SettingsDialog />
     </div>
