@@ -132,6 +132,10 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 600,
     frame: false,
+    // On macOS, disable native maximize so that accidental double-clicks on
+    // the drag region or Sequoia window-tiling gestures don't unexpectedly
+    // maximize the window. Our IPC handler re-enables it temporarily.
+    maximizable: process.platform !== 'darwin',
     transparent: false,
     backgroundColor: '#09090b',
     show: false,
@@ -146,7 +150,13 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
-    if (saved.isMaximized) mainWindow?.maximize()
+    if (saved.isMaximized) {
+      mainWindow?.setMaximizable(true)
+      mainWindow?.maximize()
+      if (process.platform === 'darwin') {
+        setTimeout(() => mainWindow?.setMaximizable(false), 200)
+      }
+    }
     mainWindow?.show()
   })
 

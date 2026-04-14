@@ -24,11 +24,17 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('window:maximize', () => {
     const win = BrowserWindow.getFocusedWindow()
-    if (win?.isMaximized()) {
+    if (!win) return
+    // On macOS, maximizable is disabled to prevent accidental OS-triggered
+    // maximize. Temporarily re-enable it for our explicit toggle.
+    const needsToggle = process.platform === 'darwin' && !win.isMaximizable()
+    if (needsToggle) win.setMaximizable(true)
+    if (win.isMaximized()) {
       win.unmaximize()
     } else {
-      win?.maximize()
+      win.maximize()
     }
+    if (needsToggle) setTimeout(() => { if (!win.isDestroyed()) win.setMaximizable(false) }, 200)
   })
 
   ipcMain.handle('window:close', () => {
@@ -54,6 +60,7 @@ export function registerIpcHandlers(): void {
       minWidth: 800,
       minHeight: 600,
       frame: false,
+      maximizable: process.platform !== 'darwin',
       transparent: false,
       backgroundColor: '#09090b',
       show: false,
