@@ -1,6 +1,6 @@
 # conductord
 
-A Go daemon that manages long-lived terminal sessions over PTY. It wraps each session in tmux so terminals survive app restarts, provides a WebSocket API for real-time I/O, and includes an autopilot system that auto-responds to CLI permission prompts.
+A Go daemon that manages long-lived terminal sessions over PTY. Sessions survive app restarts via an in-memory scrollback buffer. Provides a WebSocket API for real-time I/O and includes an autopilot system that auto-responds to CLI permission prompts.
 
 ## Architecture
 
@@ -13,33 +13,26 @@ Electron Main Process
     │
     │  HTTP over Unix socket
     ▼
-conductord ──────── PTY ──────── tmux session ──────── shell / claude / codex
+conductord ──────── PTY ──────── shell / claude / codex
     │
     ├── System tray (macOS)
-    ├── Log file (~/.conductor/logs)
-    └── Bundled tmux binary (embedded)
+    └── Log file (~/.conductor/logs)
 ```
 
 conductord listens on a Unix domain socket (`~/.conductor/conductord.sock`). The Electron main process bridges IPC calls from the renderer to HTTP/WebSocket requests on this socket.
 
-Sessions are backed by tmux using a dedicated socket (`-L conductor`) to avoid interfering with the user's personal tmux server.
-
 ## Building
 
-Prerequisites: Go 1.25+, Homebrew (macOS)
+Prerequisites: Go 1.25+
 
 ```bash
-# 1. Bundle tmux binary + dylibs into embedded/
-bash scripts/prepare-tmux.sh
-
-# 2. Build the daemon
 cd conductord && go build -o conductord .
 ```
 
 Or from the app root:
 
 ```bash
-npm run package   # prepare-tmux + go build + electron-vite build + electron-builder
+npm run package   # go build + electron-vite build + electron-builder
 ```
 
 ## Running
@@ -78,7 +71,7 @@ npm run package   # prepare-tmux + go build + electron-vite build + electron-bui
 GET /ws/terminal?id=<session-id>&cwd=<path>&command=<cmd>
 ```
 
-Upgrades to a WebSocket connection. Creates a new tmux session or reattaches to an existing one.
+Upgrades to a WebSocket connection. Creates a new PTY session or reattaches to an existing one.
 
 **Server → Client:**
 - Binary frames: PTY output
@@ -92,7 +85,7 @@ Upgrades to a WebSocket connection. Creates a new tmux session or reattaches to 
 | `resize` | `{cols, rows}` | Resize PTY |
 | `kill` | — | Terminate session |
 | `autopilot` | boolean | Enable/disable prompt auto-response |
-| `tmux-option` | `{key, value}` | Set tmux option (only `mouse` allowed) |
+| `capture-scrollback` | — | Request scrollback buffer (returns JSON `{type: "scrollback", data: "..."}`) |
 
 On connect, the server replays the 64 KB scrollback buffer so the client sees recent output.
 
@@ -110,15 +103,6 @@ On connect, the server replays the 64 KB scrollback buffer so the client sees re
 
 **`DELETE /api/sessions/{id}`** — Kill a session
 
-**`GET /api/tmux`** — List live tmux sessions
-```json
-[{"name": "t-NP-42", "connected": true, "command": "claude", "cwd": "/project", "created": 1711900000, "activity": 1711900500}]
-```
-
-**`DELETE /api/tmux/{name}`** — Kill a tmux session
-
-**`DELETE /api/tmux?orphaned=1`** — Kill all detached tmux sessions with no active conductord connection
-
 **`POST /api/exec`** — One-shot command execution (no PTY)
 ```json
 // Request
@@ -134,11 +118,11 @@ Commands run through the user's login shell (`bash -ilc` / `zsh -ilc`) so PATH a
 
 ```
 1. Client connects via WebSocket with session ID
-2. If new: tmux new-session → PTY created → readLoop() starts
-   If existing: tmux attach → scrollback replayed → live output resumes
-3. Client disconnects → session detaches (PTY stays alive)
+2. If new: PTY created → readLoop() starts
+   If existing: scrollback replayed → live output resumes
+3. Client disconnects → session stays alive (PTY keeps running)
 4. Client reconnects → reattaches, scrollback replayed
-5. Client sends "kill" → PTY terminated, tmux session destroyed
+5. Client sends "kill" → PTY terminated, session destroyed
 ```
 
 Sessions survive client disconnects, app restarts, and window closes. Only an explicit kill or `Quit Conductor` from the tray destroys them.
@@ -175,27 +159,6 @@ When `API Error: 500` appears, autopilot sends `continue\r` with exponential bac
 - Vetoes responses when a slash-command autocomplete picker is open
 - Disabled by default — toggled per-session via WebSocket
 
-## Tmux Integration
-
-conductord bundles a self-contained tmux binary with its dependencies to avoid version mismatches with the user's system tmux.
-
-### Bundle Contents (`embedded/<os>-<arch>/`)
-
-| File | Purpose |
-|------|---------|
-| `tmux` | Patched binary with `@executable_path` dylib references |
-| `libevent_core-2.1.7.dylib` | Event library |
-| `libncursesw.6.dylib` | Terminal handling |
-| `libutf8proc.3.dylib` | Unicode processing |
-
-Extracted at runtime to `~/.cache/conductor/tmux/`. Falls back to system tmux if the bundle is missing.
-
-### Isolation
-
-- Uses socket name `-L conductor` (separate tmux server)
-- Custom `tmux.conf`: 256-color, no status bar, mouse scroll enabled
-- Session names sanitized to alphanumeric + `-` + `_`
-
 ## System Tray
 
 When run with `-tray`, conductord shows a macOS system tray icon with:
@@ -204,7 +167,7 @@ When run with `-tray`, conductord shows a macOS system tray icon with:
 - **N active sessions** — updates every 2 seconds
 - **Open Conductor** — launches the Electron app
 - **View Logs** — opens `~/Library/Logs/conductord.log`
-- **Quit Conductor** — kills all tmux sessions and exits
+- **Quit Conductor** — kills all sessions and exits
 
 The tray icon is a programmatically generated 22×22 template PNG showing a `>_` terminal prompt.
 
@@ -232,19 +195,13 @@ Tests cover the `/api/exec` endpoint: argument handling, working directory, time
 
 ```
 conductord/
-├── main.go          Core daemon: sessions, API handlers, tmux, autopilot, exec
+├── main.go          Core daemon: sessions, API handlers, autopilot, exec
 ├── tray.go          System tray menu and lifecycle
 ├── tray_icon.go     Programmatic tray icon generation
 ├── exec_test.go     Tests for /api/exec endpoint
 ├── go.mod
 ├── go.sum
 └── embedded/
-    ├── tmux.conf            Minimal tmux config
     ├── .gitkeep
-    ├── AppIcon.icns         macOS app icon
-    └── darwin-arm64/        Bundled tmux + dylibs (macOS ARM)
-        ├── tmux
-        ├── libevent_core-2.1.7.dylib
-        ├── libncursesw.6.dylib
-        └── libutf8proc.3.dylib
+    └── AppIcon.icns         macOS app icon
 ```

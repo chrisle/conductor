@@ -6,7 +6,7 @@ Conductor gives Claude Code and your shell a persistent, multi-pane home so you 
 
 ## Why Conductor
 
-**Sessions that survive app restarts.** Every terminal is backed by tmux. Close the window and reopen it — pick up exactly where you left off with full scrollback.
+**Sessions that survive app restarts.** Every terminal is backed by a persistent PTY managed by conductord. Close the window and reopen it — pick up exactly where you left off with full scrollback.
 
 **Run AI assistants in parallel.** Split the workspace into as many panes as you need. Have Claude Code refactoring in one pane, another Claude session generating tests, and a shell running your build — all visible at once.
 
@@ -18,7 +18,7 @@ Conductor gives Claude Code and your shell a persistent, multi-pane home so you 
 
 ## Features
 
-- **Persistent terminals** — tmux-backed sessions with 64KB scrollback replay on reconnect
+- **Persistent terminals** — PTY-backed sessions with 64KB scrollback replay on reconnect
 - **Split panes and tabs** — horizontal/vertical splits with drag-and-drop tab rearrangement
 - **Claude Code** — first-class support with session history and multiple account switching
 - **Autopilot** — auto-responds to CLI permission prompts and retries on API errors with exponential backoff
@@ -41,7 +41,7 @@ Electron Main Process
     |
     |  HTTP over Unix socket
     v
-conductord (Go daemon) --- PTY --- tmux session --- shell / claude
+conductord (Go daemon) --- PTY --- shell / claude
 ```
 
 The Electron frontend handles UI. A Go daemon (`conductord`) manages terminal sessions over PTY, communicating via HTTP and WebSocket on a Unix domain socket. This separation means sessions stay alive even when the app isn't running.
@@ -51,7 +51,7 @@ The Electron frontend handles UI. A Go daemon (`conductord`) manages terminal se
 - **Frontend:** React, TypeScript, Vite, xterm.js, Monaco Editor, Radix UI, Tailwind CSS, Zustand
 - **Desktop:** Electron
 - **Daemon:** Go, gorilla/websocket, creack/pty
-- **Sessions:** tmux (bundled binary, isolated socket)
+- **Sessions:** Direct PTY via creack/pty with in-memory scrollback
 
 ## Getting Started
 
