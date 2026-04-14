@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Minus, Square, X, Maximize2, ChevronDown, FolderOpen, Plus, Pencil, Trash2, FilePlus2, SaveAll, AppWindow, PanelLeft, Train } from 'lucide-react'
+import { Minus, Square, X, Maximize2, ChevronDown, FolderOpen, Plus, Pencil, Trash2, FilePlus2, SaveAll, AppWindow, PanelLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -173,7 +173,10 @@ export default function TitleBar(): React.ReactElement {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="no-drag flex items-center gap-0.5 text-ui-sm text-zinc-500 hover:text-zinc-300 transition-colors rounded px-1 py-0.5 hover:bg-zinc-800/50">
-                <Train className="w-3 h-3" />
+                <svg className="w-3 h-3" viewBox="0 0 375 375" fill="currentColor" fillRule="evenodd">
+                  <circle cx="187.5" cy="188" r="165.7"/>
+                  <path d="M274.49 281.98C301.57 259.26 316.13 229.46 317.41 201.15L247.26 188.81C244.81 200.53 239.85 213.48 227.74 223.65C207.62 240.53 180.12 240.76 160.21 217.01C140.73 193.81 144.96 167.42 165.85 149.90C178.49 139.29 192.73 137.43 204.93 137.31L207.32 66.31C177.98 60.62 145.15 69.70 116.52 93.73C61.60 139.82 51.52 208.48 100.65 267.01C149.76 325.56 219.57 328.07 274.49 281.98Z"/>
+                </svg>
                 Conductor
                 <ChevronDown className="w-2.5 h-2.5 text-zinc-600" />
               </button>
