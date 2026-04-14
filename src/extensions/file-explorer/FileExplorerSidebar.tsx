@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react'
-import { Terminal, GitBranch, FolderOpen, RefreshCw, FilePlus, FolderPlus, Bot, ExternalLink, Eye, X } from 'lucide-react'
+import React, { useEffect, useState, useCallback } from 'react'
+import { Terminal, GitBranch, FolderOpen, RefreshCw, FilePlus, FolderPlus, Bot, ExternalLink, Eye, X, ChevronDown } from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -21,24 +21,42 @@ interface FileExplorerSidebarProps {
   groupId: string
 }
 
+/** Truncate a path from the left, showing the rightmost segments that fit. */
+function truncatePath(fullPath: string): string {
+  const tilded = fullPath.replace(/^\/Users\/[^/]+/, '~')
+  const parts = tilded.split('/')
+  if (parts.length <= 3) return tilded
+  return '.../' + parts.slice(-2).join('/')
+}
+
 export default function FileExplorerSidebar({ groupId }: FileExplorerSidebarProps): React.ReactElement {
   const { addTab } = useTabsStore()
   const { focusedGroupId } = useLayoutStore()
   const { rootPath, gitRef, virtualPath, exitVirtualMode } = useSidebarStore()
   const [isGitRepo, setIsGitRepo] = useState(false)
+  const [currentBranch, setCurrentBranch] = useState<string | null>(null)
+  const [shortstat, setShortstat] = useState<{ insertions: number; deletions: number }>({ insertions: 0, deletions: 0 })
   const [branchPickerOpen, setBranchPickerOpen] = useState(false)
 
-  useEffect(() => {
-    if (!rootPath) { setIsGitRepo(false); return }
-    window.electronAPI.gitBranch(rootPath).then(branch => setIsGitRepo(branch !== null))
+  const loadGitInfo = useCallback(async () => {
+    if (!rootPath) { setIsGitRepo(false); setCurrentBranch(null); return }
+    const [branch, stat] = await Promise.all([
+      window.electronAPI.gitBranch(rootPath),
+      window.electronAPI.gitShortstat(rootPath),
+    ])
+    setIsGitRepo(branch !== null)
+    setCurrentBranch(branch)
+    setShortstat(stat)
   }, [rootPath])
 
-  function openNewTerminal() {
-    const targetGroup = focusedGroupId || groupId
-    const cwd = resolveTerminalCwd()
-    saveTerminalCwd(cwd)
-    addTab(targetGroup, { type: 'terminal', title: 'Terminal', filePath: cwd })
-  }
+  useEffect(() => { loadGitInfo() }, [loadGitInfo])
+
+  // Refresh git info when sidebar refreshes
+  useEffect(() => {
+    const handler = () => { loadGitInfo() }
+    window.addEventListener('sidebar:refresh', handler)
+    return () => window.removeEventListener('sidebar:refresh', handler)
+  }, [loadGitInfo])
 
   function openClaudeHere() {
     const cwd = rootPath || '/'
@@ -59,26 +77,9 @@ export default function FileExplorerSidebar({ groupId }: FileExplorerSidebarProp
     const targetGroup = focusedGroupId || groupId
     addTab(targetGroup, { type: 'terminal', title: 'Terminal', filePath: cwd })
   }
-  function openGitGraph() {
-    const targetGroup = focusedGroupId || groupId
-    addTab(targetGroup, { type: 'git-graph', title: 'Git Graph', filePath: rootPath || undefined })
-  }
-
   const actions: SidebarAction[] = [
     { icon: RefreshCw, label: 'Refresh', onClick: () => window.dispatchEvent(new Event('sidebar:refresh')) },
-    { icon: Terminal, label: 'New terminal', onClick: openNewTerminal },
   ]
-
-  if (isGitRepo) {
-    actions.push({ icon: GitBranch, label: 'Switch branch', onClick: () => setBranchPickerOpen(true) })
-  }
-
-  // Format the current directory for display
-  const displayPath = gitRef
-    ? (virtualPath || '/')
-    : rootPath
-      ? rootPath.replace(/^\/Users\/[^/]+/, '~')
-      : ''
 
   return (
     <SidebarLayout
@@ -101,14 +102,45 @@ export default function FileExplorerSidebar({ groupId }: FileExplorerSidebarProp
             )}
             {(rootPath || gitRef) && (
               <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-zinc-700/50 shrink-0 min-w-0">
-                <FolderOpen className="w-3 h-3 text-zinc-500 shrink-0" />
-                <span
-                  className="text-ui-xs text-zinc-400 truncate block"
-                  dir="rtl"
-                  title={gitRef ? virtualPath || '/' : rootPath || ''}
-                >
-                  <bdi>{displayPath}</bdi>
-                </span>
+                {isGitRepo && !gitRef ? (
+                  <BranchPicker
+                    open={branchPickerOpen}
+                    onOpenChange={setBranchPickerOpen}
+                    repoPath={rootPath!}
+                  >
+                    <button
+                      role="combobox"
+                      aria-expanded={branchPickerOpen}
+                      className="flex items-center gap-1.5 min-w-0 hover:text-zinc-200 transition-colors group"
+                    >
+                      <GitBranch className="w-3 h-3 text-zinc-500 shrink-0" />
+                      <span className="text-ui-xs text-zinc-400 truncate group-hover:text-zinc-200">
+                        {currentBranch || 'detached'}
+                      </span>
+                      {(shortstat.insertions > 0 || shortstat.deletions > 0) && (
+                        <span className="flex items-center gap-1 text-ui-xs shrink-0">
+                          {shortstat.insertions > 0 && (
+                            <span className="text-emerald-500">+{shortstat.insertions}</span>
+                          )}
+                          {shortstat.deletions > 0 && (
+                            <span className="text-red-400">-{shortstat.deletions}</span>
+                          )}
+                        </span>
+                      )}
+                      <ChevronDown className="w-3 h-3 text-zinc-600 shrink-0 group-hover:text-zinc-400" />
+                    </button>
+                  </BranchPicker>
+                ) : (
+                  <>
+                    <FolderOpen className="w-3 h-3 text-zinc-500 shrink-0" />
+                    <span
+                      className="text-ui-xs text-zinc-400 truncate block"
+                      title={gitRef ? virtualPath || '/' : rootPath || ''}
+                    >
+                      {gitRef ? (virtualPath || '/') : truncatePath(rootPath || '')}
+                    </span>
+                  </>
+                )}
               </div>
             )}
             <div className="flex-1 overflow-hidden">
@@ -163,13 +195,6 @@ export default function FileExplorerSidebar({ groupId }: FileExplorerSidebarProp
           )}
         </ContextMenuContent>
       </ContextMenu>
-      {rootPath && (
-        <BranchPicker
-          open={branchPickerOpen}
-          onOpenChange={setBranchPickerOpen}
-          repoPath={rootPath}
-        />
-      )}
     </SidebarLayout>
   )
 }

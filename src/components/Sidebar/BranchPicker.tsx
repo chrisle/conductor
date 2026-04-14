@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { GitBranch, FolderGit2, Check, Globe } from 'lucide-react'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Command,
   CommandInput,
@@ -17,6 +16,7 @@ interface BranchPickerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   repoPath: string
+  children: React.ReactNode
 }
 
 interface Worktree {
@@ -31,7 +31,7 @@ interface Branch {
   isRemote: boolean
 }
 
-export default function BranchPicker({ open, onOpenChange, repoPath }: BranchPickerProps): React.ReactElement {
+export default function BranchPicker({ open, onOpenChange, repoPath, children }: BranchPickerProps): React.ReactElement {
   const { setRootPath, setGitRef, setGitRepoRoot, setVirtualPath, collapseAll, exitVirtualMode, gitRef } = useSidebarStore()
   const [worktrees, setWorktrees] = useState<Worktree[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
@@ -77,12 +77,14 @@ export default function BranchPicker({ open, onOpenChange, repoPath }: BranchPic
   const remoteBranches = branches.filter(b => b.isRemote)
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="overflow-hidden p-0 bg-zinc-900 border-zinc-700 max-w-lg" hideClose>
-        <VisuallyHidden><DialogTitle>Switch branch</DialogTitle></VisuallyHidden>
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger asChild>
+        {children}
+      </PopoverTrigger>
+      <PopoverContent className="w-72 p-0 bg-zinc-900 border-zinc-700 shadow-lg shadow-black/50" side="bottom" align="start">
         <Command className="rounded-lg bg-zinc-900">
           <CommandInput placeholder="Search branches..." />
-          <CommandList>
+          <CommandList className="max-h-64">
             <CommandEmpty>No branches found.</CommandEmpty>
 
             {worktrees.length > 0 && (
@@ -94,10 +96,7 @@ export default function BranchPicker({ open, onOpenChange, repoPath }: BranchPic
                     onSelect={() => selectWorktree(wt)}
                   >
                     <FolderGit2 className="text-emerald-500" />
-                    <div className="flex flex-col min-w-0">
-                      <span>{wt.branch}</span>
-                      <span className="text-ui-xs text-zinc-500 truncate">{wt.path.replace(/^\/Users\/[^/]+/, '~')}</span>
-                    </div>
+                    <span>{wt.branch}</span>
                     {wt.branch === currentBranch && !gitRef && (
                       <Check className="ml-auto text-emerald-400 shrink-0" />
                     )}
@@ -149,7 +148,7 @@ export default function BranchPicker({ open, onOpenChange, repoPath }: BranchPic
             )}
           </CommandList>
         </Command>
-      </DialogContent>
-    </Dialog>
+      </PopoverContent>
+    </Popover>
   )
 }
