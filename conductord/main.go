@@ -611,11 +611,12 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 			s.mu.Unlock()
 			log.Printf("[session %s] autopilot %v", s.id, enabled)
 		case "capture-scrollback":
-			// Return the scrollback buffer content to the client.
-			sb := s.getScrollback()
+			// Return the rendered terminal state (scrollback + visible screen)
+			// interpreted by the VT emulator, so the client gets clean ANSI text.
+			rendered := s.renderState()
 			conn.WriteJSON(map[string]interface{}{
 				"type": "scrollback",
-				"data": string(sb),
+				"data": rendered,
 			})
 		}
 	}
