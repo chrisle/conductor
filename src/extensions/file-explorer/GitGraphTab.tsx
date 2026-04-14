@@ -445,7 +445,7 @@ export default function GitGraphTab({ tab }: TabProps): React.ReactElement {
                         <span className="text-ui-sm text-zinc-600 shrink-0 w-16 text-right">{formatDate(row.commit.date)}</span>
                       </div>
                     </ContextMenuTrigger>
-                    <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
+                    <ContextMenuContent className="w-44 bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
                       <ContextMenuItem className="gap-2 text-ui-base cursor-pointer" onClick={() => navigator.clipboard.writeText(row.commit.hash)}>
                         <Hash className="w-3.5 h-3.5" />
                         Copy Hash

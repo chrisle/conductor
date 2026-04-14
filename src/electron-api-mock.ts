@@ -122,6 +122,7 @@ const mock: typeof window.electronAPI = {
   gitShow: async () => ({ body: '', files: [] }),
   gitRemoteUrl: async () => null,
   gitShortstat: async () => ({ insertions: 0, deletions: 0 }),
+  gitStatus: async () => [],
   captureScrollback: async () => null,
 
   // App config
@@ -148,6 +149,10 @@ const mock: typeof window.electronAPI = {
   // Git
   worktreeList: async () => [],
   worktreeAdd: async () => ({ success: false, error: 'Not available in web mode' }),
+  gitRepoRoot: async () => null,
+  gitBranchList: async () => [],
+  gitLsTree: async () => [],
+  gitShowFile: async () => ({ success: false, error: 'Not available in web mode' }),
   skillExists: async () => false,
   installSkill: async () => ({ success: false }),
 
@@ -181,6 +186,7 @@ const mock: typeof window.electronAPI = {
   jiraFetch: async () => ({ ok: false, status: 0, body: null, error: 'Not available in web mode' }),
   jiraPost: async () => ({ ok: false, status: 0, body: null, error: 'Not available in web mode' }),
   jiraPut: async () => ({ ok: false, status: 0, body: null, error: 'Not available in web mode' }),
+  jiraDelete: async () => ({ ok: false, status: 0, body: null, error: 'Not available in web mode' }),
 
   // Extensions
   getExtensionsDir: async () => '/tmp/extensions',

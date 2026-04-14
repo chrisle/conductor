@@ -40,7 +40,7 @@ function ZoomControl() {
             {pct}%
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="center" side="top" className="min-w-[100px] bg-zinc-900 border-zinc-700">
+        <DropdownMenuContent align="center" side="top" className="min-w-[100px] bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
           {ZOOM_PRESETS.map(z => (
             <DropdownMenuItem
               key={z}

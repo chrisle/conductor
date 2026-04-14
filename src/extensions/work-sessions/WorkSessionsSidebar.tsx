@@ -424,14 +424,14 @@ function SessionTreeNode({
             </button>
           </div>
         </ContextMenuTrigger>
-        <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
+        <ContextMenuContent className="w-44 bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
           {/* Terminal preview: opens a sub-panel showing the last few lines of output */}
           <ContextMenuSub>
             <ContextMenuSubTrigger className="gap-2 text-xs cursor-pointer">
               <Eye className="w-3.5 h-3.5" />
               Preview
             </ContextMenuSubTrigger>
-            <ContextMenuSubContent className="bg-zinc-900 border-zinc-700 w-[340px]">
+            <ContextMenuSubContent className="bg-zinc-900/80 backdrop-blur-xl border-zinc-700 w-[340px]">
               <TerminalPreview sessionId={session.session.name} />
             </ContextMenuSubContent>
           </ContextMenuSub>
@@ -445,7 +445,7 @@ function SessionTreeNode({
               <Folder className="w-3.5 h-3.5" />
               Move to…
             </ContextMenuSubTrigger>
-            <ContextMenuSubContent className="bg-zinc-900 border-zinc-700">
+            <ContextMenuSubContent className="bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
               {moveToFolderItems.map(item => (
                 <ContextMenuItem
                   key={item.id ?? '__root__'}
@@ -474,7 +474,7 @@ function SessionTreeNode({
                   <LayoutGrid className="w-3.5 h-3.5" />
                   Tile {tileTargets.length} sessions
                 </ContextMenuSubTrigger>
-                <ContextMenuSubContent className="bg-zinc-900 border-zinc-700">
+                <ContextMenuSubContent className="bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
                   <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={() => tileSessions(tileTargets, 'columns')}>
                     <Columns3 className="w-3.5 h-3.5" />
                     Columns
@@ -782,7 +782,7 @@ function FolderTreeNode({
             )}
           </div>
         </ContextMenuTrigger>
-        <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
+        <ContextMenuContent className="w-44 bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
           <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={() => {
             useProjectStore.getState().addSessionFolder('New Folder', folder.id)
           }}>
@@ -799,7 +799,7 @@ function FolderTreeNode({
                 <LayoutGrid className="w-3.5 h-3.5" />
                 Tile sessions
               </ContextMenuSubTrigger>
-              <ContextMenuSubContent className="bg-zinc-900 border-zinc-700">
+              <ContextMenuSubContent className="bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
                 <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={() => tileSessions(attachedInFolder, 'columns')}>
                   <Columns3 className="w-3.5 h-3.5" />
                   Columns
@@ -1218,7 +1218,7 @@ export default function WorkSessionsSidebar({ groupId }: { groupId: string }): R
             </div>
           </ScrollArea>
         </ContextMenuTrigger>
-        <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
+        <ContextMenuContent className="w-44 bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
           <ContextMenuItem className="gap-2 text-xs cursor-pointer" onSelect={() => {
             useProjectStore.getState().addSessionFolder('New Folder', null)
           }}>

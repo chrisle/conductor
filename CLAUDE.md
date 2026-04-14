@@ -31,7 +31,7 @@ Every context menu follows this exact component structure:
 
 ### ContextMenuContent styling
 
-- Always include: `className="w-44 bg-zinc-900 border-zinc-700"`
+- Always include: `className="w-44 bg-zinc-900/80 backdrop-blur-xl border-zinc-700"`
 - Use `min-w-[140px]` instead of `w-44` only when the menu has very short labels (e.g. file tree)
 
 ### ContextMenuItem styling

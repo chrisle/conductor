@@ -52,6 +52,7 @@ interface ElectronAPI {
   gitShow: (path: string, hash: string) => Promise<{ body: string; files: Array<{ status: string; file: string }> }>
   gitRemoteUrl: (path: string) => Promise<string | null>
   gitShortstat: (path: string) => Promise<{ insertions: number; deletions: number }>
+  gitStatus: (path: string) => Promise<Array<{ path: string; status: string }>>
 
   // App config
   loadConfig: () => Promise<AppConfig | null>
@@ -78,6 +79,12 @@ interface ElectronAPI {
   // Git
   worktreeList: (repoPath: string) => Promise<Array<{ path: string; branch: string; bare: boolean; head: string }>>
   worktreeAdd: (repoPath: string, branchName: string, basePath?: string) => Promise<{ success: boolean; path?: string; error?: string }>
+  gitRepoRoot: (dirPath: string) => Promise<string | null>
+  gitBranchList: (repoPath: string) => Promise<Array<{ name: string; isRemote: boolean }>>
+  gitLsTree: (repoPath: string, ref: string, treePath: string) => Promise<Array<{
+    name: string; path: string; isDirectory: boolean; isFile: boolean
+  }>>
+  gitShowFile: (repoPath: string, ref: string, filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>
 
   // Skills
   skillExists: (name: string) => Promise<boolean>
@@ -120,6 +127,7 @@ interface ElectronAPI {
   jiraFetch: (url: string, headers: Record<string, string>) => Promise<{ ok: boolean; status: number; body: unknown; error?: string }>
   jiraPost: (url: string, headers: Record<string, string>, body: string) => Promise<{ ok: boolean; status: number; body: unknown; error?: string }>
   jiraPut: (url: string, headers: Record<string, string>, body: string) => Promise<{ ok: boolean; status: number; body: unknown; error?: string }>
+  jiraDelete: (url: string, headers: Record<string, string>) => Promise<{ ok: boolean; status: number; body: unknown; error?: string }>
 
   // Extensions
   getExtensionsDir: () => Promise<string>

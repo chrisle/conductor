@@ -27,6 +27,8 @@ interface FileTreeNodeProps {
   entry: FileEntry
   depth: number
   groupId: string
+  gitRef?: string | null
+  gitRepoRoot?: string | null
 }
 
 function getFileIcon(filename: string): LucideIcon {
@@ -164,7 +166,7 @@ function getLanguageFromExtension(filename: string): string {
 
 type CreatingType = 'file' | 'folder' | null
 
-export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProps): React.ReactElement {
+export default function FileTreeNode({ entry, depth, groupId, gitRef, gitRepoRoot }: FileTreeNodeProps): React.ReactElement {
   const [children, setChildren] = useState<FileEntry[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
@@ -173,9 +175,15 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
   const [newName, setNewName] = useState('')
   const createInputRef = useRef<HTMLInputElement>(null)
 
-  const { isExpanded, toggleExpanded, selectedPath, setSelectedPath } = useSidebarStore()
+  const { isExpanded, toggleExpanded, selectedPath, setSelectedPath, rootPath, gitStatusMap } = useSidebarStore()
   const { addTab } = useTabsStore()
   const { focusedGroupId, setFocusedGroup } = useLayoutStore()
+
+  // Compute git status for this entry
+  const relativePath = rootPath ? entry.path.replace(rootPath + '/', '') : entry.name
+  const fileGitStatus = gitStatusMap.get(relativePath)
+  // For directories, check if any child file has a git status
+  const dirHasChanges = entry.isDirectory && !gitRef && Array.from(gitStatusMap.keys()).some(p => p.startsWith(relativePath + '/'))
 
   const expanded = isExpanded(entry.path)
   const isSelected = selectedPath === entry.path
@@ -195,7 +203,9 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
 
   async function loadChildren() {
     setIsLoading(true)
-    const result = await window.electronAPI.readDir(entry.path)
+    const result = gitRef && gitRepoRoot
+      ? await window.electronAPI.gitLsTree(gitRepoRoot, gitRef, entry.path)
+      : await window.electronAPI.readDir(entry.path)
     setChildren(result)
     setIsLoading(false)
   }
@@ -203,7 +213,9 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
   async function refreshChildren() {
     if (expanded && entry.isDirectory) {
       setIsLoading(true)
-      const result = await window.electronAPI.readDir(entry.path)
+      const result = gitRef && gitRepoRoot
+        ? await window.electronAPI.gitLsTree(gitRepoRoot, gitRef, entry.path)
+        : await window.electronAPI.readDir(entry.path)
       setChildren(result)
       setIsLoading(false)
     }
@@ -215,8 +227,8 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
       if (!expanded && children.length === 0) loadChildren()
       setSelectedPath(entry.path)
     } else {
-      // If already selected, start a delayed rename
-      if (isSelected && !isRenaming) {
+      // If already selected, start a delayed rename (not in virtual mode)
+      if (!gitRef && isSelected && !isRenaming) {
         if (renameTimerRef.current) clearTimeout(renameTimerRef.current)
         renameTimerRef.current = setTimeout(() => {
           setIsRenaming(true)
@@ -234,7 +246,11 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
       renameTimerRef.current = null
     }
     if (entry.isDirectory) {
-      useSidebarStore.getState().setRootPath(entry.path)
+      if (gitRef) {
+        useSidebarStore.getState().setVirtualPath(entry.path)
+      } else {
+        useSidebarStore.getState().setRootPath(entry.path)
+      }
     } else {
       openFile()
     }
@@ -245,7 +261,9 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
     // If the file is already open in a visible group, focus that tab
     for (const [gid, group] of Object.entries(useTabsStore.getState().groups)) {
       if (!layoutGroupIds.includes(gid)) continue
-      const existing = group.tabs.find(t => t.filePath === entry.path)
+      const existing = group.tabs.find(t =>
+        t.filePath === entry.path && (t.gitRef || null) === (gitRef || null)
+      )
       if (existing) {
         useTabsStore.getState().setActiveTab(gid, existing.id)
         setFocusedGroup(gid)
@@ -255,11 +273,17 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
     const targetGroupId = (focusedGroupId && layoutGroupIds.includes(focusedGroupId))
       ? focusedGroupId
       : groupId
-    addTab(targetGroupId, {
+
+    const tabData: any = {
       type: extensionRegistry.getTabTypeForFile(entry.name),
-      title: entry.name,
-      filePath: entry.path
-    })
+      title: gitRef ? `${entry.name} [${gitRef}]` : entry.name,
+      filePath: entry.path,
+    }
+    if (gitRef && gitRepoRoot) {
+      tabData.gitRef = gitRef
+      tabData.gitRepoRoot = gitRepoRoot
+    }
+    addTab(targetGroupId, tabData)
   }
 
   async function handleDelete() {
@@ -398,18 +422,33 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
                 onClick={e => e.stopPropagation()}
               />
             ) : (
-              <span className="truncate">{entry.name}</span>
+              <span className={cn(
+                'truncate',
+                fileGitStatus === 'untracked' && 'text-green-400',
+                fileGitStatus === 'modified' && 'text-amber-400',
+                fileGitStatus === 'deleted' && 'text-red-400 line-through',
+                !fileGitStatus && dirHasChanges && 'text-amber-400/70',
+              )}>{entry.name}</span>
+            )}
+            {fileGitStatus === 'untracked' && (
+              <span className="shrink-0 text-[9px] font-bold text-green-400 ml-auto">U</span>
+            )}
+            {fileGitStatus === 'modified' && (
+              <span className="shrink-0 text-[9px] font-bold text-amber-400 ml-auto">M</span>
+            )}
+            {fileGitStatus === 'deleted' && (
+              <span className="shrink-0 text-[9px] font-bold text-red-400 ml-auto">D</span>
             )}
           </div>
         </ContextMenuTrigger>
-        <ContextMenuContent className="bg-zinc-900 border-zinc-700 min-w-[140px]">
+        <ContextMenuContent className="bg-zinc-900/80 backdrop-blur-xl border-zinc-700 min-w-[140px]">
           {entry.isFile && (
             <ContextMenuItem className="text-ui-base text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={openFile}>
               <FileUp className="w-3.5 h-3.5 mr-2" />
               Open
             </ContextMenuItem>
           )}
-          {entry.isDirectory && (
+          {!gitRef && entry.isDirectory && (
             <>
               <ContextMenuItem className="text-ui-base text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => startCreating('file')}>
                 <FilePlus className="w-3.5 h-3.5 mr-2" />
@@ -459,25 +498,29 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
             <Copy className="w-3.5 h-3.5 mr-2" />
             Copy Relative Path
           </ContextMenuItem>
-          <ContextMenuSeparator className="bg-zinc-700" />
-          <ContextMenuItem className="text-ui-base text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => { setIsRenaming(true); setRenameValue(entry.name) }}>
-            <Pencil className="w-3.5 h-3.5 mr-2" />
-            Rename
-          </ContextMenuItem>
-          <ContextMenuSeparator className="bg-zinc-700" />
-          <ContextMenuItem
-            className="text-ui-base text-red-400 focus:bg-zinc-800 focus:text-red-300"
-            onClick={handleDelete}
-          >
-            <Trash2 className="w-3.5 h-3.5 mr-2" />
-            Delete
-          </ContextMenuItem>
+          {!gitRef && (
+            <>
+              <ContextMenuSeparator className="bg-zinc-700" />
+              <ContextMenuItem className="text-ui-base text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => { setIsRenaming(true); setRenameValue(entry.name) }}>
+                <Pencil className="w-3.5 h-3.5 mr-2" />
+                Rename
+              </ContextMenuItem>
+              <ContextMenuSeparator className="bg-zinc-700" />
+              <ContextMenuItem
+                className="text-ui-base text-red-400 focus:bg-zinc-800 focus:text-red-300"
+                onClick={handleDelete}
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-2" />
+                Delete
+              </ContextMenuItem>
+            </>
+          )}
         </ContextMenuContent>
       </ContextMenu>
 
       {expanded && entry.isDirectory && (
         <div>
-          {creating && (
+          {!gitRef && creating && (
             <div
               className="flex items-center gap-1 px-2 py-[3px] text-ui-base"
               style={{ paddingLeft: `${8 + indent + 12}px` }}
@@ -519,6 +562,8 @@ export default function FileTreeNode({ entry, depth, groupId }: FileTreeNodeProp
               entry={child}
               depth={depth + 1}
               groupId={groupId}
+              gitRef={gitRef}
+              gitRepoRoot={gitRepoRoot}
             />
           ))}
         </div>

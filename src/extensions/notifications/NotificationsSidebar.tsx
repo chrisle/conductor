@@ -95,7 +95,7 @@ function NotificationItem({
           </div>
         </button>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
+      <ContextMenuContent className="w-44 bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
         <ContextMenuItem
           className="gap-2 text-xs cursor-pointer"
           onClick={() => markRead(notification.id)}

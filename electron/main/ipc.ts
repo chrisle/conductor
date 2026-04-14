@@ -262,6 +262,24 @@ export function registerIpcHandlers(): void {
     })
   })
 
+  ipcMain.handle('git:status', (_event, dirPath: string) => {
+    return new Promise<Array<{ path: string; status: string }>>((resolve) => {
+      execFile('git', ['-C', dirPath, 'status', '--porcelain', '-u'], { maxBuffer: 1024 * 1024 }, (err, stdout) => {
+        if (err) { resolve([]); return }
+        const entries = stdout.split('\n').filter(Boolean).map(line => {
+          const xy = line.substring(0, 2)
+          const filePath = line.substring(3)
+          let status = 'modified'
+          if (xy === '??' || xy === 'A ' || xy === 'AM') status = 'untracked'
+          else if (xy.includes('D')) status = 'deleted'
+          else if (xy.includes('M') || xy.includes('R') || xy.includes('C')) status = 'modified'
+          return { path: filePath, status }
+        })
+        resolve(entries)
+      })
+    })
+  })
+
   ipcMain.handle('git:shortstat', (_event, dirPath: string) => {
     return new Promise<{ insertions: number; deletions: number }>((resolve) => {
       execFile('git', ['-C', dirPath, 'diff', '--shortstat'], (err, stdout) => {
@@ -366,6 +384,60 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('git:worktreeAdd', (_event, repoPath: string, branchName: string, basePath?: string) => {
     return worktreeAdd(repoPath, branchName, basePath)
+  })
+
+  ipcMain.handle('git:repoRoot', (_event, dirPath: string) => {
+    return new Promise<string | null>((resolve) => {
+      execFile('git', ['-C', dirPath, 'rev-parse', '--show-toplevel'], (err, stdout) => {
+        resolve(err ? null : stdout.trim() || null)
+      })
+    })
+  })
+
+  ipcMain.handle('git:branchList', (_event, repoPath: string) => {
+    return new Promise<Array<{ name: string; isRemote: boolean }>>((resolve) => {
+      execFile('git', ['-C', repoPath, 'branch', '-a', '--format=%(refname:short)'], (err, stdout) => {
+        if (err) { resolve([]); return }
+        const branches = stdout.trim().split('\n').filter(Boolean).map(name => ({
+          name,
+          isRemote: name.startsWith('origin/')
+        }))
+        resolve(branches)
+      })
+    })
+  })
+
+  ipcMain.handle('git:lsTree', (_event, repoPath: string, ref: string, treePath: string) => {
+    return new Promise<Array<{ name: string; path: string; isDirectory: boolean; isFile: boolean }>>((resolve) => {
+      const target = treePath ? `${ref}:${treePath}` : ref
+      execFile('git', ['-C', repoPath, 'ls-tree', target], (err, stdout) => {
+        if (err) { resolve([]); return }
+        const entries = stdout.trim().split('\n').filter(Boolean).map(line => {
+          const [meta, fullPath] = line.split('\t')
+          const type = meta.split(' ')[1] // "blob" or "tree"
+          const name = fullPath.split('/').pop() || fullPath
+          const entryPath = treePath ? `${treePath}/${name}` : name
+          return { name, path: entryPath, isDirectory: type === 'tree', isFile: type === 'blob' }
+        })
+        entries.sort((a, b) => {
+          if (a.isDirectory && !b.isDirectory) return -1
+          if (!a.isDirectory && b.isDirectory) return 1
+          return a.name.localeCompare(b.name)
+        })
+        resolve(entries)
+      })
+    })
+  })
+
+  ipcMain.handle('git:showFile', (_event, repoPath: string, ref: string, filePath: string) => {
+    return new Promise<{ success: boolean; content?: string; error?: string }>((resolve) => {
+      execFile('git', ['-C', repoPath, 'show', `${ref}:${filePath}`],
+        { maxBuffer: 1024 * 1024 * 4 },
+        (err, stdout) => {
+          if (err) resolve({ success: false, error: err.message })
+          else resolve({ success: true, content: stdout })
+        })
+    })
   })
 
   // Skills
@@ -691,6 +763,17 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
   ipcMain.handle('jira:put', async (_event, url: string, headers: Record<string, string>, body: string) => {
     try {
       const res = await fetch(url, { method: 'PUT', headers, body })
+      const contentType = res.headers.get('content-type') || ''
+      const resBody = contentType.includes('json') ? await res.json() : null
+      return { ok: res.ok, status: res.status, body: resBody }
+    } catch (err) {
+      return { ok: false, status: 0, body: null, error: String(err) }
+    }
+  })
+
+  ipcMain.handle('jira:delete', async (_event, url: string, headers: Record<string, string>) => {
+    try {
+      const res = await fetch(url, { method: 'DELETE', headers })
       const contentType = res.headers.get('content-type') || ''
       const resBody = contentType.includes('json') ? await res.json() : null
       return { ok: res.ok, status: res.status, body: resBody }

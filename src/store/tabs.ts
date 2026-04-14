@@ -20,6 +20,10 @@ export interface Tab {
   refreshKey?: number
   /** Free-form note shown on hover; edited via right-click → Edit Tab Note */
   note?: string
+  /** Git ref for virtual file browsing (read-only) */
+  gitRef?: string
+  /** Git repo root path, used with gitRef to resolve virtual file content */
+  gitRepoRoot?: string
 }
 
 export interface TabGroup {
@@ -32,6 +36,8 @@ export interface TabGroup {
   tabHistory: string[]
   /** The git worktree path this group is associated with */
   worktree?: string
+  /** When true, the pane is locked — tabs cannot be closed, moved, or reordered */
+  locked?: boolean
 }
 
 export interface TabsState {
@@ -49,6 +55,7 @@ export interface TabsState {
   reorderTab: (groupId: string, fromIndex: number, toIndex: number) => void
   updateTab: (groupId: string, tabId: string, updates: Partial<Tab>) => void
   setGroupWorktree: (groupId: string, worktree: string | undefined) => void
+  setGroupLocked: (groupId: string, locked: boolean) => void
   getGroup: (groupId: string) => TabGroup | undefined
   /** Toggle a single tab in the selection (cmd/ctrl-click) */
   toggleSelectTab: (groupId: string, tabId: string) => void
@@ -275,6 +282,19 @@ export const useTabsStore = create<TabsState>((set, get) => ({
         groups: {
           ...state.groups,
           [groupId]: { ...group, worktree }
+        }
+      }
+    })
+  },
+
+  setGroupLocked: (groupId, locked) => {
+    set(state => {
+      const group = state.groups[groupId]
+      if (!group) return state
+      return {
+        groups: {
+          ...state.groups,
+          [groupId]: { ...group, locked }
         }
       }
     })

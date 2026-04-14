@@ -29,6 +29,7 @@ const electronAPI = {
   gitShow: (path: string, hash: string) => ipcRenderer.invoke('git:show', path, hash),
   gitRemoteUrl: (path: string) => ipcRenderer.invoke('git:remoteUrl', path),
   gitShortstat: (path: string) => ipcRenderer.invoke('git:shortstat', path),
+  gitStatus: (path: string) => ipcRenderer.invoke('git:status', path),
   rename: (oldPath: string, newPath: string) => ipcRenderer.invoke('fs:rename', oldPath, newPath),
   deleteFile: (path: string) => ipcRenderer.invoke('fs:delete', path),
   getHomeDir: () => ipcRenderer.invoke('fs:getHomeDir'),
@@ -70,6 +71,10 @@ const electronAPI = {
   // Git
   worktreeList: (repoPath: string) => ipcRenderer.invoke('git:worktreeList', repoPath),
   worktreeAdd: (repoPath: string, branchName: string, basePath?: string) => ipcRenderer.invoke('git:worktreeAdd', repoPath, branchName, basePath),
+  gitRepoRoot: (dirPath: string) => ipcRenderer.invoke('git:repoRoot', dirPath),
+  gitBranchList: (repoPath: string) => ipcRenderer.invoke('git:branchList', repoPath),
+  gitLsTree: (repoPath: string, ref: string, treePath: string) => ipcRenderer.invoke('git:lsTree', repoPath, ref, treePath),
+  gitShowFile: (repoPath: string, ref: string, filePath: string) => ipcRenderer.invoke('git:showFile', repoPath, ref, filePath),
 
   // Skills
   skillExists: (name: string) => ipcRenderer.invoke('skill:exists', name),
@@ -107,6 +112,7 @@ const electronAPI = {
   jiraFetch: (url: string, headers: Record<string, string>) => ipcRenderer.invoke('jira:fetch', url, headers),
   jiraPost: (url: string, headers: Record<string, string>, body: string) => ipcRenderer.invoke('jira:post', url, headers, body),
   jiraPut: (url: string, headers: Record<string, string>, body: string) => ipcRenderer.invoke('jira:put', url, headers, body),
+  jiraDelete: (url: string, headers: Record<string, string>) => ipcRenderer.invoke('jira:delete', url, headers),
 
   // Extensions
   getExtensionsDir: () => ipcRenderer.invoke('extensions:getDir'),

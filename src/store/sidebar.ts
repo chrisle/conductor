@@ -14,6 +14,12 @@ export interface SidebarState {
   expandedPaths: Set<string>
   favorites: string[]
   selectedPath: string | null
+  /** When set, file explorer is in virtual read-only mode browsing this git ref */
+  gitRef: string | null
+  /** Repo root path for git commands in virtual mode */
+  gitRepoRoot: string | null
+  /** Current subdirectory within the virtual tree (relative to repo root) */
+  virtualPath: string
   setWidth: (width: number) => void
   toggleVisibility: () => void
   setRootPath: (path: string) => void
@@ -24,6 +30,13 @@ export interface SidebarState {
   removeFavorite: (path: string) => void
   isFavorite: (path: string) => boolean
   setSelectedPath: (path: string | null) => void
+  /** Map of relative file path → git status ('modified' | 'untracked' | 'deleted') */
+  gitStatusMap: Map<string, string>
+  setGitStatusMap: (map: Map<string, string>) => void
+  setGitRef: (ref: string | null) => void
+  setGitRepoRoot: (path: string | null) => void
+  setVirtualPath: (path: string) => void
+  exitVirtualMode: () => void
 }
 
 export const useSidebarStore = create<SidebarState>((set, get) => ({
@@ -33,6 +46,12 @@ export const useSidebarStore = create<SidebarState>((set, get) => ({
   expandedPaths: new Set<string>(),
   favorites: [],
   selectedPath: null,
+  gitRef: null,
+  gitRepoRoot: null,
+  gitStatusMap: new Map(),
+
+  setGitStatusMap: (map) => set({ gitStatusMap: map }),
+  virtualPath: '',
 
   setWidth: (width) => set({ width: Math.max(220, Math.min(600, width)) }),
 
@@ -72,4 +91,12 @@ export const useSidebarStore = create<SidebarState>((set, get) => ({
   isFavorite: (path) => get().favorites.includes(path),
 
   setSelectedPath: (path) => set({ selectedPath: path }),
+
+  setGitRef: (ref) => set({ gitRef: ref }),
+
+  setGitRepoRoot: (path) => set({ gitRepoRoot: path }),
+
+  setVirtualPath: (path) => set({ virtualPath: path, expandedPaths: new Set(), selectedPath: null }),
+
+  exitVirtualMode: () => set({ gitRef: null, gitRepoRoot: null, virtualPath: '', expandedPaths: new Set(), selectedPath: null }),
 }))

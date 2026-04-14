@@ -48,10 +48,13 @@ function TerminalTabInner({
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error' | null>('connecting');
+  const [resizeDimensions, setResizeDimensions] = useState<{ cols: number; rows: number } | null>(null);
+  const resizeDimTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydratingRef = useRef(false);
   const isActiveRef = useRef(isActive);
   const writeBufferRef = useRef<string[]>([]);
   const writeRafRef = useRef<number | null>(null);
+  const needsRefitRef = useRef(false);
 
   const handleRefresh = useCallback(() => {
     termAPI.killTerminal(tabId);
@@ -343,6 +346,9 @@ function TerminalTabInner({
       term.onResize(({ cols, rows }: { cols: number; rows: number }) => {
         console.log(`[terminal] resize: cols=${cols} rows=${rows}`);
         termAPI.resizeTerminal(tabId, cols, rows);
+        setResizeDimensions({ cols, rows });
+        if (resizeDimTimerRef.current) clearTimeout(resizeDimTimerRef.current);
+        resizeDimTimerRef.current = setTimeout(() => setResizeDimensions(null), 800);
       });
 
       term.onRender(({ start, end }: { start: number; end: number }) => {
@@ -369,8 +375,11 @@ function TerminalTabInner({
       let resizeTimer: ReturnType<typeof setTimeout> | null = null;
       const scheduleRefit = () => {
         // Skip refit for hidden terminals — avoids N useless layout
-        // calculations during split pane resizing.
-        if (!isActiveRef.current) return;
+        // calculations during split pane resizing. Mark for deferred refit.
+        if (!isActiveRef.current) {
+          needsRefitRef.current = true;
+          return;
+        }
         if (resizeTimer) clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
           try {
@@ -391,6 +400,7 @@ function TerminalTabInner({
 
       cleanupRef.current = () => {
         if (resizeTimer) clearTimeout(resizeTimer);
+        if (resizeDimTimerRef.current) clearTimeout(resizeDimTimerRef.current);
         if (writeRafRef.current !== null) cancelAnimationFrame(writeRafRef.current);
         writeRafRef.current = null;
         writeBufferRef.current = [];
@@ -492,6 +502,9 @@ function TerminalTabInner({
           }
         }
       };
+      // Clear deferred refit flag
+      needsRefitRef.current = false;
+
       // Use rAF to wait for the browser to finish layout after the hidden
       // class is removed, then fit. The 50ms / 200ms fallbacks catch cases
       // where a single frame isn't enough (e.g. complex split resizes).
@@ -501,6 +514,9 @@ function TerminalTabInner({
       });
       setTimeout(fitAndScroll, 100);
       setTimeout(fitAndScroll, 300);
+      // Extra delayed refit for cases where layout is still settling
+      // (e.g. after complex split pane resizes that complete after 300ms)
+      setTimeout(fitAndScroll, 600);
     } else {
       term.blur();
 
@@ -602,8 +618,23 @@ function TerminalTabInner({
       <div
         ref={containerRef}
         className="h-full w-full min-w-0 overflow-hidden"
-        onClick={() => terminalRef.current?.focus()}
+        onClick={() => {
+          const term = terminalRef.current;
+          if (term) {
+            term.focus();
+            // Force refit on click — recovers from stale dimensions
+            // that can leave the terminal unresponsive after layout changes
+            doFit();
+          }
+        }}
       />
+      {resizeDimensions && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+          <div className="bg-zinc-800/90 backdrop-blur-sm text-zinc-200 text-sm font-mono px-4 py-2 rounded-lg shadow-lg border border-zinc-700/50">
+            {resizeDimensions.cols} &times; {resizeDimensions.rows}
+          </div>
+        </div>
+      )}
     </div>
     </div>
     {footerPosition === 'bottom' && toolbar}

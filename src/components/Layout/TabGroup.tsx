@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { X, Plus, FileText, FolderOpen, FilePlus2, RotateCw, Pencil, Skull, LayoutGrid, Columns3, Rows3, UserCircle, Check, StickyNote } from 'lucide-react'
+import { X, Plus, FileText, FolderOpen, FilePlus2, RotateCw, Pencil, Skull, LayoutGrid, Columns3, Rows3, UserCircle, Check, StickyNote, Lock, Unlock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
@@ -87,7 +87,7 @@ function EmptyState({ groupId, renderContextMenuItems }: { groupId: string, rend
           <RecentProjects />
         </div>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
+      <ContextMenuContent className="w-44 bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
         {renderContextMenuItems()}
       </ContextMenuContent>
     </ContextMenu>
@@ -115,7 +115,9 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   const { groups, setActiveTab, removeTab, addTab, moveTab } = useTabsStore()
   const selectedTabIds = useTabsStore(s => s.selectedTabIds[groupId])
   const { focusedGroupId, setFocusedGroup, insertPanel, removeGroup, getAllGroupIds } = useLayoutStore()
+  const setGroupLocked = useTabsStore(s => s.setGroupLocked)
   const group = groups[groupId]
+  const isLocked = group?.locked ?? false
 
   const [dropZone, setDropZone] = useState<DropZone>(null)
   const dropZoneRef = useRef<DropZone>(null)
@@ -443,6 +445,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   }
 
   function closeTab(tabId: string) {
+    if (isLocked) return
     const groupTabs = group.tabs
     removeTab(groupId, tabId)
     if (groupTabs.length === 1) {
@@ -620,7 +623,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                     <UserCircle className="w-3.5 h-3.5 shrink-0" />
                     <span>Project Default</span>
                   </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="bg-zinc-900 border-zinc-700">
+                  <DropdownMenuSubContent className="bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
                     <DropdownMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5">Default for this project</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
@@ -697,7 +700,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
             <span>Browser</span>
             {showHints && <NumberHint n={4} />}
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="bg-zinc-900 border-zinc-700">
+          <DropdownMenuSubContent className="bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
             <DropdownMenuItem
               onClick={() => {
                 useTabsStore.getState().addTab(groupId, {
@@ -760,7 +763,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
             <ClaudeIcon className="w-3.5 h-3.5 text-[#D97757] shrink-0" />
             <span>Claude</span>
           </ContextMenuSubTrigger>
-          <ContextMenuSubContent className="bg-zinc-900 border-zinc-700">
+          <ContextMenuSubContent className="bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
             <ContextMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5">Claude Accounts</ContextMenuLabel>
             <CtxMenuSeparator className="bg-zinc-700" />
             <ContextMenuItem
@@ -795,7 +798,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                     <UserCircle className="w-3.5 h-3.5 shrink-0" />
                     <span>Project Default</span>
                   </ContextMenuSubTrigger>
-                  <ContextMenuSubContent className="bg-zinc-900 border-zinc-700">
+                  <ContextMenuSubContent className="bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
                     <ContextMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5">Default for this project</ContextMenuLabel>
                     <CtxMenuSeparator className="bg-zinc-700" />
                     <ContextMenuItem
@@ -867,7 +870,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
             <Globe className="w-3.5 h-3.5 text-blue-400 shrink-0" />
             <span>Browser</span>
           </ContextMenuSubTrigger>
-          <ContextMenuSubContent className="bg-zinc-900 border-zinc-700">
+          <ContextMenuSubContent className="bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
             <ContextMenuItem
               onClick={() => {
                 useTabsStore.getState().addTab(groupId, {
@@ -936,11 +939,11 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
               <ContextMenuTrigger asChild>
               <TooltipTrigger asChild>
               <div
-                draggable
+                draggable={!isLocked}
                 // Explicitly enable drag across the entire tab surface in Electron/Chromium,
                 // where user-select:none can limit drag initiation to text nodes only.
-                style={{ WebkitUserDrag: 'element' } as React.CSSProperties}
-                onDragStart={e => handleTabDragStart(e, tab, index)}
+                style={!isLocked ? { WebkitUserDrag: 'element' } as React.CSSProperties : undefined}
+                onDragStart={e => !isLocked && handleTabDragStart(e, tab, index)}
                 onDragEnd={handleTabDragEnd}
                 onDragOver={e => handleTabDragOver(e, index)}
                 onDragLeave={() => setDragOverTabIndex(null)}
@@ -1017,18 +1020,22 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                   <StickyNote className="w-3 h-3 shrink-0 text-amber-400/80" aria-label="Has note" />
                 )}
                 <TabBadge tabId={tab.id} />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  draggable={false}
-                  onClick={e => handleCloseTab(e, tab.id)}
-                  className={cn(
-                    'shrink-0 w-4 h-4 opacity-0 group-hover/tab:opacity-100 hover:bg-zinc-700 transition-all',
-                    tab.id === group.activeTabId && 'opacity-60'
-                  )}
-                >
-                  <X className="w-2.5 h-2.5" />
-                </Button>
+                {isLocked ? (
+                  <Lock className="shrink-0 w-2.5 h-2.5 text-zinc-600" />
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    draggable={false}
+                    onClick={e => handleCloseTab(e, tab.id)}
+                    className={cn(
+                      'shrink-0 w-4 h-4 hover:bg-zinc-700 transition-all',
+                      tab.id === group.activeTabId ? 'opacity-60' : 'opacity-40 group-hover/tab:opacity-100'
+                    )}
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </Button>
+                )}
               </div>
               </TooltipTrigger>
               </ContextMenuTrigger>
@@ -1042,7 +1049,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                 </TooltipContent>
               )}
               </Tooltip>
-              <ContextMenuContent className="w-44 bg-zinc-900 border-zinc-700">
+              <ContextMenuContent className="w-44 bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
                 {(() => {
                   const sel = getEffectiveSelection(tab.id)
                   const multiSelected = sel.length > 1
@@ -1063,7 +1070,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                             <LayoutGrid className="w-3.5 h-3.5" />
                             Tile Selected
                           </ContextMenuSubTrigger>
-                          <ContextMenuSubContent className="bg-zinc-900 border-zinc-700">
+                          <ContextMenuSubContent className="bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
                             <ContextMenuItem
                               className="gap-2 text-ui-base cursor-pointer"
                               onClick={() => tileSelectedTabs(tab.id, 'columns')}
@@ -1112,6 +1119,14 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                     <>
                       <ContextMenuItem
                         className="gap-2 text-ui-base cursor-pointer"
+                        onClick={() => setGroupLocked(groupId, !isLocked)}
+                      >
+                        {isLocked ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                        {isLocked ? 'Unlock Pane' : 'Lock Pane'}
+                      </ContextMenuItem>
+                      <CtxMenuSeparator className="bg-zinc-700" />
+                      <ContextMenuItem
+                        className="gap-2 text-ui-base cursor-pointer"
                         onClick={() => startRename(tab)}
                       >
                         <Pencil className="w-3.5 h-3.5" />
@@ -1132,7 +1147,7 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                               <UserCircle className="w-3.5 h-3.5" />
                               Switch Account
                             </ContextMenuSubTrigger>
-                            <ContextMenuSubContent className="bg-zinc-900 border-zinc-700">
+                            <ContextMenuSubContent className="bg-zinc-900/80 backdrop-blur-xl border-zinc-700">
                               <ContextMenuLabel className="text-ui-xs text-zinc-500 font-normal py-0.5">Restart with account</ContextMenuLabel>
                               <CtxMenuSeparator className="bg-zinc-700" />
                               <ContextMenuItem
