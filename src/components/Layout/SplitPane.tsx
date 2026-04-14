@@ -44,7 +44,7 @@ function ContainerNode({ node }: ContainerNodeProps): React.ReactElement {
           <React.Fragment key={getChildKey(child)}>
             {/* Pane */}
             <div
-              style={{ [isRow ? 'width' : 'height']: pct }}
+              style={{ [isRow ? 'width' : 'height']: pct, contain: 'strict' }}
               className={cn(
                 'overflow-hidden',
                 i === children.length - 1 && 'flex-1'

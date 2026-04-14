@@ -372,7 +372,9 @@ function TerminalTabInner({
       };
       el?.addEventListener("wheel", onWheel, { capture: true, passive: false });
 
-      let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+      // rAF-throttled refit: fires at most once per frame (~60fps) during
+      // continuous resize instead of debouncing with a 100ms delay.
+      let resizeRafId: number | null = null;
       const scheduleRefit = () => {
         // Skip refit for hidden terminals — avoids N useless layout
         // calculations during split pane resizing. Mark for deferred refit.
@@ -380,15 +382,16 @@ function TerminalTabInner({
           needsRefitRef.current = true;
           return;
         }
-        if (resizeTimer) clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(() => {
+        if (resizeRafId !== null) return;
+        resizeRafId = requestAnimationFrame(() => {
+          resizeRafId = null;
           try {
             doFit();
             if (!userScrolledUpRef.current) {
               terminalRef.current?.scrollToBottom();
             }
           } catch {}
-        }, 100);
+        });
       };
       const resizeObserver = new ResizeObserver(scheduleRefit);
       if (wrapperRef.current) resizeObserver.observe(wrapperRef.current);
@@ -399,7 +402,7 @@ function TerminalTabInner({
       window.addEventListener("resize", onWindowResize);
 
       cleanupRef.current = () => {
-        if (resizeTimer) clearTimeout(resizeTimer);
+        if (resizeRafId !== null) cancelAnimationFrame(resizeRafId);
         if (resizeDimTimerRef.current) clearTimeout(resizeDimTimerRef.current);
         if (writeRafRef.current !== null) cancelAnimationFrame(writeRafRef.current);
         writeRafRef.current = null;
@@ -505,18 +508,15 @@ function TerminalTabInner({
       // Clear deferred refit flag
       needsRefitRef.current = false;
 
-      // Use rAF to wait for the browser to finish layout after the hidden
-      // class is removed, then fit. The 50ms / 200ms fallbacks catch cases
-      // where a single frame isn't enough (e.g. complex split resizes).
+      // rAF to wait for the browser to finish layout after the hidden
+      // class is removed, then fit. One delayed fallback catches cases
+      // where the initial frame isn't enough (e.g. complex split resizes).
       requestAnimationFrame(() => {
         terminalRef.current?.focus();
         fitAndScroll();
       });
-      setTimeout(fitAndScroll, 100);
-      setTimeout(fitAndScroll, 300);
-      // Extra delayed refit for cases where layout is still settling
-      // (e.g. after complex split pane resizes that complete after 300ms)
-      setTimeout(fitAndScroll, 600);
+      const fallbackTimer = setTimeout(fitAndScroll, 200);
+      return () => clearTimeout(fallbackTimer);
     } else {
       term.blur();
 
@@ -619,13 +619,7 @@ function TerminalTabInner({
         ref={containerRef}
         className="h-full w-full min-w-0 overflow-hidden"
         onClick={() => {
-          const term = terminalRef.current;
-          if (term) {
-            term.focus();
-            // Force refit on click — recovers from stale dimensions
-            // that can leave the terminal unresponsive after layout changes
-            doFit();
-          }
+          terminalRef.current?.focus();
         }}
       />
       {resizeDimensions && (
