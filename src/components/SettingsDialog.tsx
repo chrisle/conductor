@@ -759,10 +759,12 @@ function ExtensionsSection(): React.ReactElement {
 
                   {/* Actions: enable/disable + uninstall/unload */}
                   <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
-                    <Switch
-                      checked={enabled}
-                      onCheckedChange={v => extensionRegistry.setEnabled(ext.id, v)}
-                    />
+                    {!ext.builtin && (
+                      <Switch
+                        checked={enabled}
+                        onCheckedChange={v => extensionRegistry.setEnabled(ext.id, v)}
+                      />
+                    )}
                     {ext.installed && (
                       <Tooltip>
                         <TooltipTrigger asChild>
