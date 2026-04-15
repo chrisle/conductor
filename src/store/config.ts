@@ -12,8 +12,6 @@ export interface ConfigState {
 
   // Convenience setters
   setZoom: (zoom: number) => Promise<void>
-  setKanbanCompactColumns: (columns: string[]) => Promise<void>
-  setKanbanHideDoneColumn: (hide: boolean) => Promise<void>
   setClaudeCodeSettings: (patch: Partial<AppConfig['aiCli']['claudeCode']>) => Promise<void>
   setCodexSettings: (patch: Partial<AppConfig['aiCli']['codex']>) => Promise<void>
   setDisabledExtensions: (disabled: string[]) => Promise<void>
@@ -31,6 +29,10 @@ export interface ConfigState {
   removeProviderConnection: (id: string) => Promise<void>
   getActiveConnection: (providerType?: ProviderType) => ProviderConnection | null
   getConnectionById: (id: string) => ProviderConnection | null
+
+  // Per-extension data
+  setExtensionData: (extensionId: string, data: Record<string, unknown>) => Promise<void>
+  getExtensionData: (extensionId: string) => Record<string, unknown>
 
   // Customization
   setTerminalCustomization: (patch: Partial<TerminalCustomization>) => Promise<void>
@@ -61,6 +63,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
             claudeCode: { ...DEFAULT_APP_CONFIG.aiCli.claudeCode, ...loaded.aiCli?.claudeCode },
             codex: { ...DEFAULT_APP_CONFIG.aiCli.codex, ...loaded.aiCli?.codex },
           },
+          extensionData: { ...DEFAULT_APP_CONFIG.extensionData, ...loaded.extensionData, ...migrateKanbanConfig(loaded) },
           extensions: { ...DEFAULT_APP_CONFIG.extensions, ...loaded.extensions },
           customization: {
             terminal: { ...DEFAULT_TERMINAL_CUSTOMIZATION, ...(loaded as any).customization?.terminal },
@@ -98,20 +101,6 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   setZoom: async (zoom) => {
     set(state => ({ config: { ...state.config, ui: { ...state.config.ui, zoom } } }))
     await window.electronAPI.patchConfig({ ui: { zoom } })
-  },
-
-  setKanbanCompactColumns: async (columns) => {
-    set(state => ({
-      config: { ...state.config, ui: { ...state.config.ui, kanbanCompactColumns: columns } },
-    }))
-    await window.electronAPI.patchConfig({ ui: { kanbanCompactColumns: columns } })
-  },
-
-  setKanbanHideDoneColumn: async (hide) => {
-    set(state => ({
-      config: { ...state.config, ui: { ...state.config.ui, kanbanHideDoneColumn: hide } },
-    }))
-    await window.electronAPI.patchConfig({ ui: { kanbanHideDoneColumn: hide } })
   },
 
   setClaudeCodeSettings: async (patch) => {
@@ -219,6 +208,16 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     return get().config.providerConnections.find(c => c.id === id) ?? null
   },
 
+  setExtensionData: async (extensionId, data) => {
+    const extensionData = { ...get().config.extensionData, [extensionId]: { ...get().config.extensionData[extensionId], ...data } }
+    set(state => ({ config: { ...state.config, extensionData } }))
+    await window.electronAPI.patchConfig({ extensionData } as any)
+  },
+
+  getExtensionData: (extensionId) => {
+    return get().config.extensionData[extensionId] ?? {}
+  },
+
   setTerminalCustomization: async (patch) => {
     const terminal = { ...get().config.customization.terminal, ...patch }
     set(state => ({
@@ -301,7 +300,9 @@ function migrateFromLocalStorage(): AppConfig {
 
   try {
     const compact = localStorage.getItem('conductor:jira:compact')
-    if (compact) config.ui.kanbanCompactColumns = JSON.parse(compact)
+    if (compact) {
+      config.extensionData.kanban = { ...config.extensionData.kanban, compactColumns: JSON.parse(compact) }
+    }
   } catch {}
 
   try {
@@ -333,6 +334,17 @@ function migrateFromLocalStorage(): AppConfig {
   } catch {}
 
   return config
+}
+
+/** Migrate old kanbanCompactColumns / kanbanHideDoneColumn from ui into extensionData.kanban */
+function migrateKanbanConfig(loaded: any): Record<string, Record<string, unknown>> {
+  const ui = loaded.ui
+  if (!ui) return {}
+  const kanban: Record<string, unknown> = {}
+  if (Array.isArray(ui.kanbanCompactColumns)) kanban.compactColumns = ui.kanbanCompactColumns
+  if (typeof ui.kanbanHideDoneColumn === 'boolean') kanban.hideDoneColumn = ui.kanbanHideDoneColumn
+  if (Object.keys(kanban).length === 0) return {}
+  return { kanban: { ...loaded.extensionData?.kanban, ...kanban } }
 }
 
 function clearLegacyLocalStorage(): void {

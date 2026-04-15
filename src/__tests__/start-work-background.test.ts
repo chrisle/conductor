@@ -29,7 +29,8 @@ vi.mock('@conductor/extension-api', () => ({
   useConfigStore: {
     getState: () => ({
       config: {
-        ui: { kanbanCompactColumns: [] },
+        ui: { zoom: 1 },
+        extensionData: {},
         aiCli: { claudeCode: { allowYoloMode: true, yoloModeByDefault: true } },
       },
       ready: true,

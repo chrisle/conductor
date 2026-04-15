@@ -11,8 +11,8 @@ describe('DEFAULT_APP_CONFIG', () => {
     expect(DEFAULT_APP_CONFIG.ui.zoom).toBe(1)
   })
 
-  it('has empty kanban compact columns', () => {
-    expect(DEFAULT_APP_CONFIG.ui.kanbanCompactColumns).toEqual([])
+  it('has empty extensionData', () => {
+    expect(DEFAULT_APP_CONFIG.extensionData).toEqual({})
   })
 
   it('has empty claude accounts', () => {

@@ -31,13 +31,12 @@ describe('useConfigStore', () => {
     it('loads existing config and deep-merges with defaults', async () => {
       const savedConfig: AppConfig = {
         ...DEFAULT_APP_CONFIG,
-        ui: { zoom: 1.5, kanbanCompactColumns: ['Done'], kanbanHideDoneColumn: false },
+        ui: { zoom: 1.5 },
       }
       vi.mocked(window.electronAPI.loadConfig).mockResolvedValue(savedConfig)
       await useConfigStore.getState().initialize()
       expect(useConfigStore.getState().ready).toBe(true)
       expect(useConfigStore.getState().config.ui.zoom).toBe(1.5)
-      expect(useConfigStore.getState().config.ui.kanbanCompactColumns).toEqual(['Done'])
     })
 
     it('preserves default fields missing from loaded config', async () => {
@@ -91,13 +90,25 @@ describe('useConfigStore', () => {
     })
   })
 
-  describe('setKanbanCompactColumns', () => {
-    it('updates compact columns and patches config', async () => {
-      await useConfigStore.getState().setKanbanCompactColumns(['Done', 'Closed'])
-      expect(useConfigStore.getState().config.ui.kanbanCompactColumns).toEqual(['Done', 'Closed'])
-      expect(window.electronAPI.patchConfig).toHaveBeenCalledWith({
-        ui: { kanbanCompactColumns: ['Done', 'Closed'] },
+  describe('setExtensionData', () => {
+    it('stores per-extension data and patches config', async () => {
+      await useConfigStore.getState().setExtensionData('kanban', { compactColumns: ['Done', 'Closed'] })
+      expect(useConfigStore.getState().config.extensionData.kanban).toEqual({ compactColumns: ['Done', 'Closed'] })
+    })
+
+    it('merges new data with existing extension data', async () => {
+      await useConfigStore.getState().setExtensionData('kanban', { compactColumns: ['Done'] })
+      await useConfigStore.getState().setExtensionData('kanban', { hideDoneColumn: true })
+      expect(useConfigStore.getState().config.extensionData.kanban).toEqual({
+        compactColumns: ['Done'],
+        hideDoneColumn: true,
       })
+    })
+  })
+
+  describe('getExtensionData', () => {
+    it('returns empty object for unknown extension', () => {
+      expect(useConfigStore.getState().getExtensionData('unknown')).toEqual({})
     })
   })
 

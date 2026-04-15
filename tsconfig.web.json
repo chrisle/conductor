@@ -26,8 +26,6 @@
     "src/__tests__/fs-handlers.test.ts",
     "src/__tests__/jira-api.test.ts",
     "src/__tests__/jira-ui.test.tsx",
-    "src/__tests__/kanban-ui.test.tsx",
-    "src/__tests__/provider-api.test.ts",
     "src/__tests__/start-work-background.test.ts",
     "src/__tests__/worktree.test.ts"
   ]

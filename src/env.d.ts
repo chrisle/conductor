@@ -171,7 +171,6 @@ interface ElectronAPI {
 
 declare global {
   const __APP_VERSION__: string
-  const __KANBAN_EXTENSION_VERSION__: string
   interface Window {
     electronAPI: ElectronAPI
   }

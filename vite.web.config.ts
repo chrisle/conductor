@@ -10,8 +10,7 @@ export default defineConfig({
     alias: {
       '@renderer': resolve('src'),
       '@': resolve('src'),
-      '@conductor/extension-sdk': resolve('../conductor-extension-sdk/src/index.ts'),
-      '@kanban-extension': resolve('../kanban-extension/src/index.ts')
+      '@conductor/extension-sdk': resolve('../conductor-extension-sdk/src/index.ts')
     }
   },
   server: {

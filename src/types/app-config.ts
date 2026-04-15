@@ -70,9 +70,9 @@ export interface AppConfig {
   version: 1
   ui: {
     zoom: number
-    kanbanCompactColumns: string[]
-    kanbanHideDoneColumn: boolean
   }
+  /** Per-extension preferences. Keyed by extension ID. */
+  extensionData: Record<string, Record<string, unknown>>
   /** Last working directory used when opening a new terminal tab */
   lastTerminalCwd?: string
   claudeAccounts: ClaudeAccount[]
@@ -161,9 +161,8 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   version: 1,
   ui: {
     zoom: 1,
-    kanbanCompactColumns: [],
-    kanbanHideDoneColumn: false,
   },
+  extensionData: {},
   claudeAccounts: [],
   defaultClaudeAccountId: null,
   providerConnections: [],

@@ -4,7 +4,6 @@ import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 
 const appVersion = JSON.parse(readFileSync(resolve('package.json'), 'utf-8')).version
-const jiraExtVersion = JSON.parse(readFileSync(resolve('../kanban-extension/package.json'), 'utf-8')).version
 
 export default defineConfig({
   main: {
@@ -51,14 +50,12 @@ export default defineConfig({
       alias: {
         '@renderer': resolve('src'),
         '@': resolve('src'),
-        '@conductor/extension-sdk': resolve('../conductor-extension-sdk/src/index.ts'),
-        '@kanban-extension': resolve('../kanban-extension/src/index.ts')
+        '@conductor/extension-sdk': resolve('../conductor-extension-sdk/src/index.ts')
       }
     },
     plugins: [react()],
     define: {
       __APP_VERSION__: JSON.stringify(appVersion),
-      __KANBAN_EXTENSION_VERSION__: JSON.stringify(jiraExtVersion),
     }
   }
 })
