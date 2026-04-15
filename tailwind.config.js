@@ -4,7 +4,10 @@ module.exports = {
   content: [
     './src/**/*.{ts,tsx,js,jsx}',
     './index.html',
-    '../kanban-extension/src/**/*.{ts,tsx}'
+    // Scan sibling extensions so their Tailwind classes (e.g. bg-jira-sunken)
+    // get emitted into the host app's stylesheet. Extensions are loaded at
+    // runtime, so their classes only appear in CSS if we scan them here.
+    '../kanban-extension/src/**/*.{ts,tsx,js,jsx}',
   ],
   theme: {
     extend: {
