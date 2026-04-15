@@ -12,6 +12,10 @@
   Conductor gives Claude Code and your shell a persistent, multi-pane home so you can run several AI sessions side-by-side, keep them alive across app restarts, and see your files, git history, and browser in the same window.
 </p>
 
+<p align="center">
+  <img src="screenshot.png" alt="Conductor screenshot" />
+</p>
+
 ---
 
 ## Features
