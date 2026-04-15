@@ -23,11 +23,16 @@ export function registerTerminalBridge(): void {
   ipcMain.handle('terminal:create', async (event, id: string, cwd?: string, command?: string, shell?: string) => {
     // If already connected, close the stale WebSocket so we get a fresh
     // connection and let conductord decide whether the session is new.
+    // Also drop any in-flight connection promise tied to the old WS —
+    // otherwise the dedup below would hand back a promise whose session
+    // map entry we just deleted, and every subsequent write would be
+    // silently discarded (sessions.get(id) → undefined).
     if (sessions.has(id)) {
       const old = sessions.get(id)!
       old.intentionalClose = true
       old.ws.close()
       sessions.delete(id)
+      pendingConnections.delete(id)
     }
 
     // Deduplicate in-flight connection attempts for the same session
@@ -146,6 +151,11 @@ export function registerTerminalBridge(): void {
     const session = sessions.get(id)
     if (session && session.ws.readyState === WebSocket.OPEN) {
       session.ws.send(JSON.stringify({ type: 'input', data }))
+    } else {
+      // Surface silently-dropped writes in dev so this class of bug is
+      // visible. A user typing and seeing nothing happen is otherwise
+      // invisible from the renderer side.
+      console.warn(`[terminal-bridge] dropping write for ${id}: session=${!!session} readyState=${session?.ws.readyState}`)
     }
   })
 

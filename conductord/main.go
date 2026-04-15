@@ -484,9 +484,14 @@ func (s *session) write(data []byte) {
 
 func (s *session) resize(cols, rows uint16) {
 	_ = s.ptmx.Resize(int(cols), int(rows))
-	s.vtMu.Lock()
-	s.vterm.Resize(int(cols), int(rows))
-	s.vtMu.Unlock()
+	// VT emulator resize can reflow the internal screen buffer and be slow.
+	// Run it off the WebSocket input loop so input messages (typed keys,
+	// subsequent resizes) aren't blocked while it runs.
+	go func() {
+		s.vtMu.Lock()
+		s.vterm.Resize(int(cols), int(rows))
+		s.vtMu.Unlock()
+	}()
 }
 
 func (s *session) kill() {
@@ -639,12 +644,15 @@ func handleTerminal(w http.ResponseWriter, r *http.Request) {
 			s.mu.Unlock()
 			log.Printf("[session %s] autopilot %v", s.id, enabled)
 		case "capture-scrollback":
-			// Return the rendered terminal state (scrollback + visible screen)
-			// interpreted by the VT emulator, so the client gets clean ANSI text.
-			rendered := s.renderState()
+			// Return the raw scrollback bytes. The VT-rendered snapshot would
+			// be cleaner ANSI but strips mode transitions (alt-screen, mouse,
+			// bracketed paste) that a reattaching TUI like claude relies on —
+			// without those, xterm is in the wrong buffer and input/echo
+			// appears broken even though the PTY is alive.
+			sb := s.getScrollback()
 			conn.WriteJSON(map[string]interface{}{
 				"type": "scrollback",
-				"data": rendered,
+				"data": string(sb),
 			})
 		}
 	}
