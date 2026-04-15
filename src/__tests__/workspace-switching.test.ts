@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useTabsStore } from '../store/tabs'
 import { useLayoutStore, type LayoutNode } from '../store/layout'
 import { useProjectStore } from '../store/project'
-import { serializeWorkspace } from '../lib/project-io'
+import { serializeWorkspace, switchWorkspace } from '../lib/project-io'
 
 /**
  * Tests that workspace switching correctly saves and restores layout state.
@@ -365,5 +365,159 @@ describe('workspace switching layout preservation (CON-67)', () => {
 
     const workspace = serializeWorkspace()
     expect(workspace.groups[groupId].worktree).toBe('/path/to/worktree')
+  })
+})
+
+describe('switchWorkspace preserves layout with dead sessions', () => {
+  beforeEach(() => {
+    resetStores()
+    // conductordGetSessions is not in default setup.ts — add it here
+    ;(window.electronAPI as any).conductordGetSessions = vi.fn().mockResolvedValue([])
+  })
+
+  it('preserves all terminal tabs and split layout even when sessions are dead', async () => {
+    // Set up workspace "B" as current state (will be switched away from)
+    const currentGroupId = 'current-group'
+    useTabsStore.setState({
+      groups: {
+        [currentGroupId]: {
+          id: currentGroupId,
+          activeTabId: 'cur-1',
+          tabHistory: ['cur-1'],
+          tabs: [{ id: 'cur-1', type: 'terminal', title: 'Current Terminal' }],
+        },
+      },
+    })
+    useLayoutStore.setState({
+      root: { type: 'leaf', groupId: currentGroupId },
+      focusedGroupId: currentGroupId,
+    })
+
+    // The target workspace "A" has a split layout with only terminal/session tabs.
+    // All sessions are dead in conductord (mockResolvedValue([]) above).
+    // Without skipSessionFilter, these would all be filtered out and the layout would collapse.
+    const projectData = {
+      version: 3,
+      name: 'test',
+      activeWorkspace: 'A',
+      workspaces: {
+        A: {
+          layout: {
+            type: 'row',
+            children: [
+              { node: { type: 'leaf', groupId: 'g-left' }, size: 0.6 },
+              {
+                node: {
+                  type: 'column',
+                  children: [
+                    { node: { type: 'leaf', groupId: 'g-top-right' }, size: 1 },
+                    { node: { type: 'leaf', groupId: 'g-bottom-right' }, size: 1 },
+                  ],
+                },
+                size: 0.4,
+              },
+            ],
+          },
+          groups: {
+            'g-left': {
+              id: 'g-left',
+              tabs: [
+                { id: 'term-1', type: 'terminal', title: 'Terminal 1' },
+                { id: 'claude-1', type: 'claude-code', title: 'Claude' },
+              ],
+              activeTabId: 'term-1',
+              tabHistory: ['term-1', 'claude-1'],
+            },
+            'g-top-right': {
+              id: 'g-top-right',
+              tabs: [{ id: 'term-2', type: 'terminal', title: 'Terminal 2' }],
+              activeTabId: 'term-2',
+              tabHistory: ['term-2'],
+            },
+            'g-bottom-right': {
+              id: 'g-bottom-right',
+              tabs: [{ id: 'codex-1', type: 'codex', title: 'Codex' }],
+              activeTabId: 'codex-1',
+              tabHistory: ['codex-1'],
+            },
+          },
+          focusedGroupId: 'g-left',
+        },
+        B: {
+          layout: { type: 'leaf', groupId: currentGroupId },
+          groups: {
+            [currentGroupId]: {
+              id: currentGroupId,
+              tabs: [{ id: 'cur-1', type: 'terminal', title: 'Current Terminal' }],
+              activeTabId: 'cur-1',
+              tabHistory: ['cur-1'],
+            },
+          },
+          focusedGroupId: currentGroupId,
+        },
+      },
+      sidebar: { rootPath: null, expandedPaths: [] },
+    }
+
+    // Mock readFile to return the project data, writeFile to accept saves
+    vi.mocked(window.electronAPI.readFile).mockResolvedValue({
+      success: true,
+      content: JSON.stringify(projectData),
+    } as any)
+    vi.mocked(window.electronAPI.writeFile).mockResolvedValue(undefined as any)
+
+    // Set project store to simulate a saved project on workspace B
+    useProjectStore.setState({
+      filePath: '/test/project.conductor',
+      name: 'test',
+      activeWorkspace: 'B',
+      workspaceNames: ['A', 'B'],
+    })
+
+    // Switch to workspace A
+    const result = await switchWorkspace('A')
+    expect(result).toBe(true)
+
+    // Verify all 3 groups are preserved (none were filtered out)
+    const groups = useTabsStore.getState().groups
+    expect(Object.keys(groups)).toHaveLength(3)
+    expect(groups['g-left']).toBeDefined()
+    expect(groups['g-top-right']).toBeDefined()
+    expect(groups['g-bottom-right']).toBeDefined()
+
+    // Verify all tabs are preserved
+    expect(groups['g-left'].tabs).toHaveLength(2)
+    expect(groups['g-left'].tabs[0].id).toBe('term-1')
+    expect(groups['g-left'].tabs[1].id).toBe('claude-1')
+    expect(groups['g-top-right'].tabs).toHaveLength(1)
+    expect(groups['g-bottom-right'].tabs).toHaveLength(1)
+
+    // Verify active tabs and history are preserved
+    expect(groups['g-left'].activeTabId).toBe('term-1')
+    expect(groups['g-left'].tabHistory).toEqual(['term-1', 'claude-1'])
+
+    // Verify the full layout tree structure including split ratios
+    const root = useLayoutStore.getState().root!
+    expect(root.type).toBe('row')
+    if (root.type === 'row') {
+      expect(root.children).toHaveLength(2)
+      expect(root.children[0].size).toBe(0.6)
+      expect(root.children[1].size).toBe(0.4)
+      expect(root.children[0].node).toEqual({ type: 'leaf', groupId: 'g-left' })
+
+      const rightCol = root.children[1].node
+      expect(rightCol.type).toBe('column')
+      if (rightCol.type === 'column') {
+        expect(rightCol.children).toHaveLength(2)
+        expect(rightCol.children[0].node).toEqual({ type: 'leaf', groupId: 'g-top-right' })
+        expect(rightCol.children[1].node).toEqual({ type: 'leaf', groupId: 'g-bottom-right' })
+      }
+    }
+
+    // Verify focused group is preserved
+    expect(useLayoutStore.getState().focusedGroupId).toBe('g-left')
+
+    // conductordGetSessions should NOT have been called (skipSessionFilter: true)
+    expect((window.electronAPI as any).conductordGetSessions).not.toHaveBeenCalled()
   })
 })

@@ -114,16 +114,25 @@ export function serializeProject(): ConductorProject {
 const SESSION_TAB_TYPES = new Set(['terminal', 'claude-code', 'codex'])
 
 /** Restore a workspace (tabs + layout) */
-async function restoreWorkspace(workspace: Workspace): Promise<void> {
+interface RestoreOptions {
+  /** Skip stale-session filtering. Used during workspace switches where
+   *  terminals were just killed and will be recreated on mount. */
+  skipSessionFilter?: boolean
+}
+
+async function restoreWorkspace(workspace: Workspace, options?: RestoreOptions): Promise<void> {
   // Fetch live conductord sessions BEFORE mutating any state.
   // This avoids a race where auto-save fires during the async gap and
   // serializes a partially-cleared workspace, corrupting the saved data.
+  // Skip entirely during workspace switches — terminals will recreate sessions on mount.
   let liveSessionIds: Set<string> | null = null
-  try {
-    const sessions = await window.electronAPI.conductordGetSessions()
-    liveSessionIds = new Set(sessions.filter(s => !s.dead).map(s => s.id))
-  } catch {
-    // If conductord is unreachable, skip filtering
+  if (!options?.skipSessionFilter) {
+    try {
+      const sessions = await window.electronAPI.conductordGetSessions()
+      liveSessionIds = new Set(sessions.filter(s => !s.dead).map(s => s.id))
+    } catch {
+      // If conductord is unreachable, skip filtering
+    }
   }
 
   const tabsStore = useTabsStore.getState()
@@ -417,7 +426,7 @@ export async function switchWorkspace(workspaceName: string): Promise<boolean> {
       const workspace = data.workspaces[workspaceName]
       if (!workspace) return false
 
-      await restoreWorkspace(workspace)
+      await restoreWorkspace(workspace, { skipSessionFilter: true })
     } catch {
       return false
     }
