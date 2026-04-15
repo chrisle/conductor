@@ -48,8 +48,13 @@ type session struct {
 	// Virtual terminal emulator: interprets raw PTY output so reconnecting
 	// clients receive the rendered screen state (with proper ANSI formatting)
 	// instead of a raw byte replay that can produce garbled output.
+	//
+	// Writes are processed on a dedicated goroutine via vtCh so a slow or
+	// hung emulator call can never block the PTY read loop (which would
+	// starve the attached client of live output).
 	vterm *vt.Emulator
 	vtMu  sync.RWMutex
+	vtCh  chan []byte
 
 	// Currently attached WebSocket (nil if detached)
 	conn *websocket.Conn
@@ -249,8 +254,10 @@ func newSession(id, cwd, command, shellPref string) (*session, error) {
 		cmd:        cmd,
 		scrollback: make([]byte, scrollbackSize),
 		vterm:      emu,
+		vtCh:       make(chan []byte, 256),
 	}
 
+	go s.vtFeedLoop()
 	go s.readLoop()
 
 	go func() {
@@ -274,6 +281,9 @@ func newSession(id, cwd, command, shellPref string) (*session, error) {
 		} else {
 			log.Printf("[session %s] process exited (status 0)", id)
 		}
+
+		// Stop the VT feed loop.
+		close(s.vtCh)
 
 		sessionsMu.Lock()
 		delete(sessions, id)
@@ -345,18 +355,26 @@ func (s *session) readLoop() {
 			}
 			s.mu.Unlock()
 
-			// Feed data to VT emulator for rendered state capture
-			s.vtMu.Lock()
-			s.vterm.Write(data)
-			s.vtMu.Unlock()
-
-			// Forward to attached client
+			// Forward to attached client. The PTY read loop must never block
+			// on anything but the next read, otherwise a TUI like claude can
+			// appear to hang.
 			if conn != nil {
 				if werr := conn.WriteMessage(websocket.BinaryMessage, data); werr != nil {
 					s.mu.Lock()
 					s.conn = nil
 					s.mu.Unlock()
 				}
+			}
+
+			// Hand a copy to the VT feed loop (best-effort; drop on backpressure
+			// so a slow/hung emulator can't stall the PTY reader).
+			cp := make([]byte, n)
+			copy(cp, data)
+			select {
+			case s.vtCh <- cp:
+			default:
+				// Emulator is behind — drop this chunk. Scrollback replay
+				// will be approximate rather than exact, which is acceptable.
 			}
 
 			// Send autopilot response after delay
@@ -407,6 +425,16 @@ func (s *session) getScrollback() []byte {
 // screen) as ANSI-formatted text. The VT emulator interprets the raw PTY
 // byte stream so the output is a clean cell-grid snapshot rather than a
 // raw replay of escape sequences.
+// vtFeedLoop drains chunks off vtCh and writes them into the VT emulator
+// on a dedicated goroutine, isolated from the PTY read loop.
+func (s *session) vtFeedLoop() {
+	for data := range s.vtCh {
+		s.vtMu.Lock()
+		s.vterm.Write(data)
+		s.vtMu.Unlock()
+	}
+}
+
 func (s *session) renderState() string {
 	s.vtMu.RLock()
 	defer s.vtMu.RUnlock()
