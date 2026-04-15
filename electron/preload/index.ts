@@ -135,6 +135,7 @@ const electronAPI = {
   selectExtensionZip: () => ipcRenderer.invoke('extensions:selectZip'),
   selectExtensionDir: () => ipcRenderer.invoke('extensions:selectDir'),
   installUnpackedExtension: (dirPath: string) => ipcRenderer.invoke('extensions:installUnpacked', dirPath),
+  installExtensionFromUrl: (url: string) => ipcRenderer.invoke('extensions:installFromUrl', url),
   onExtensionInstalled: (cb: (extensionId: string) => void) => {
     const handler = (_event: any, id: string) => cb(id)
     ipcRenderer.on('extensions:installed', handler)

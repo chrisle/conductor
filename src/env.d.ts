@@ -139,6 +139,7 @@ interface ElectronAPI {
   selectExtensionZip: () => Promise<string | null>
   selectExtensionDir: () => Promise<string | null>
   installUnpackedExtension: (dirPath: string) => Promise<{ success: boolean; extensionId?: string; dirPath?: string; error?: string }>
+  installExtensionFromUrl: (url: string) => Promise<{ success: boolean; extensionId?: string; error?: string }>
   onExtensionInstalled: (cb: (extensionId: string) => void) => () => void
 
   // Conductord log watching

@@ -2,7 +2,7 @@ import { ipcMain, BrowserWindow, app, dialog, shell, webContents } from 'electro
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import { execFile } from 'child_process'
+import { execFile, execFileSync } from 'child_process'
 import { readDir, readFile, readFileBinary, writeFile, mkdirRecursive, deleteEntry } from './fs-handlers'
 
 import { conductordFetch } from './conductord-client'
@@ -948,6 +948,114 @@ Generate a properly formatted Jira ticket. Respond with ONLY valid JSON, no mark
     // Return the original path so the renderer can store it in config and load
     // directly from the source directory (no symlink needed).
     return { success: true, extensionId: manifest.id, dirPath }
+  })
+
+  ipcMain.handle('extensions:installFromUrl', async (_event, url: string) => {
+    // Validate URL: must be HTTPS or SSH git URL
+    const isHttps = /^https:\/\/.+/i.test(url)
+    const isSsh = /^git@.+:.+/i.test(url)
+    if (!isHttps && !isSsh) {
+      return { success: false, error: 'URL must be an HTTPS or SSH git repository URL' }
+    }
+
+    const tmpDir = path.join(os.tmpdir(), `conductor-ext-${Date.now()}`)
+    try {
+      // Shallow clone the repository
+      execFileSync('git', ['clone', '--depth', '1', url, tmpDir], {
+        timeout: 60_000,
+        stdio: 'pipe',
+      })
+
+      // Read manifest.json from the cloned repo
+      const manifestPath = path.join(tmpDir, 'manifest.json')
+      if (!fs.existsSync(manifestPath)) {
+        return { success: false, error: 'Repository does not contain a manifest.json in the root' }
+      }
+
+      let manifest: any
+      try {
+        manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+      } catch {
+        return { success: false, error: 'Failed to parse manifest.json' }
+      }
+      if (!manifest.id) {
+        return { success: false, error: 'manifest.json missing id field' }
+      }
+
+      // Build the extension if package.json exists
+      const packageJsonPath = path.join(tmpDir, 'package.json')
+      if (fs.existsSync(packageJsonPath)) {
+        // Determine which package manager to use
+        const hasYarnLock = fs.existsSync(path.join(tmpDir, 'yarn.lock'))
+        const hasPnpmLock = fs.existsSync(path.join(tmpDir, 'pnpm-lock.yaml'))
+        const installCmd = hasPnpmLock ? 'pnpm' : hasYarnLock ? 'yarn' : 'npm'
+
+        execFileSync(installCmd, ['install'], {
+          cwd: tmpDir,
+          timeout: 120_000,
+          stdio: 'pipe',
+        })
+
+        // Try npm run build — not all repos have it, so don't fail if missing
+        try {
+          const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'))
+          if (pkg.scripts?.build) {
+            execFileSync('npm', ['run', 'build'], {
+              cwd: tmpDir,
+              timeout: 120_000,
+              stdio: 'pipe',
+            })
+          }
+        } catch (buildErr: any) {
+          return { success: false, error: `Build failed: ${buildErr.message || buildErr}` }
+        }
+      }
+
+      // Locate the built output — check dist/ first, then root
+      const mainFile = manifest.main || 'index.js'
+      let sourceDir: string
+      if (fs.existsSync(path.join(tmpDir, 'dist', mainFile))) {
+        sourceDir = path.join(tmpDir, 'dist')
+      } else if (fs.existsSync(path.join(tmpDir, mainFile))) {
+        sourceDir = tmpDir
+      } else {
+        return { success: false, error: `Could not find built bundle "${mainFile}" in repo root or dist/` }
+      }
+
+      // Copy built extension to the extensions directory
+      const destDir = path.join(extensionsDir, manifest.id)
+      if (!fs.existsSync(destDir)) {
+        fs.mkdirSync(destDir, { recursive: true })
+      }
+
+      // Copy manifest.json and all files from the source directory
+      const filesToCopy = fs.readdirSync(sourceDir).filter(f => {
+        // Skip directories like node_modules, .git, src
+        const full = path.join(sourceDir, f)
+        return fs.statSync(full).isFile()
+      })
+      for (const file of filesToCopy) {
+        fs.copyFileSync(path.join(sourceDir, file), path.join(destDir, file))
+      }
+      // Ensure manifest.json is present in the destination (may not be in dist/)
+      if (!fs.existsSync(path.join(destDir, 'manifest.json'))) {
+        fs.copyFileSync(manifestPath, path.join(destDir, 'manifest.json'))
+      }
+
+      // Notify all renderer windows
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.webContents.send('extensions:installed', manifest.id)
+      }
+
+      return { success: true, extensionId: manifest.id }
+    } catch (err: any) {
+      return { success: false, error: err.message || String(err) }
+    } finally {
+      // Clean up temp directory
+      try {
+        fs.rmSync(tmpDir, { recursive: true, force: true })
+      } catch { /* ignore cleanup errors */ }
+    }
   })
 
   // Conductord log watching

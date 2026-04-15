@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Download, Trash2, Package, RefreshCw, Puzzle, ChevronRight, FolderOpen, FolderCode, X, Settings, ArrowLeft } from 'lucide-react'
+import { Download, Trash2, Package, RefreshCw, Puzzle, ChevronRight, FolderOpen, FolderCode, X, Settings, ArrowLeft, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
+import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/ui/dialog'
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { extensionRegistry } from '@/extensions'
 import { loadExtension, loadExtensionsFromDevPaths, dirPathToExtensionId } from '@/extensions/loader'
 import { useConfigStore } from '@/store/config'
@@ -27,6 +29,8 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [configExtensionId, setConfigExtensionId] = useState<string | null>(null)
+  const [urlDialogOpen, setUrlDialogOpen] = useState(false)
+  const [urlInput, setUrlInput] = useState('')
 
   const devPaths = useConfigStore(s => s.config.extensions.devPaths)
   const setExtensionDevPaths = useConfigStore(s => s.setExtensionDevPaths)
@@ -155,6 +159,30 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
     }
   }
 
+  async function handleInstallFromUrl() {
+    const url = urlInput.trim()
+    if (!url) return
+
+    setUrlDialogOpen(false)
+    setUrlInput('')
+    setLoading(true)
+    setMessage(null)
+
+    try {
+      const result = await window.electronAPI.installExtensionFromUrl(url)
+      if (result.success) {
+        setMessage({ type: 'success', text: `Installed "${result.extensionId}" from git repo.` })
+        await loadInstalled()
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Install failed' })
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: String(err) })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const builtinExtensions = extensionRegistry.getAllExtensions().filter(
     e => extensionRegistry.isBuiltin(e.id)
   )
@@ -194,8 +222,9 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
         { icon: RefreshCw, label: 'Refresh', onClick: loadInstalled },
         { icon: FolderOpen, label: 'Load Unpacked', onClick: handleLoadUnpacked, disabled: loading },
         { icon: Download, label: 'Install from .zip', onClick: handleInstall, disabled: loading },
+        { icon: Globe, label: 'Install from URL', onClick: () => setUrlDialogOpen(true), disabled: loading },
       ]}
-      footer="Install extensions from .zip files or load unpacked folders built with the Conductor Extension SDK"
+      footer="Install extensions from .zip files, git repo URLs, or load unpacked folders built with the Conductor Extension SDK"
     >
       {/* Status message */}
       {message && (
@@ -409,6 +438,37 @@ export default function ExtensionsSidebar({ groupId }: ExtensionsSidebarProps): 
           )}
         </div>
       </ScrollArea>
+
+      {/* Install from URL dialog */}
+      <Dialog open={urlDialogOpen} onOpenChange={(open) => { if (!open) { setUrlDialogOpen(false); setUrlInput('') } }}>
+        <DialogContent className="bg-zinc-900 border-zinc-700 max-w-md" hideClose>
+          <VisuallyHidden><DialogTitle>Install from Git URL</DialogTitle></VisuallyHidden>
+          <div className="space-y-3">
+            <div className="text-ui-base text-zinc-300 font-medium">Install from Git URL</div>
+            <p className="text-ui-sm text-zinc-500">
+              Enter an HTTPS or SSH git repository URL. The repo will be cloned and built automatically.
+            </p>
+            <input
+              className="w-full bg-zinc-800 border border-zinc-600 rounded px-2 py-1.5 text-ui-sm text-zinc-200 outline-none focus:border-blue-500"
+              placeholder="https://github.com/owner/repo.git"
+              value={urlInput}
+              onChange={e => setUrlInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && urlInput.trim() && handleInstallFromUrl()}
+              autoFocus
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" className="text-ui-sm text-zinc-400 hover:text-zinc-200" onClick={() => { setUrlDialogOpen(false); setUrlInput('') }}>Cancel</Button>
+            <Button
+              className="text-ui-sm bg-blue-600 hover:bg-blue-500 text-white"
+              disabled={!urlInput.trim()}
+              onClick={handleInstallFromUrl}
+            >
+              Install
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SidebarLayout>
   )
 }

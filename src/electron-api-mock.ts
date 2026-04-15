@@ -196,6 +196,7 @@ const mock: typeof window.electronAPI = {
   selectExtensionZip: async () => null,
   selectExtensionDir: async () => null,
   installUnpackedExtension: async () => ({ success: false, error: 'Not available in web mode' }),
+  installExtensionFromUrl: async () => ({ success: false, error: 'Not available in web mode' }),
   onExtensionInstalled: () => () => {},
 
   // Conductord log watching
