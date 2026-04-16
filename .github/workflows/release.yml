@@ -4,7 +4,7 @@
 # workflow only builds and publishes — no version bump in CI.
 #
 # 1. Builds the Mac (DMG) and Windows (NSIS) installers in parallel
-#    on self-hosted runners.
+#    on GitHub-hosted runners.
 # 2. Publishes installers + latest.yml/latest-mac.yml to GitHub Releases.
 #    electron-updater reads from the same release for in-app updates.
 #
@@ -39,11 +39,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: [self-hosted, macOS]
+          - os: macos-latest
             platform: mac
-          - runner: [self-hosted, Windows]
+          - os: windows-latest
             platform: win
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
