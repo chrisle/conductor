@@ -1,6 +1,6 @@
 {
   "name": "conductor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -100,7 +100,10 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "extraResources": [
-        { "from": "conductord/conductord", "to": "conductord" }
+        {
+          "from": "conductord/conductord",
+          "to": "conductord"
+        }
       ]
     },
     "win": {
@@ -112,7 +115,10 @@
         }
       ],
       "extraResources": [
-        { "from": "conductord/conductord.exe", "to": "conductord.exe" }
+        {
+          "from": "conductord/conductord.exe",
+          "to": "conductord.exe"
+        }
       ]
     }
   }
