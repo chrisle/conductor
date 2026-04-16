@@ -8,12 +8,9 @@
 # 2. Publishes installers + latest.yml/latest-mac.yml to GitHub Releases.
 #    electron-updater reads from the same release for in-app updates.
 #
-# Required GitHub secrets:
-#   APPLE_CERTIFICATE_P12          Base64-encoded .p12 signing certificate
-#   APPLE_CERTIFICATE_PASSWORD     Password for the .p12 certificate
-#   APPLE_ID                       Apple ID email used for notarization
-#   APPLE_APP_SPECIFIC_PASSWORD    App-specific password for the Apple ID
-#   APPLE_TEAM_ID                  10-character Apple Developer Team ID
+# Apple signing credentials are loaded at runtime from 1Password via the
+# load-secrets-action.  The only GitHub secret needed is:
+#   OP_SERVICE_ACCOUNT_TOKEN       1Password service account token
 #
 # GITHUB_TOKEN is provided automatically and used by electron-builder
 # (via GH_TOKEN) to create the release.
@@ -48,6 +45,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Load Apple credentials from 1Password
+        if: matrix.platform == 'mac'
+        uses: 1password/load-secrets-action@v2
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          CSC_LINK: op://Conductor/Apple Developer/CERTIFICATE_P12
+          CSC_KEY_PASSWORD: op://Conductor/Apple Developer/CERTIFICATE_PASSWORD
+          APPLE_ID: op://Conductor/Apple Developer/APPLE_ID
+          APPLE_APP_SPECIFIC_PASSWORD: op://Conductor/Apple Developer/APP_SPECIFIC_PASSWORD
+          APPLE_TEAM_ID: op://Conductor/Apple Developer/APPLE_TEAM_ID
+
       - uses: actions/setup-go@v5
         with:
           go-version-file: conductord/go.mod
@@ -69,14 +79,11 @@ jobs:
         run: go build -o conductord .
 
       # ── macOS: sign, notarize, publish ────────────────────────────────────
+      # Apple credentials (CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, etc.)
+      # are already exported by the 1Password step above.
       - name: Build and publish (macOS)
         if: matrix.platform == 'mac'
         env:
-          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12 }}
-          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npx electron-vite build
