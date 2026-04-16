@@ -1,24 +1,22 @@
 # Triggered on every push to main.
 #
-# 1. Bumps the patch version in package.json and commits it back to main
-#    (the push uses GITHUB_TOKEN, which does NOT re-trigger this workflow).
-# 2. Builds the Mac (DMG) and Windows (NSIS) installers in parallel.
-# 3. Publishes the artifacts to Backblaze B2 via electron-builder's
-#    S3-compatible publish provider so electron-updater can serve updates.
+# The deploy skill bumps the version locally before pushing, so this
+# workflow only builds and publishes — no version bump in CI.
+#
+# 1. Builds the Mac (DMG) and Windows (NSIS) installers in parallel
+#    on self-hosted runners.
+# 2. Publishes installers + latest.yml/latest-mac.yml to GitHub Releases.
+#    electron-updater reads from the same release for in-app updates.
 #
 # Required GitHub secrets:
-#   GH secrets (Settings → Secrets → Actions):
-#
-#   B2_KEY_ID              Backblaze B2 key ID  (used as AWS_ACCESS_KEY_ID)
-#   B2_APPLICATION_KEY     Backblaze B2 app key (used as AWS_SECRET_ACCESS_KEY)
-#   B2_BUCKET              Bucket name, e.g. conductor-releases
-#   B2_ENDPOINT            S3-compatible endpoint, e.g. https://s3.us-east-005.backblazeb2.com
-#
 #   APPLE_CERTIFICATE_P12          Base64-encoded .p12 signing certificate
 #   APPLE_CERTIFICATE_PASSWORD     Password for the .p12 certificate
 #   APPLE_ID                       Apple ID email used for notarization
 #   APPLE_APP_SPECIFIC_PASSWORD    App-specific password for the Apple ID
 #   APPLE_TEAM_ID                  10-character Apple Developer Team ID
+#
+# GITHUB_TOKEN is provided automatically and used by electron-builder
+# (via GH_TOKEN) to create the release.
 
 name: Release
 
@@ -31,65 +29,24 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+permissions:
+  contents: write
+
 jobs:
-  # ── 1. Bump version ───────────────────────────────────────────────────────
-  bump-version:
-    name: Bump version
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.bump.outputs.version }}
-      sha: ${{ steps.push.outputs.sha }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # Full history so the push can fast-forward.
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Configure git identity
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Bump patch version
-        id: bump
-        run: |
-          # npm version writes the new version to package.json + package-lock.json
-          # --no-git-tag-version skips the automatic git commit/tag (we do it below)
-          RAW=$(npm version patch --no-git-tag-version)
-          VERSION="${RAW#v}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Commit and push version bump
-        id: push
-        run: |
-          git add package.json package-lock.json
-          git commit -m "chore(release): v${{ steps.bump.outputs.version }} [CON-70]"
-          git push origin main
-          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-  # ── 2. Build installers ───────────────────────────────────────────────────
   build:
     name: Build (${{ matrix.platform }})
-    needs: bump-version
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
+          - runner: [self-hosted, macOS]
             platform: mac
-          - os: windows-latest
+          - runner: [self-hosted, Windows]
             platform: win
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          # Checkout the version-bumped commit, not the original trigger SHA.
-          ref: ${{ needs.bump-version.outputs.sha }}
 
       - uses: actions/setup-go@v5
         with:
@@ -105,8 +62,8 @@ jobs:
         run: npm ci
 
       - name: Build conductord binary
-        # Use an explicit output name (no .exe) so the path matches
-        # what electron-builder's extraResources expects on all platforms.
+        # Explicit output name (no .exe) so the path matches what
+        # electron-builder's extraResources expects on all platforms.
         working-directory: conductord
         shell: bash
         run: go build -o conductord .
@@ -115,18 +72,12 @@ jobs:
       - name: Build and publish (macOS)
         if: matrix.platform == 'mac'
         env:
-          # Code signing
           CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          # Notarization (read by electron-builder directly)
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # B2 credentials (S3-compatible API)
-          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
-          B2_BUCKET: ${{ secrets.B2_BUCKET }}
-          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npx electron-vite build
           npx electron-builder --mac --publish always
@@ -136,11 +87,7 @@ jobs:
         if: matrix.platform == 'win'
         shell: bash
         env:
-          # B2 credentials (S3-compatible API)
-          AWS_ACCESS_KEY_ID: ${{ secrets.B2_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.B2_APPLICATION_KEY }}
-          B2_BUCKET: ${{ secrets.B2_BUCKET }}
-          B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npx electron-vite build
           npx electron-builder --win --publish always
