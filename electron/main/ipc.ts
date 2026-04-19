@@ -10,6 +10,7 @@ import { registerTerminalBridge } from './terminal-bridge'
 import { worktreeAdd } from './worktree'
 import { debugLog } from './logger'
 import { getJsonlPath, readJsonlTail, computeSessionMetrics } from './claude-session-metrics'
+import { toggleMaximize } from '../../src/lib/window-maximize'
 
 // Conductord log watchers: watchId -> { watcher, fd }
 const logWatchers = new Map<string, { watcher: fs.FSWatcher; offset: number; logPath: string }>()
@@ -30,19 +31,7 @@ export function registerIpcHandlers(): void {
     const win = BrowserWindow.getFocusedWindow()
     console.debug('[ipc] window:maximize called, win:', !!win, 'isMaximized:', win?.isMaximized(), 'isMaximizable:', win?.isMaximizable())
     if (!win) return
-    // On macOS, maximizable is disabled to prevent accidental OS-triggered
-    // maximize. Temporarily re-enable it for our explicit toggle.
-    const needsToggle = process.platform === 'darwin' && !win.isMaximizable()
-    console.debug('[ipc] window:maximize needsToggle:', needsToggle)
-    if (needsToggle) win.setMaximizable(true)
-    if (win.isMaximized()) {
-      console.debug('[ipc] window:maximize -> unmaximizing')
-      win.unmaximize()
-    } else {
-      console.debug('[ipc] window:maximize -> maximizing')
-      win.maximize()
-    }
-    if (needsToggle) setTimeout(() => { if (!win.isDestroyed()) win.setMaximizable(false) }, 200)
+    toggleMaximize(win)
   })
 
   ipcMain.handle('window:close', () => {
