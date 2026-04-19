@@ -291,13 +291,25 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     return () => document.removeEventListener('keydown', onKeyDown, true)
   }, [floatingMenuOpen, floatingSubmenu, claudeAccounts, rootPath, groupId, extraMenuItems])
 
-  // Global dragend listener — ensures isDraggingTab resets even when the
-  // per-element dragend doesn't fire (e.g. source tab removed from DOM mid-drag).
+  // Reset isDraggingTab whenever a drag could plausibly have ended.
+  // - dragend: normal case, fires when the drag operation completes in our renderer
+  // - drop: belt-and-suspenders in case dragend is swallowed
+  // - blur: if the Electron window loses focus mid-drag (e.g. drop lands over a
+  //   <webview> whose renderer process swallows the event, or user switches apps)
+  // - safety timeout: absolute backstop so the overlay cannot wedge indefinitely
   useEffect(() => {
     if (!isDraggingTab) return
     const reset = () => setIsDraggingTab(false)
+    const safetyTimer = setTimeout(reset, 3000)
     window.addEventListener('dragend', reset)
-    return () => window.removeEventListener('dragend', reset)
+    window.addEventListener('drop', reset)
+    window.addEventListener('blur', reset)
+    return () => {
+      clearTimeout(safetyTimer)
+      window.removeEventListener('dragend', reset)
+      window.removeEventListener('drop', reset)
+      window.removeEventListener('blur', reset)
+    }
   }, [isDraggingTab])
 
   if (!group) return <div className="h-full w-full bg-zinc-950" />
