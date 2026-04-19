@@ -34,8 +34,14 @@ export interface LayoutState {
   /** Insert a panel at the very edge of the root layout */
   insertAtEdge: (position: DropPosition, newGroupId: string) => void
   removeGroup: (groupId: string) => void
-  /** Update the sizes array for the container that holds groupId */
+  /** Update the sizes array for the container that directly holds groupId as a child leaf */
   setSizes: (groupId: string, sizes: number[]) => void
+  /**
+   * Update sizes for the container identified by an ordered signature of its
+   * direct children's first-leaf groupIds. Use this for nested layouts where a
+   * single groupId is not unique enough to identify the right container.
+   */
+  setSizesForContainer: (childFirstLeafIds: string[], sizes: number[]) => void
   getAllGroupIds: () => string[]
   /** Replace a leaf node (by groupId) with an arbitrary subtree */
   replaceLeaf: (targetGroupId: string, replacement: LayoutNode) => void
@@ -49,9 +55,19 @@ export interface LayoutState {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function collectGroupIds(node: LayoutNode): string[] {
+export function collectGroupIds(node: LayoutNode): string[] {
   if (node.type === 'leaf') return [node.groupId]
   return node.children.flatMap(c => collectGroupIds(c.node))
+}
+
+/** First leaf groupId encountered during depth-first descent. */
+export function firstLeafGroupId(node: LayoutNode): string | null {
+  if (node.type === 'leaf') return node.groupId
+  for (const c of node.children) {
+    const id = firstLeafGroupId(c.node)
+    if (id) return id
+  }
+  return null
 }
 
 /** Find the index of a child that contains a given groupId (direct leaf or nested). */
@@ -220,6 +236,39 @@ function updateSizes(node: LayoutNode, targetGroupId: string, sizes: number[]): 
   }
 }
 
+/**
+ * Update sizes for the container whose direct children's first-leaf groupIds
+ * match the given ordered signature. Unlike {@link updateSizes}, this can
+ * uniquely identify a container even when its children are themselves
+ * containers (nested layouts), because we match against the exact ordered
+ * set of child signatures rather than a single descendant groupId.
+ */
+function updateSizesForContainer(
+  node: LayoutNode,
+  signature: string[],
+  sizes: number[]
+): LayoutNode {
+  if (node.type === 'leaf') return node
+
+  if (node.children.length === signature.length && sizes.length === signature.length) {
+    const matches = node.children.every((c, i) => firstLeafGroupId(c.node) === signature[i])
+    if (matches) {
+      return {
+        ...node,
+        children: node.children.map((c, i) => ({ ...c, size: sizes[i] })),
+      }
+    }
+  }
+
+  return {
+    ...node,
+    children: node.children.map(c => ({
+      ...c,
+      node: updateSizesForContainer(c.node, signature, sizes),
+    })),
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Legacy binary-tree compat (for project-io save/restore)
 // ---------------------------------------------------------------------------
@@ -332,6 +381,13 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     set(state => {
       if (!state.root) return state
       return { root: updateSizes(state.root, groupId, sizes) }
+    })
+  },
+
+  setSizesForContainer: (childFirstLeafIds, sizes) => {
+    set(state => {
+      if (!state.root) return state
+      return { root: updateSizesForContainer(state.root, childFirstLeafIds, sizes) }
     })
   },
 

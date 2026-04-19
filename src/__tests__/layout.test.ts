@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useLayoutStore, type LayoutNode, migrateLayout } from '../store/layout'
+import { useLayoutStore, firstLeafGroupId, type LayoutNode, migrateLayout } from '../store/layout'
 
 function resetStore() {
   useLayoutStore.setState({ root: null, focusedGroupId: null })
@@ -322,6 +322,184 @@ describe('useLayoutStore', () => {
         expect(root.children[0].size).toBe(0.7)
         expect(root.children[1].size).toBe(0.3)
       }
+    })
+  })
+
+  describe('setSizesForContainer', () => {
+    /**
+     * Regression test for the "can't resize vertical split" bug.
+     *
+     * With a layout like row([column([B, C]), A]):
+     *  - Outer row has 2 children, child first-leaf signature = [B, A]
+     *  - Inner column has 2 children, child first-leaf signature = [B, C]
+     *
+     * The old setSizes(anchorGroupId, ...) descended into the tree looking
+     * for the first container that DIRECTLY holds `anchorGroupId` as a leaf
+     * child. Since the resize handle derived `anchorGroupId` via
+     * collectFirstGroupId (which returns 'B' from the column), setSizes
+     * would find and update the inner column instead of the outer row.
+     * The outer row's sizes never changed and the user could not drag the
+     * outer handle.
+     *
+     * setSizesForContainer fixes this by identifying the container via the
+     * ordered first-leaf signature of its direct children, which is unique
+     * even for nested containers.
+     */
+    it('updates the correct container in a nested layout', () => {
+      // row([column([B, C]), A])
+      const initial: LayoutNode = {
+        type: 'row',
+        children: [
+          {
+            node: {
+              type: 'column',
+              children: [
+                { node: { type: 'leaf', groupId: 'B' }, size: 1 },
+                { node: { type: 'leaf', groupId: 'C' }, size: 1 },
+              ],
+            },
+            size: 1,
+          },
+          { node: { type: 'leaf', groupId: 'A' }, size: 1 },
+        ],
+      }
+      useLayoutStore.getState().setRoot(initial)
+
+      // Outer row's signature: first leaf of each direct child
+      // - child 0: column([B, C]) -> 'B'
+      // - child 1: leaf A        -> 'A'
+      useLayoutStore.getState().setSizesForContainer(['B', 'A'], [0.7, 0.3])
+
+      const root = useLayoutStore.getState().root!
+      expect(root.type).toBe('row')
+      if (root.type === 'row') {
+        expect(root.children[0].size).toBe(0.7)
+        expect(root.children[1].size).toBe(0.3)
+        // Inner column must be untouched
+        const inner = root.children[0].node
+        expect(inner.type).toBe('column')
+        if (inner.type === 'column') {
+          expect(inner.children[0].size).toBe(1)
+          expect(inner.children[1].size).toBe(1)
+        }
+      }
+    })
+
+    it('updates the inner container when given its signature, not the outer one', () => {
+      const initial: LayoutNode = {
+        type: 'row',
+        children: [
+          {
+            node: {
+              type: 'column',
+              children: [
+                { node: { type: 'leaf', groupId: 'B' }, size: 1 },
+                { node: { type: 'leaf', groupId: 'C' }, size: 1 },
+              ],
+            },
+            size: 1,
+          },
+          { node: { type: 'leaf', groupId: 'A' }, size: 1 },
+        ],
+      }
+      useLayoutStore.getState().setRoot(initial)
+
+      // Inner column's signature is [B, C]
+      useLayoutStore.getState().setSizesForContainer(['B', 'C'], [0.25, 0.75])
+
+      const root = useLayoutStore.getState().root!
+      if (root.type === 'row') {
+        // Outer row sizes untouched
+        expect(root.children[0].size).toBe(1)
+        expect(root.children[1].size).toBe(1)
+        const inner = root.children[0].node
+        if (inner.type === 'column') {
+          expect(inner.children[0].size).toBe(0.25)
+          expect(inner.children[1].size).toBe(0.75)
+        }
+      }
+    })
+
+    it('handles a flat 3-pane container', () => {
+      const initial: LayoutNode = {
+        type: 'row',
+        children: [
+          { node: { type: 'leaf', groupId: 'a' }, size: 1 },
+          { node: { type: 'leaf', groupId: 'b' }, size: 1 },
+          { node: { type: 'leaf', groupId: 'c' }, size: 1 },
+        ],
+      }
+      useLayoutStore.getState().setRoot(initial)
+
+      useLayoutStore.getState().setSizesForContainer(['a', 'b', 'c'], [0.5, 0.25, 0.25])
+
+      const root = useLayoutStore.getState().root!
+      if (root.type === 'row') {
+        expect(root.children.map(c => c.size)).toEqual([0.5, 0.25, 0.25])
+      }
+    })
+
+    it('no-ops when no container matches the signature', () => {
+      const initial: LayoutNode = {
+        type: 'row',
+        children: [
+          { node: { type: 'leaf', groupId: 'g1' }, size: 1 },
+          { node: { type: 'leaf', groupId: 'g2' }, size: 1 },
+        ],
+      }
+      useLayoutStore.getState().setRoot(initial)
+      useLayoutStore.getState().setSizesForContainer(['nope', 'also-nope'], [0.7, 0.3])
+
+      const root = useLayoutStore.getState().root!
+      if (root.type === 'row') {
+        expect(root.children[0].size).toBe(1)
+        expect(root.children[1].size).toBe(1)
+      }
+    })
+
+    it('no-ops when signature length does not match container child count', () => {
+      const initial: LayoutNode = {
+        type: 'row',
+        children: [
+          { node: { type: 'leaf', groupId: 'g1' }, size: 1 },
+          { node: { type: 'leaf', groupId: 'g2' }, size: 1 },
+        ],
+      }
+      useLayoutStore.getState().setRoot(initial)
+      // Three-item signature can't match a two-child row
+      useLayoutStore.getState().setSizesForContainer(['g1', 'g2', 'g3'], [0.3, 0.3, 0.4])
+
+      const root = useLayoutStore.getState().root!
+      if (root.type === 'row') {
+        expect(root.children[0].size).toBe(1)
+        expect(root.children[1].size).toBe(1)
+      }
+    })
+  })
+
+  describe('firstLeafGroupId', () => {
+    it('returns the groupId for a leaf', () => {
+      expect(firstLeafGroupId({ type: 'leaf', groupId: 'x' })).toBe('x')
+    })
+
+    it('returns the first leaf in depth-first order for a container', () => {
+      const node: LayoutNode = {
+        type: 'row',
+        children: [
+          {
+            node: {
+              type: 'column',
+              children: [
+                { node: { type: 'leaf', groupId: 'B' }, size: 1 },
+                { node: { type: 'leaf', groupId: 'C' }, size: 1 },
+              ],
+            },
+            size: 1,
+          },
+          { node: { type: 'leaf', groupId: 'A' }, size: 1 },
+        ],
+      }
+      expect(firstLeafGroupId(node)).toBe('B')
     })
   })
 

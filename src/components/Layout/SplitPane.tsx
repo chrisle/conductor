@@ -1,6 +1,6 @@
 import React, { useRef, useCallback } from 'react'
 import { cn } from '@/lib/utils'
-import { useLayoutStore, type LayoutNode, type LayoutChild } from '@/store/layout'
+import { useLayoutStore, firstLeafGroupId, type LayoutNode, type LayoutChild } from '@/store/layout'
 import TabGroup from './TabGroup'
 
 interface SplitPaneProps {
@@ -71,16 +71,7 @@ function ContainerNode({ node }: ContainerNodeProps): React.ReactElement {
 /** Stable key for a layout child. */
 function getChildKey(child: LayoutChild): string {
   if (child.node.type === 'leaf') return child.node.groupId
-  return collectFirstGroupId(child.node) || 'unknown'
-}
-
-function collectFirstGroupId(node: LayoutNode): string | null {
-  if (node.type === 'leaf') return node.groupId
-  for (const c of node.children) {
-    const id = collectFirstGroupId(c.node)
-    if (id) return id
-  }
-  return null
+  return firstLeafGroupId(child.node) || 'unknown'
 }
 
 // ---------------------------------------------------------------------------
@@ -94,7 +85,7 @@ interface ResizeHandleProps {
 }
 
 function ResizeHandle({ node, index, isRow }: ResizeHandleProps): React.ReactElement {
-  const { setSizes } = useLayoutStore()
+  const setSizesForContainer = useLayoutStore(s => s.setSizesForContainer)
   const isResizing = useRef(false)
   const handleRef = useRef<HTMLDivElement>(null)
 
@@ -107,10 +98,14 @@ function ResizeHandle({ node, index, isRow }: ResizeHandleProps): React.ReactEle
     // prevents the native <webview> from swallowing mouse events.
     window.dispatchEvent(new Event('pane-resize-start'))
 
-    // We need to find a groupId in this container to call setSizes
-    const firstChild = node.children[0]
-    const anchorGroupId = collectFirstGroupId(firstChild.node)
-    if (!anchorGroupId) return
+    // Identify this container by the ordered first-leaf groupId of each child.
+    // A single groupId isn't enough for nested layouts — e.g. in
+    // row([column([B, C]), A]), the outer row's first-leaf signature is [B, A]
+    // which uniquely distinguishes it from the inner column with [B, C].
+    const signature = node.children
+      .map(c => firstLeafGroupId(c.node))
+      .filter((id): id is string => id !== null)
+    if (signature.length !== node.children.length) return
 
     // Get the container element (parent of the handle)
     const container = handleRef.current?.parentElement
@@ -160,7 +155,7 @@ function ResizeHandle({ node, index, isRow }: ResizeHandleProps): React.ReactEle
           }
         }
 
-        setSizes(anchorGroupId, newSizes)
+        setSizesForContainer(signature, newSizes)
       })
     }
 
@@ -176,7 +171,7 @@ function ResizeHandle({ node, index, isRow }: ResizeHandleProps): React.ReactEle
 
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-  }, [node, isRow, setSizes, index])
+  }, [node, isRow, setSizesForContainer, index])
 
   return (
     <div
