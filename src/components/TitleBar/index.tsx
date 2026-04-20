@@ -122,7 +122,7 @@ export default function TitleBar(): React.ReactElement {
   return (
     <TooltipProvider delayDuration={400}>
       <div
-        className="drag-region flex items-center h-8 bg-zinc-900/80 border-b border-zinc-700/50 shrink-0 select-none"
+        className="drag-region relative flex items-center h-8 bg-zinc-900/80 border-b border-zinc-700/50 shrink-0 select-none"
         style={{ minHeight: 32 }}
       >
         {/* Mac traffic lights */}
@@ -168,8 +168,9 @@ export default function TitleBar(): React.ReactElement {
           <TooltipContent>Toggle Sidebar</TooltipContent>
         </Tooltip>
 
-        {/* Breadcrumb — individual buttons are no-drag, gaps between them remain draggable */}
-        <div className="flex-1 flex items-center justify-center gap-1 overflow-hidden px-4">
+        {/* Breadcrumb — absolutely centered in the full titlebar */}
+        <div className="absolute inset-0 flex items-center justify-center gap-1 overflow-hidden pointer-events-none">
+          <div className="flex items-center gap-1 pointer-events-auto">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="no-drag flex items-center gap-0.5 text-ui-sm text-zinc-500 hover:text-zinc-300 transition-colors rounded px-1 py-0.5 hover:bg-zinc-800/50">
@@ -292,6 +293,7 @@ export default function TitleBar(): React.ReactElement {
           {!projectName && (
             <span className="text-ui-sm text-zinc-500 ml-1">No project open</span>
           )}
+          </div>
         </div>
 
         {/* Windows controls */}

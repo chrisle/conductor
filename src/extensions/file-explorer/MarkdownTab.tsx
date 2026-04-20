@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import Editor from '@monaco-editor/react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { PanelRightClose, PanelRightOpen } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -10,12 +10,16 @@ import { useTabsStore } from '@/store/tabs'
 import { useConfigStore } from '@/store/config'
 import type { TabProps } from '@/extensions/types'
 
+type ViewMode = 'both' | 'source' | 'preview'
+
 export default function MarkdownTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
   const filePath = tab.filePath
   const [content, setContent] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showPreview, setShowPreview] = useState(true)
+  const [viewMode, setViewMode] = useState<ViewMode>('both')
+  const [splitPercent, setSplitPercent] = useState(50)
+  const containerRef = useRef<HTMLDivElement>(null)
   const { updateTab } = useTabsStore()
   const markdownConfig = useConfigStore(s => s.config.customization.markdown)
 
@@ -99,60 +103,110 @@ export default function MarkdownTab({ tabId, groupId, isActive, tab }: TabProps)
       }
     }}>
       {/* Toolbar */}
-      <div className="flex items-center justify-end px-2 py-1 border-b border-zinc-800 shrink-0 bg-zinc-900">
+      <div className="flex items-center justify-between px-2 py-1 border-b border-zinc-800 shrink-0 bg-zinc-900">
         <Button
           variant="ghost"
           size="icon"
           className="w-6 h-6 text-zinc-400 hover:text-zinc-200"
-          onClick={() => setShowPreview(prev => !prev)}
-          title={showPreview ? 'Hide preview' : 'Show preview'}
+          onClick={() => setViewMode(prev => prev === 'preview' ? 'both' : 'preview')}
+          title={viewMode === 'preview' ? 'Show source' : 'Hide source'}
         >
-          {showPreview ? <PanelRightClose className="w-3.5 h-3.5" /> : <PanelRightOpen className="w-3.5 h-3.5" />}
+          {viewMode === 'preview' ? <PanelLeftOpen className="w-3.5 h-3.5" /> : <PanelLeftClose className="w-3.5 h-3.5" />}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="w-6 h-6 text-zinc-400 hover:text-zinc-200"
+          onClick={() => setViewMode(prev => prev === 'source' ? 'both' : 'source')}
+          title={viewMode === 'source' ? 'Show preview' : 'Hide preview'}
+        >
+          {viewMode === 'source' ? <PanelRightOpen className="w-3.5 h-3.5" /> : <PanelRightClose className="w-3.5 h-3.5" />}
         </Button>
       </div>
 
-      <div className="flex h-full w-full min-h-0">
+      <div ref={containerRef} className="flex h-full w-full min-h-0">
         {/* Editor */}
-        <div className={cn('h-full border-r border-zinc-800', showPreview ? 'w-1/2' : 'w-full')}>
-          <Editor
-            height="100%"
-            language="markdown"
-            value={content}
-            onChange={handleChange}
-            theme="vs-dark"
-            options={{
-              fontSize: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--ui-text-base').trim(), 10) || 13,
-              fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
-              fontLigatures: true,
-              lineHeight: 1.6,
-              minimap: { enabled: false },
-              scrollBeyondLastLine: false,
-              renderWhitespace: 'selection',
-              tabSize: 2,
-              wordWrap: 'on',
-              padding: { top: 12, bottom: 12 },
-              smoothScrolling: true,
-              cursorBlinking: 'smooth',
-              cursorSmoothCaretAnimation: 'on',
-              renderLineHighlight: 'line',
-              lineNumbers: 'on',
-              glyphMargin: false,
-              folding: true,
-              overviewRulerBorder: false,
-              scrollbar: {
-                verticalScrollbarSize: 6,
-                horizontalScrollbarSize: 6
+        {viewMode !== 'preview' && (
+          <div
+            className="h-full border-r border-zinc-800"
+            style={{ width: viewMode === 'source' ? '100%' : `${splitPercent}%` }}
+          >
+            <Editor
+              height="100%"
+              language="markdown"
+              value={content}
+              onChange={handleChange}
+              theme="vs-dark"
+              options={{
+                fontSize: parseInt(getComputedStyle(document.documentElement).getPropertyValue('--ui-text-base').trim(), 10) || 13,
+                fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
+                fontLigatures: true,
+                lineHeight: 1.6,
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                renderWhitespace: 'selection',
+                tabSize: 2,
+                wordWrap: 'on',
+                padding: { top: 12, bottom: 12 },
+                smoothScrolling: true,
+                cursorBlinking: 'smooth',
+                cursorSmoothCaretAnimation: 'on',
+                renderLineHighlight: 'line',
+                lineNumbers: 'on',
+                glyphMargin: false,
+                folding: true,
+                overviewRulerBorder: false,
+                scrollbar: {
+                  verticalScrollbarSize: 6,
+                  horizontalScrollbarSize: 6
+                }
+              }}
+            />
+          </div>
+        )}
+
+        {/* Resize handle */}
+        {viewMode === 'both' && (
+          <div
+            className="shrink-0 w-1 cursor-col-resize bg-zinc-800 hover:bg-blue-500 active:bg-blue-500 transition-colors z-10"
+            onMouseDown={e => {
+              e.preventDefault()
+              const container = containerRef.current
+              if (!container) return
+              document.body.style.cursor = 'col-resize'
+              document.body.style.userSelect = 'none'
+              let rafId: number | null = null
+              const onMove = (ev: MouseEvent) => {
+                if (rafId !== null) return
+                rafId = requestAnimationFrame(() => {
+                  rafId = null
+                  const rect = container.getBoundingClientRect()
+                  const pct = ((ev.clientX - rect.left) / rect.width) * 100
+                  setSplitPercent(Math.max(15, Math.min(85, pct)))
+                })
               }
+              const onUp = () => {
+                if (rafId !== null) cancelAnimationFrame(rafId)
+                document.body.style.cursor = ''
+                document.body.style.userSelect = ''
+                document.removeEventListener('mousemove', onMove)
+                document.removeEventListener('mouseup', onUp)
+              }
+              document.addEventListener('mousemove', onMove)
+              document.addEventListener('mouseup', onUp)
             }}
           />
-        </div>
+        )}
 
         {/* Preview */}
-        {showPreview && (
-          <div className={cn(
-            'h-full w-1/2 overflow-auto p-8',
-            markdownConfig.background === 'dark' ? 'bg-zinc-900' : 'bg-white',
-          )}>
+        {viewMode !== 'source' && (
+          <div
+            className={cn(
+              'h-full overflow-auto p-8',
+              markdownConfig.background === 'dark' ? 'bg-zinc-900' : 'bg-white',
+            )}
+            style={{ width: viewMode === 'preview' ? '100%' : `${100 - splitPercent}%` }}
+          >
             <div className={cn(
               'max-w-3xl mx-auto prose prose-base prose-img:rounded-lg',
               markdownConfig.background === 'dark'
