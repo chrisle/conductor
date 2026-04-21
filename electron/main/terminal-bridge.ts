@@ -21,6 +21,7 @@ const pendingConnections = new Map<string, Promise<{ isNew: boolean }>>()
 
 export function registerTerminalBridge(): void {
   ipcMain.handle('terminal:create', async (event, id: string, cwd?: string, command?: string, shell?: string) => {
+    console.debug(`[terminal-bridge] terminal:create id=${id} cwd=${cwd} command=${command ? command.slice(0, 50) : 'none'} shell=${shell}`)
     // If already connected, close the stale WebSocket so we get a fresh
     // connection and let conductord decide whether the session is new.
     // Also drop any in-flight connection promise tied to the old WS —
@@ -28,6 +29,7 @@ export function registerTerminalBridge(): void {
     // map entry we just deleted, and every subsequent write would be
     // silently discarded (sessions.get(id) → undefined).
     if (sessions.has(id)) {
+      console.debug(`[terminal-bridge] closing stale session for ${id}`)
       const old = sessions.get(id)!
       old.intentionalClose = true
       old.ws.close()
@@ -37,6 +39,7 @@ export function registerTerminalBridge(): void {
 
     // Deduplicate in-flight connection attempts for the same session
     if (pendingConnections.has(id)) {
+      console.debug(`[terminal-bridge] reusing pending connection for ${id}`)
       return pendingConnections.get(id)!
     }
 
@@ -71,6 +74,7 @@ export function registerTerminalBridge(): void {
       }, 5000)
 
       ws.on('open', () => {
+        console.debug(`[terminal-bridge] ws open for ${id}`)
         sessions.set(id, session)
       })
 
@@ -84,6 +88,7 @@ export function registerTerminalBridge(): void {
           try {
             const msg = JSON.parse(text)
             if (msg.type === 'session') {
+              console.debug(`[terminal-bridge] session msg for ${id}: isNew=${msg.isNew} autoPilot=${msg.autoPilot}`)
               if (!sessionResolved) {
                 sessionResolved = true
                 clearTimeout(resolveTimeout)
@@ -114,6 +119,7 @@ export function registerTerminalBridge(): void {
       })
 
       ws.on('close', () => {
+        console.debug(`[terminal-bridge] ws close for ${id}, intentional=${session.intentionalClose}`)
         // Only remove from the map if this session is still the active one.
         // When a tab reconnects, terminal:create replaces the old session
         // before the old WebSocket's close event fires — deleting here
@@ -134,6 +140,7 @@ export function registerTerminalBridge(): void {
       })
 
       ws.on('error', (err) => {
+        console.debug(`[terminal-bridge] ws error for ${id}:`, err.message)
         if (!sessionResolved) {
           sessionResolved = true
           clearTimeout(resolveTimeout)
@@ -188,11 +195,18 @@ export function registerTerminalBridge(): void {
   })
 
   ipcMain.handle('terminal:captureScrollback', async (_event, id: string) => {
+    console.debug(`[terminal-bridge] captureScrollback requested for ${id}`)
     const session = sessions.get(id)
-    if (!session || session.ws.readyState !== WebSocket.OPEN) return null
+    if (!session || session.ws.readyState !== WebSocket.OPEN) {
+      console.debug(`[terminal-bridge] captureScrollback: no session or ws not open for ${id}`)
+      return null
+    }
 
     return new Promise<string | null>((resolve) => {
-      const timeout = setTimeout(() => resolve(null), 5000)
+      const timeout = setTimeout(() => {
+        console.debug(`[terminal-bridge] captureScrollback: timeout for ${id}`)
+        resolve(null)
+      }, 5000)
 
       const handler = (data: WebSocket.Data, isBinary: boolean) => {
         if (isBinary) return
@@ -201,6 +215,8 @@ export function registerTerminalBridge(): void {
           if (msg.type === 'scrollback') {
             clearTimeout(timeout)
             session.ws.off('message', handler)
+            const len = msg.data ? msg.data.length : 0
+            console.debug(`[terminal-bridge] captureScrollback: received ${len} chars for ${id}`)
             resolve(msg.data ?? null)
           }
         } catch { /* not JSON */ }

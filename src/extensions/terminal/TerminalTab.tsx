@@ -289,6 +289,7 @@ function TerminalTabInner({
           // For existing sessions, suppress live PTY data while we hydrate
           // the scrollback buffer to avoid doubling the visible screen content.
           if (!isNew) {
+            console.debug(`[terminal] ${tabId}: existing session, entering hydration mode`);
             hydratingRef.current = true;
           }
 
@@ -299,9 +300,12 @@ function TerminalTabInner({
             // Restore scrollback from serialized buffer (saved on previous
             // teardown) so colors and formatting are preserved exactly.
             const saved = sessionStorage.getItem(`terminal:buffer:${tabId}`);
+            console.debug(`[terminal] ${tabId}: reattach, sessionStorage buffer=${saved ? saved.length + ' chars' : 'none'}`);
             if (saved && !disposed) {
+              console.debug(`[terminal] ${tabId}: writing sessionStorage buffer`);
               term.write(saved, () => {
                 if (disposed) return;
+                console.debug(`[terminal] ${tabId}: sessionStorage buffer written, showing terminal`);
                 containerEl.style.visibility = "visible";
                 term.focus();
                 term.scrollToBottom();
@@ -311,14 +315,18 @@ function TerminalTabInner({
             } else {
               // No saved buffer (e.g. Electron restarted, sessionStorage wiped).
               // Ask conductord for the scrollback so we can restore output.
+              console.debug(`[terminal] ${tabId}: requesting scrollback from conductord`);
               const scrollback = await termAPI.captureScrollback(tabId);
               if (disposed) return;
+              console.debug(`[terminal] ${tabId}: conductord scrollback=${scrollback ? scrollback.length + ' chars' : 'null'}`);
               if (scrollback) {
                 // Discard queued raw binary replay — the VT-rendered snapshot
                 // from conductord is authoritative and already includes it.
                 pendingDataRef.current = [];
+                console.debug(`[terminal] ${tabId}: writing conductord scrollback`);
                 term.write(scrollback, () => {
                   if (disposed) return;
+                  console.debug(`[terminal] ${tabId}: conductord scrollback written, showing terminal`);
                   containerEl.style.visibility = "visible";
                   term.focus();
                   term.scrollToBottom();
@@ -326,6 +334,7 @@ function TerminalTabInner({
                   flushPendingData();
                 });
               } else {
+                console.debug(`[terminal] ${tabId}: no scrollback available, showing empty terminal`);
                 containerEl.style.visibility = "visible";
                 term.focus();
                 hydratingRef.current = false;
@@ -334,6 +343,7 @@ function TerminalTabInner({
             }
             setTimeout(() => doFit(), 100);
           } else {
+            console.debug(`[terminal] ${tabId}: new session, showing immediately`);
             // For new sessions: show immediately, fit after visible
             containerEl.style.visibility = "visible";
             term.focus();
