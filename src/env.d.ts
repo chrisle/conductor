@@ -39,6 +39,10 @@ interface ElectronAPI {
   readFile: (path: string) => Promise<{ success: boolean; content?: string; error?: string }>
   readFileBinary: (path: string) => Promise<{ success: boolean; data?: ArrayBuffer; error?: string }>
   writeFile: (path: string, content: string) => Promise<{ success: boolean; error?: string }>
+  watchFile: (filePath: string) => Promise<string>
+  unwatchFile: (watchId: string) => Promise<void>
+  onFileChanged: (callback: (event: IpcRendererEvent, watchId: string, filePath: string) => void) => void
+  offFileChanged: (callback: (event: IpcRendererEvent, watchId: string, filePath: string) => void) => void
   rename: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>
   deleteFile: (path: string) => Promise<{ success: boolean; error?: string }>
   mkdir: (path: string) => Promise<{ success: boolean; error?: string }>

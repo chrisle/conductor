@@ -47,6 +47,12 @@ const electronAPI = {
   deleteFile: (path: string) => ipcRenderer.invoke('fs:delete', path),
   getHomeDir: () => ipcRenderer.invoke('fs:getHomeDir'),
   autocomplete: (partial: string) => ipcRenderer.invoke('fs:autocomplete', partial),
+  watchFile: (filePath: string) => ipcRenderer.invoke('fs:watchFile', filePath),
+  unwatchFile: (watchId: string) => ipcRenderer.invoke('fs:unwatchFile', watchId),
+  onFileChanged: (callback: (event: IpcRendererEvent, watchId: string, filePath: string) => void) =>
+    ipcRenderer.on('fs:fileChanged', callback),
+  offFileChanged: (callback: (event: IpcRendererEvent, watchId: string, filePath: string) => void) =>
+    ipcRenderer.removeListener('fs:fileChanged', callback),
   loadFavorites: () => ipcRenderer.invoke('favorites:load'),
   saveFavorites: (favorites: string[]) => ipcRenderer.invoke('favorites:save', favorites),
 
