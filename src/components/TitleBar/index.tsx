@@ -50,7 +50,11 @@ export default function TitleBar(): React.ReactElement {
   const isAnyDirty = useProjectStore(s => s.isAnyDirty)
 
   useEffect(() => {
-    window.electronAPI.isMaximized().then(setIsMaximized)
+    console.debug('[TitleBar] querying initial isMaximized')
+    window.electronAPI.isMaximized().then((val) => {
+      console.debug('[TitleBar] initial isMaximized:', val)
+      setIsMaximized(val)
+    })
   }, [])
 
   useEffect(() => {
@@ -67,8 +71,11 @@ export default function TitleBar(): React.ReactElement {
 
   const handleMinimize = () => window.electronAPI.minimize()
   const handleMaximize = async () => {
+    console.debug('[TitleBar] handleMaximize called')
     await window.electronAPI.maximize()
-    setIsMaximized(await window.electronAPI.isMaximized())
+    const newState = await window.electronAPI.isMaximized()
+    console.debug('[TitleBar] handleMaximize result:', newState)
+    setIsMaximized(newState)
   }
 
   const handleClose = useCallback(() => {

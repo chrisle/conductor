@@ -57,6 +57,7 @@ function saveWindowBounds(win: BrowserWindow): void {
   // Save the normal (non-maximized) bounds so restore works correctly
   const bounds = isMaximized ? win.getNormalBounds() : win.getBounds()
   const data: WindowBounds = { ...bounds, isMaximized }
+  console.debug('[saveWindowBounds] saving:', JSON.stringify(data))
   try {
     mkdirSync(join(os.homedir(), '.conductor'), { recursive: true })
     writeFileSync(BOUNDS_FILE, JSON.stringify(data))
@@ -141,6 +142,7 @@ async function ensureConductord(): Promise<void> {
 
 function createWindow(): void {
   const saved = validateBounds(loadWindowBounds())
+  console.debug('[createWindow] saved bounds:', JSON.stringify(saved))
 
   mainWindow = new BrowserWindow({
     width: saved.width ?? 1400,
@@ -167,8 +169,12 @@ function createWindow(): void {
     }
   })
 
+  console.debug('[createWindow] window created, maximizable:', mainWindow.isMaximizable(), 'isMaximized:', mainWindow.isMaximized())
+
   mainWindow.on('ready-to-show', () => {
+    console.debug('[ready-to-show] saved.isMaximized:', saved.isMaximized, 'current isMaximized:', mainWindow?.isMaximized(), 'isMaximizable:', mainWindow?.isMaximizable())
     if (saved.isMaximized) {
+      console.debug('[ready-to-show] restoring maximized state')
       mainWindow?.setMaximizable(true)
       mainWindow?.maximize()
       if (process.platform === 'darwin') {
@@ -176,12 +182,42 @@ function createWindow(): void {
       }
     }
     mainWindow?.show()
+    console.debug('[ready-to-show] window shown, isMaximized:', mainWindow?.isMaximized())
 
     // If a .conductor file was opened before the window was ready, send it now.
     if (pendingOpenFile) {
       mainWindow?.webContents.send('project:openFile', pendingOpenFile)
       pendingOpenFile = null
     }
+  })
+
+  // Log every maximize/unmaximize event with a stack trace to find the culprit
+  mainWindow.on('maximize', () => {
+    console.debug('[window event] >>> MAXIMIZE fired <<<', 'isMaximizable:', mainWindow?.isMaximizable(), 'stack:', new Error().stack)
+  })
+  mainWindow.on('unmaximize', () => {
+    console.debug('[window event] unmaximize fired')
+  })
+
+  // Log enter/leave fullscreen too
+  mainWindow.on('enter-full-screen', () => {
+    console.debug('[window event] >>> ENTER-FULL-SCREEN fired <<<', 'stack:', new Error().stack)
+  })
+  mainWindow.on('leave-full-screen', () => {
+    console.debug('[window event] leave-full-screen fired')
+  })
+
+  // Log will-resize — on macOS Sequoia, OS window tiling can trigger this
+  mainWindow.on('will-resize', (_event, newBounds, details) => {
+    console.debug('[window event] will-resize, newBounds:', JSON.stringify(newBounds), 'details:', JSON.stringify(details))
+  })
+
+  // Log resize with bounds to detect unexpected size changes
+  mainWindow.on('resize', () => {
+    const bounds = mainWindow?.getBounds()
+    const displays = screen.getAllDisplays()
+    const primaryWorkArea = displays[0]?.workArea
+    console.debug('[window event] resize, bounds:', JSON.stringify(bounds), 'primaryWorkArea:', JSON.stringify(primaryWorkArea), 'isMaximized:', mainWindow?.isMaximized())
   })
 
   // Persist bounds on move/resize (debounced)
@@ -275,10 +311,15 @@ if (!gotLock) {
   app.quit()
 } else {
   app.on('second-instance', (_event, argv) => {
+    console.debug('[second-instance] argv:', argv)
     const file = findConductorFileInArgs(argv)
     if (file && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('project:openFile', file)
-      if (mainWindow.isMinimized()) mainWindow.restore()
+      if (mainWindow.isMinimized()) {
+        console.debug('[second-instance] restoring minimized window')
+        mainWindow.restore()
+      }
+      console.debug('[second-instance] focusing window')
       mainWindow.focus()
     }
   })
@@ -308,6 +349,7 @@ app.whenReady().then(async () => {
   }
 
   app.on('activate', async function () {
+    console.debug('[activate] fired, windows:', BrowserWindow.getAllWindows().length, 'mainWindow isMaximized:', mainWindow?.isMaximized())
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
     if (!process.env['CONDUCTOR_SKIP_TRAY']) {
       await ensureConductord()

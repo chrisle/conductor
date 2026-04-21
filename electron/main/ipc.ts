@@ -15,6 +15,10 @@ import { getJsonlPath, readJsonlTail, computeSessionMetrics } from './claude-ses
 const logWatchers = new Map<string, { watcher: fs.FSWatcher; offset: number; logPath: string }>()
 let logWatchCounter = 0
 
+// File watchers for auto-refresh: watchId -> { watcher, filePath }
+const fileWatchers = new Map<string, { watcher: fs.FSWatcher; filePath: string }>()
+let fileWatchCounter = 0
+
 export function registerIpcHandlers(): void {
   // Window controls
   ipcMain.handle('window:minimize', () => {
@@ -24,14 +28,18 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('window:maximize', () => {
     const win = BrowserWindow.getFocusedWindow()
+    console.debug('[ipc] window:maximize called, win:', !!win, 'isMaximized:', win?.isMaximized(), 'isMaximizable:', win?.isMaximizable())
     if (!win) return
     // On macOS, maximizable is disabled to prevent accidental OS-triggered
     // maximize. Temporarily re-enable it for our explicit toggle.
     const needsToggle = process.platform === 'darwin' && !win.isMaximizable()
+    console.debug('[ipc] window:maximize needsToggle:', needsToggle)
     if (needsToggle) win.setMaximizable(true)
     if (win.isMaximized()) {
+      console.debug('[ipc] window:maximize -> unmaximizing')
       win.unmaximize()
     } else {
+      console.debug('[ipc] window:maximize -> maximizing')
       win.maximize()
     }
     if (needsToggle) setTimeout(() => { if (!win.isDestroyed()) win.setMaximizable(false) }, 200)
@@ -50,7 +58,9 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('window:isMaximized', () => {
     const win = BrowserWindow.getFocusedWindow()
-    return win?.isMaximized() ?? false
+    const result = win?.isMaximized() ?? false
+    console.debug('[ipc] window:isMaximized queried:', result)
+    return result
   })
 
   ipcMain.handle('window:openNew', () => {
@@ -162,6 +172,38 @@ export function registerIpcHandlers(): void {
       return matches
     } catch {
       return []
+    }
+  })
+
+  // File watching for auto-refresh
+  ipcMain.handle('fs:watchFile', (event, filePath: string) => {
+    const watchId = `fw-${++fileWatchCounter}`
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return watchId
+
+    try {
+      const watcher = fs.watch(filePath, (eventType) => {
+        if (eventType === 'change' && !win.isDestroyed()) {
+          win.webContents.send('fs:fileChanged', watchId, filePath)
+        }
+      })
+      watcher.on('error', () => {
+        // File may have been deleted; clean up silently
+        fileWatchers.delete(watchId)
+      })
+      fileWatchers.set(watchId, { watcher, filePath })
+    } catch {
+      // File doesn't exist or can't be watched
+    }
+
+    return watchId
+  })
+
+  ipcMain.handle('fs:unwatchFile', (_event, watchId: string) => {
+    const entry = fileWatchers.get(watchId)
+    if (entry) {
+      entry.watcher.close()
+      fileWatchers.delete(watchId)
     }
   })
 
