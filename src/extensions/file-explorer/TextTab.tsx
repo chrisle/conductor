@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import Editor from '@monaco-editor/react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTabsStore } from '@/store/tabs'
 import { useConfigStore } from '@/store/config'
+import { useFileWatcher } from './useFileWatcher'
 import type { TabProps } from '@/extensions/types'
 
 function getLanguage(filePath?: string): string {
@@ -30,11 +31,11 @@ export default function TextTab({ tabId, groupId, isActive, tab }: TabProps): Re
   const { updateTab } = useTabsStore()
   const editorConfig = useConfigStore(s => s.config.customization.editor)
 
-  useEffect(() => {
-    if (filePath) {
-      loadFile()
-    }
-  }, [filePath, tab.gitRef])
+  const reload = useCallback(() => { if (filePath) loadFile() }, [filePath, tab.gitRef])
+
+  useEffect(() => { reload() }, [filePath, tab.gitRef])
+
+  useFileWatcher(isVirtual ? undefined : filePath, tab.isDirty, reload)
 
   async function loadFile() {
     if (!filePath) return

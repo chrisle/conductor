@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef, useCallback } from 'react'
 import mammoth from 'mammoth'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useFileWatcher } from './useFileWatcher'
 import type { TabProps } from '@/extensions/types'
 
 const PAGE_WIDTH = 816    // 8.5 inches at 96 DPI
@@ -30,9 +31,11 @@ export default function WordTab({ tabId, groupId, isActive, tab }: TabProps): Re
   const [pageCount, setPageCount] = useState(1)
   const measureRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (filePath) loadFile()
-  }, [filePath])
+  const reload = useCallback(() => { if (filePath) loadFile() }, [filePath])
+
+  useEffect(() => { reload() }, [filePath])
+
+  useFileWatcher(filePath, false, reload)
 
   useEffect(() => {
     if (!html) return

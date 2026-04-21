@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { pptxToHtml } from '@jvmr/pptx-to-html'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useFileWatcher } from './useFileWatcher'
 import type { TabProps } from '@/extensions/types'
 
 export default function PowerPointTab({ tabId, groupId, isActive, tab }: TabProps): React.ReactElement {
@@ -11,9 +12,11 @@ export default function PowerPointTab({ tabId, groupId, isActive, tab }: TabProp
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (filePath) loadFile()
-  }, [filePath])
+  const reload = useCallback(() => { if (filePath) loadFile() }, [filePath])
+
+  useEffect(() => { reload() }, [filePath])
+
+  useFileWatcher(filePath, false, reload)
 
   async function loadFile() {
     if (!filePath) return

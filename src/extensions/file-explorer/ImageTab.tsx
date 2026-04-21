@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
+import { useFileWatcher } from './useFileWatcher'
 import type { TabProps } from '@/extensions/types'
 
 const MIME: Record<string, string> = {
@@ -11,12 +12,10 @@ export default function ImageTab({ tab }: TabProps): React.ReactElement {
   const [src, setSrc] = useState<string | null>(null)
   const [error, setError] = useState('')
 
-  useEffect(() => {
+  const loadImage = useCallback(() => {
     if (!tab.filePath) return
-    let revoked = false
-
+    setError('')
     window.electronAPI.readFileBinary(tab.filePath).then(result => {
-      if (revoked) return
       if (!result.success || !result.data) {
         setError('Failed to load image')
         return
@@ -28,9 +27,11 @@ export default function ImageTab({ tab }: TabProps): React.ReactElement {
       for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
       setSrc(`data:${mime};base64,${btoa(binary)}`)
     })
-
-    return () => { revoked = true }
   }, [tab.filePath])
+
+  useEffect(() => { loadImage() }, [loadImage])
+
+  useFileWatcher(tab.filePath, false, loadImage)
 
   if (error) {
     return (
