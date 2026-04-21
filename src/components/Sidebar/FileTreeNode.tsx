@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   ChevronRight, ChevronDown, Folder, FolderOpen,
   FileCode, FileJson, FileText, FileImage, FileArchive,
@@ -384,6 +384,52 @@ export default function FileTreeNode({ entry, depth, groupId, gitRef, gitRepoRoo
     if (creating) setTimeout(() => createInputRef.current?.focus(), 0)
   }, [creating])
 
+  const [dragOver, setDragOver] = useState(false)
+
+  const handleDragStart = useCallback((e: React.DragEvent) => {
+    e.dataTransfer.setData('text/plain', entry.path)
+    e.dataTransfer.effectAllowed = 'move'
+  }, [entry.path])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (!entry.isDirectory || gitRef) return
+    const sourcePath = e.dataTransfer.types.includes('text/plain') ? true : false
+    if (!sourcePath) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOver(true)
+  }, [entry.isDirectory, gitRef])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    // Only clear if we're actually leaving this element, not entering a child
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return
+    setDragOver(false)
+  }, [])
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOver(false)
+    if (!entry.isDirectory || gitRef) return
+
+    const sourcePath = e.dataTransfer.getData('text/plain')
+    if (!sourcePath) return
+
+    // Don't drop onto self or own parent
+    const sourceDir = sourcePath.substring(0, sourcePath.lastIndexOf('/'))
+    if (sourcePath === entry.path || sourceDir === entry.path) return
+
+    // Don't drop a folder into its own descendant
+    if (entry.path.startsWith(sourcePath + '/')) return
+
+    const sourceName = sourcePath.substring(sourcePath.lastIndexOf('/') + 1)
+    const destPath = `${entry.path}/${sourceName}`
+
+    await window.electronAPI.rename(sourcePath, destPath)
+    window.dispatchEvent(new CustomEvent('sidebar:refresh', { detail: { path: sourcePath } }))
+    window.dispatchEvent(new CustomEvent('sidebar:refresh', { detail: { path: entry.path } }))
+  }, [entry.path, entry.isDirectory, gitRef])
+
   const indent = depth * 12
 
   return (
@@ -395,11 +441,17 @@ export default function FileTreeNode({ entry, depth, groupId, gitRef, gitRepoRoo
               'flex items-center gap-1 px-2 py-[3px] cursor-pointer select-none text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100 transition-colors group min-w-0',
               'text-ui-base',
               isSelected && 'bg-zinc-800 text-zinc-100',
-              entry.name.startsWith('.') && 'opacity-50'
+              entry.name.startsWith('.') && 'opacity-50',
+              dragOver && 'bg-blue-500/20 outline outline-1 outline-blue-500/50'
             )}
             style={{ paddingLeft: `${8 + indent}px` }}
             onClick={handleClick}
             onDoubleClick={handleDoubleClick}
+            draggable={!gitRef && !isRenaming}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
           >
             {entry.isDirectory ? (
               <>
