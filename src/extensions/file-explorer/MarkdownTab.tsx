@@ -1,14 +1,49 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react'
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import Editor from '@monaco-editor/react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import mermaid from 'mermaid'
 import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { useTabsStore } from '@/store/tabs'
 import { useConfigStore } from '@/store/config'
+import { useLayoutStore } from '@/store/layout'
+import { extensionRegistry } from '@/extensions/registry'
+import { useFileWatcher } from './useFileWatcher'
 import type { TabProps } from '@/extensions/types'
+
+mermaid.initialize({ startOnLoad: false, theme: 'dark' })
+
+let mermaidId = 0
+
+function MermaidBlock({ code, theme }: { code: string; theme: 'light' | 'dark' }): React.ReactElement {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [svg, setSvg] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const id = `mermaid-${++mermaidId}`
+    mermaid.initialize({ startOnLoad: false, theme: theme === 'dark' ? 'dark' : 'default' })
+    mermaid.render(id, code).then(
+      ({ svg }) => { if (!cancelled) setSvg(svg) },
+      (err) => { if (!cancelled) setError(String(err)) },
+    )
+    return () => { cancelled = true }
+  }, [code, theme])
+
+  if (error) {
+    return (
+      <pre className="text-red-400 text-xs bg-zinc-800 rounded p-3 overflow-auto">
+        {error}
+      </pre>
+    )
+  }
+
+  return <div ref={containerRef} dangerouslySetInnerHTML={{ __html: svg }} />
+}
 
 type ViewMode = 'both' | 'source' | 'preview'
 
@@ -23,9 +58,11 @@ export default function MarkdownTab({ tabId, groupId, isActive, tab }: TabProps)
   const { updateTab } = useTabsStore()
   const markdownConfig = useConfigStore(s => s.config.customization.markdown)
 
-  useEffect(() => {
-    if (filePath) loadFile()
-  }, [filePath])
+  const reload = useCallback(() => { if (filePath) loadFile() }, [filePath])
+
+  useEffect(() => { reload() }, [filePath])
+
+  useFileWatcher(filePath, tab.isDirty, reload)
 
   async function loadFile() {
     if (!filePath) return
@@ -57,6 +94,61 @@ export default function MarkdownTab({ tabId, groupId, isActive, tab }: TabProps)
       updateTab(groupId, tabId, { isDirty: false })
     }
   }, [filePath, content, groupId, tabId, updateTab])
+
+  const mermaidTheme = markdownConfig.background
+  const markdownComponents = useMemo(() => ({
+    code: ({ className, children, ...props }: React.HTMLAttributes<HTMLElement>) => {
+      const match = /language-(\w+)/.exec(className || '')
+      if (match?.[1] === 'mermaid') {
+        return <MermaidBlock code={String(children).trim()} theme={mermaidTheme} />
+      }
+      return <code className={className} {...props}>{children}</code>
+    },
+    a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
+      const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+        e.preventDefault()
+        if (!href) return
+
+        // External URLs — open in default browser
+        if (/^https?:\/\//.test(href)) {
+          window.electronAPI.openExternal(href)
+          return
+        }
+
+        // Anchor-only links — ignore
+        if (href.startsWith('#')) return
+
+        // Local file link — resolve relative to current file's directory
+        const dir = filePath ? filePath.replace(/\/[^/]*$/, '') : ''
+        const resolved = href.startsWith('/') ? href : `${dir}/${href}`
+        const fileName = resolved.split('/').pop() || ''
+        const tabType = extensionRegistry.getTabTypeForFile(fileName)
+
+        const { addTab } = useTabsStore.getState()
+        const { groups } = useTabsStore.getState()
+        const layoutGroupIds = useLayoutStore.getState().getAllGroupIds()
+
+        // If already open, focus it
+        for (const [gid, group] of Object.entries(groups)) {
+          if (!layoutGroupIds.includes(gid)) continue
+          const existing = group.tabs.find(t => t.filePath === resolved)
+          if (existing) {
+            useTabsStore.getState().setActiveTab(gid, existing.id)
+            useLayoutStore.getState().setFocusedGroup(gid)
+            return
+          }
+        }
+
+        addTab(groupId, {
+          type: tabType,
+          title: fileName,
+          filePath: resolved,
+        })
+      }
+
+      return <a {...props} href={href} onClick={handleClick}>{children}</a>
+    },
+  }), [filePath, groupId, mermaidTheme])
 
   if (isLoading) {
     return (
@@ -237,7 +329,7 @@ export default function MarkdownTab({ tabId, groupId, isActive, tab }: TabProps)
                     'prose-hr:border-zinc-200',
                   ].join(' '),
             )}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{
                 markdownConfig.includeFrontmatter
                   ? content
                   : content.replace(/^---\n[\s\S]*?\n---\n/, '')
