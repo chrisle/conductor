@@ -3,18 +3,22 @@ import CodexIcon from '@/components/ui/CodexIcon'
 import type { Extension } from '../types'
 import ClaudeCodeTab from './components/ClaudeCodeTab'
 import CodexTab from './components/CodexTab'
-import AiCliSettingsPanel from './components/AiCliSettingsPanel'
+import ClaudeCodeSettingsPanel from './components/ClaudeCodeSettingsPanel'
+import CodexSettingsPanel from './components/CodexSettingsPanel'
 import { useTabsStore } from '@/store/tabs'
 import { useSidebarStore } from '@/store/sidebar'
 import { nextSessionId } from '@/lib/session-id'
 
 export const aiCliExtension: Extension = {
   id: 'ai-cli',
-  name: 'AI CLI',
+  name: 'AI',
   description: 'AI coding assistants: Claude Code and Codex',
   version: '1.0.0',
   icon: ClaudeIcon,
-  settingsPanel: AiCliSettingsPanel,
+  settingsPanels: [
+    { id: 'claude-code', label: 'Claude Code', icon: ClaudeIcon, panel: ClaudeCodeSettingsPanel },
+    { id: 'codex', label: 'Codex', icon: CodexIcon, panel: CodexSettingsPanel },
+  ],
   tabs: [
     {
       type: 'claude-code',

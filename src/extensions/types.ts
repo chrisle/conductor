@@ -32,6 +32,14 @@ export interface SkillDefinition {
   content: string
 }
 
+export interface SettingsSubPanel {
+  /** Stable id used as part of the section key (e.g. "claude-code" → "ai-cli/claude-code") */
+  id: string
+  label: string
+  icon?: React.ComponentType<{ className?: string }>
+  panel: React.ComponentType<Record<string, never>>
+}
+
 export interface Extension {
   id: string
   name: string
@@ -41,7 +49,10 @@ export interface Extension {
   sidebar?: React.ComponentType<{ groupId: string }>
   tabs?: TabRegistration[]
   newTabMenuItems?: NewTabMenuItem[]
+  /** Single settings panel rendered under the extension's top-level nav entry. */
   settingsPanel?: React.ComponentType<Record<string, never>>
+  /** Multiple sub-panels rendered as children in the settings sidebar. Takes precedence over settingsPanel. */
+  settingsPanels?: SettingsSubPanel[]
   configPanel?: React.ComponentType
   onActivate?: () => void
   skills?: SkillDefinition[]

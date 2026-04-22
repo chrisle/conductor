@@ -38,12 +38,20 @@ export default function SettingsDialog(): React.ReactElement {
 
   const settingsPanels = extensionRegistry.getSettingsPanels()
 
-  // Build nav items: extension panels + appearance + shortcuts + terminal + system tray + extensions
-  const navItems: { id: string; label: string; icon: React.ElementType }[] = [
-    ...settingsPanels.map(({ extension }) => ({
+  type NavItem = {
+    id: string
+    label: string
+    icon: React.ElementType
+    /** When present, the item renders as a collapsible parent; clicking a child selects `{parentId}/{childId}`. */
+    children?: { id: string; label: string; icon?: React.ElementType }[]
+  }
+
+  const navItems: NavItem[] = [
+    ...settingsPanels.map(({ extension, subPanels }): NavItem => ({
       id: extension.id,
       label: extension.name,
       icon: extension.icon || Puzzle,
+      children: subPanels?.map(sp => ({ id: sp.id, label: sp.label, icon: sp.icon })),
     })),
     { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'keyboard-shortcuts', label: 'Shortcuts', icon: Keyboard },
@@ -52,9 +60,42 @@ export default function SettingsDialog(): React.ReactElement {
     { id: 'extensions', label: 'Extensions', icon: Package },
   ]
 
-  // Default to first section if current active section doesn't exist
-  const validIds = new Set(navItems.map(n => n.id))
-  const currentSection = validIds.has(activeSection) ? activeSection : navItems[0]?.id ?? ''
+  // Flat set of selectable section ids (leaf items + child paths like "ai-cli/claude-code")
+  const validIds = new Set<string>()
+  for (const item of navItems) {
+    if (item.children && item.children.length > 0) {
+      for (const child of item.children) validIds.add(`${item.id}/${child.id}`)
+    } else {
+      validIds.add(item.id)
+    }
+  }
+
+  // Fallback to first leaf if activeSection is invalid. Parent-only ids resolve to their first child.
+  const firstLeaf = (() => {
+    const first = navItems[0]
+    if (!first) return ''
+    if (first.children && first.children.length > 0) return `${first.id}/${first.children[0].id}`
+    return first.id
+  })()
+  const currentSection = validIds.has(activeSection) ? activeSection : firstLeaf
+
+  // Auto-expand any parent whose child is currently active
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(() => {
+    const initial = new Set<string>()
+    for (const item of navItems) {
+      if (item.children && currentSection.startsWith(`${item.id}/`)) initial.add(item.id)
+    }
+    return initial
+  })
+
+  function toggleParent(id: string) {
+    setExpandedParents(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -72,21 +113,69 @@ export default function SettingsDialog(): React.ReactElement {
               <div className="flex flex-col gap-0.5 px-2">
                 {navItems.map(item => {
                   const Icon = item.icon
-                  const isActive = currentSection === item.id
+                  const hasChildren = !!item.children && item.children.length > 0
+                  const isParentActive = hasChildren && currentSection.startsWith(`${item.id}/`)
+                  const isLeafActive = !hasChildren && currentSection === item.id
+                  const isExpanded = hasChildren && (expandedParents.has(item.id) || isParentActive)
+
                   return (
-                    <button
-                      key={item.id}
-                      onClick={() => setActiveSection(item.id)}
-                      className={cn(
-                        'flex items-center gap-2 px-2 py-1.5 rounded text-left transition-colors text-ui-sm',
-                        isActive
-                          ? 'bg-zinc-700/60 text-zinc-100'
-                          : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
-                      )}
-                    >
-                      <Icon className="w-4 h-4 shrink-0" />
-                      <span className="truncate">{item.label}</span>
-                    </button>
+                    <React.Fragment key={item.id}>
+                      <button
+                        onClick={() => {
+                          if (hasChildren) {
+                            // Opening a parent selects its first child AND expands
+                            const firstChild = item.children![0]
+                            setActiveSection(`${item.id}/${firstChild.id}`)
+                            setExpandedParents(prev => new Set(prev).add(item.id))
+                          } else {
+                            setActiveSection(item.id)
+                          }
+                        }}
+                        className={cn(
+                          'flex items-center gap-2 px-2 py-1.5 rounded text-left transition-colors text-ui-sm',
+                          isLeafActive
+                            ? 'bg-zinc-700/60 text-zinc-100'
+                            : isParentActive
+                              ? 'text-zinc-200'
+                              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+                        )}
+                      >
+                        {hasChildren && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); toggleParent(item.id) }}
+                            className="shrink-0 text-zinc-500 hover:text-zinc-300 -ml-1 p-0.5"
+                            aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                          >
+                            {isExpanded
+                              ? <ChevronDown className="w-3 h-3" />
+                              : <ChevronRight className="w-3 h-3" />}
+                          </button>
+                        )}
+                        <Icon className="w-4 h-4 shrink-0" />
+                        <span className="truncate">{item.label}</span>
+                      </button>
+
+                      {hasChildren && isExpanded && item.children!.map(child => {
+                        const ChildIcon = child.icon
+                        const childSectionId = `${item.id}/${child.id}`
+                        const isChildActive = currentSection === childSectionId
+                        return (
+                          <button
+                            key={child.id}
+                            onClick={() => setActiveSection(childSectionId)}
+                            className={cn(
+                              'flex items-center gap-2 pl-8 pr-2 py-1.5 rounded text-left transition-colors text-ui-sm',
+                              isChildActive
+                                ? 'bg-zinc-700/60 text-zinc-100'
+                                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+                            )}
+                          >
+                            {ChildIcon && <ChildIcon className="w-3.5 h-3.5 shrink-0" />}
+                            <span className="truncate">{child.label}</span>
+                          </button>
+                        )
+                      })}
+                    </React.Fragment>
                   )
                 })}
               </div>
@@ -114,9 +203,25 @@ function SettingsContent({
   section: string
   settingsPanels: ReturnType<typeof extensionRegistry.getSettingsPanels>
 }): React.ReactElement {
-  // Extension-contributed settings panel
+  // Nested extension section: "{extensionId}/{subPanelId}"
+  if (section.includes('/')) {
+    const [extId, subId] = section.split('/', 2)
+    const match = settingsPanels.find(p => p.extension.id === extId)
+    const sub = match?.subPanels?.find(s => s.id === subId)
+    if (match && sub) {
+      const Panel = sub.panel
+      return (
+        <div>
+          <h3 className="text-ui-base font-medium text-zinc-200 mb-4">{sub.label}</h3>
+          <Panel />
+        </div>
+      )
+    }
+  }
+
+  // Top-level extension-contributed settings panel
   const panelMatch = settingsPanels.find(p => p.extension.id === section)
-  if (panelMatch) {
+  if (panelMatch && panelMatch.panel) {
     const Panel = panelMatch.panel
     return (
       <div>

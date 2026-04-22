@@ -3,13 +3,11 @@ import { Plus, Trash2, Eye, EyeOff } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { useClaudeCodeSettings } from '../contexts/useClaudeCodeSettings'
-import { useCodexSettings } from '../contexts/useCodexSettings'
 import { useConfigStore } from '@/store/config'
 import { nanoid } from '@/lib/nanoid'
 
-export default function AiCliSettingsPanel(): React.ReactElement {
+export default function ClaudeCodeSettingsPanel(): React.ReactElement {
   const claudeCode = useClaudeCodeSettings()
-  const codex = useCodexSettings()
   const accounts = useConfigStore(s => s.config.claudeAccounts)
   const addAccount = useConfigStore(s => s.addClaudeAccount)
   const removeAccount = useConfigStore(s => s.removeClaudeAccount)
@@ -188,33 +186,6 @@ export default function AiCliSettingsPanel(): React.ReactElement {
           <Switch
             checked={claudeCode.agentTeams}
             onCheckedChange={(v) => claudeCode.update({ agentTeams: v })}
-          />
-        </div>
-      </div>
-
-      <div className="w-full h-px bg-zinc-800" />
-
-      <div className="flex flex-col gap-4">
-        <div className="text-ui-sm text-zinc-500 uppercase tracking-wider">Codex</div>
-
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <div className="text-ui-base font-medium text-zinc-200">Auto-pilot scan interval</div>
-            <div className="text-ui-sm text-zinc-500 mt-0.5">
-              How often PTY output is scanned (ms)
-            </div>
-          </div>
-          <input
-            type="number"
-            min={50}
-            max={5000}
-            step={50}
-            value={codex.autoPilotScanMs}
-            onChange={(e) => {
-              const v = parseInt(e.target.value, 10)
-              if (!isNaN(v) && v >= 50) codex.update({ autoPilotScanMs: v })
-            }}
-            className="w-20 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-ui-base text-zinc-200 text-right focus:outline-none focus:border-zinc-500"
           />
         </div>
       </div>

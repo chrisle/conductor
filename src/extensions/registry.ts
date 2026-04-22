@@ -1,4 +1,4 @@
-import type { Extension, TabRegistration, NewTabMenuItem } from './types'
+import type { Extension, TabRegistration, NewTabMenuItem, SettingsSubPanel } from './types'
 import { useConfigStore } from '@/store/config'
 
 class ExtensionRegistry {
@@ -121,10 +121,29 @@ class ExtensionRegistry {
     return this.getEnabledExtensions().filter(p => p.icon && p.sidebar)
   }
 
-  getSettingsPanels(): { extension: Extension; panel: NonNullable<Extension['settingsPanel']> }[] {
-    return this.getEnabledExtensions()
-      .filter(e => e.settingsPanel)
-      .map(e => ({ extension: e, panel: e.settingsPanel! }))
+  /**
+   * Entries shown in the settings sidebar for enabled extensions.
+   * - Extensions with `settingsPanels` become a parent group with children.
+   * - Extensions with a single `settingsPanel` become a leaf entry.
+   */
+  getSettingsPanels(): {
+    extension: Extension
+    panel?: NonNullable<Extension['settingsPanel']>
+    subPanels?: SettingsSubPanel[]
+  }[] {
+    const entries: {
+      extension: Extension
+      panel?: NonNullable<Extension['settingsPanel']>
+      subPanels?: SettingsSubPanel[]
+    }[] = []
+    for (const extension of this.getEnabledExtensions()) {
+      if (extension.settingsPanels && extension.settingsPanels.length > 0) {
+        entries.push({ extension, subPanels: extension.settingsPanels })
+      } else if (extension.settingsPanel) {
+        entries.push({ extension, panel: extension.settingsPanel })
+      }
+    }
+    return entries
   }
 
   getTabRegistration(type: string): TabRegistration | undefined {

@@ -122,22 +122,34 @@ export default function SettingsSidebar({ groupId }: SettingsSidebarProps): Reac
       <ScrollArea className="flex-1">
         <div className="py-1">
           {/* Extension-contributed settings panels */}
-          {settingsPanels.map(({ extension, panel: Panel }) => (
-            <React.Fragment key={extension.id}>
-              <Collapsible defaultOpen>
-                <CollapsibleTrigger className="flex items-center gap-1 px-3 py-1.5 w-full group cursor-pointer">
-                  <ChevronRight className="w-3 h-3 text-zinc-500 transition-transform group-data-[state=open]:rotate-90" />
-                  <span className="text-ui-sm text-zinc-400 uppercase tracking-wider font-medium">{extension.name}</span>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div className="px-3 py-2">
-                    <Panel />
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-              <Separator className="my-2 bg-zinc-700/50" />
-            </React.Fragment>
-          ))}
+          {settingsPanels.map(({ extension, panel, subPanels }) => {
+            const renderables: { key: string; label: string; Panel: React.ComponentType }[] = []
+            if (subPanels && subPanels.length > 0) {
+              for (const sp of subPanels) renderables.push({ key: sp.id, label: sp.label, Panel: sp.panel })
+            } else if (panel) {
+              renderables.push({ key: extension.id, label: extension.name, Panel: panel })
+            }
+            return (
+              <React.Fragment key={extension.id}>
+                {renderables.map(({ key, label, Panel }) => (
+                  <React.Fragment key={key}>
+                    <Collapsible defaultOpen>
+                      <CollapsibleTrigger className="flex items-center gap-1 px-3 py-1.5 w-full group cursor-pointer">
+                        <ChevronRight className="w-3 h-3 text-zinc-500 transition-transform group-data-[state=open]:rotate-90" />
+                        <span className="text-ui-sm text-zinc-400 uppercase tracking-wider font-medium">{label}</span>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="px-3 py-2">
+                          <Panel />
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                    <Separator className="my-2 bg-zinc-700/50" />
+                  </React.Fragment>
+                ))}
+              </React.Fragment>
+            )
+          })}
 
           {/* Conductor Daemon */}
           <Collapsible defaultOpen>
