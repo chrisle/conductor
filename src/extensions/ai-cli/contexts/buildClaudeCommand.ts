@@ -15,7 +15,18 @@ import type { ClaudeCodeSettings } from './useClaudeCodeSettings'
  */
 export function buildClaudeCommand(
   command: string,
-  settings: Pick<ClaudeCodeSettings, 'allowYoloMode' | 'yoloModeByDefault' | 'disableBackgroundTasks' | 'agentTeams'>,
+  settings: Pick<
+    ClaudeCodeSettings,
+    | 'allowYoloMode'
+    | 'yoloModeByDefault'
+    | 'disableBackgroundTasks'
+    | 'agentTeams'
+    | 'effortLevelMax'
+    | 'disableAdaptiveThinking'
+    | 'maxThinkingTokens'
+    | 'disable1MContext'
+    | 'disableTelemetry'
+  >,
   apiKey?: string,
 ): string {
   // On Windows, conductord starts a PowerShell PTY — emit `$env:FOO='bar'`
@@ -31,6 +42,11 @@ export function buildClaudeCommand(
   if (apiKey) envVars.push(envStmt('ANTHROPIC_API_KEY', apiKey))
   if (settings.disableBackgroundTasks) envVars.push(envStmt('CLAUDE_CODE_DISABLE_BACKGROUND_TASKS', '1'))
   if (settings.agentTeams) envVars.push(envStmt('CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS', '1'))
+  if (settings.effortLevelMax) envVars.push(envStmt('CLAUDE_CODE_EFFORT_LEVEL', 'max'))
+  if (settings.disableAdaptiveThinking) envVars.push(envStmt('CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING', '1'))
+  if (settings.maxThinkingTokens > 0) envVars.push(envStmt('MAX_THINKING_TOKENS', String(settings.maxThinkingTokens)))
+  if (settings.disable1MContext) envVars.push(envStmt('CLAUDE_CODE_DISABLE_1M_CONTEXT', '1'))
+  if (settings.disableTelemetry) envVars.push(envStmt('DISABLE_TELEMETRY', '1'))
 
   // yoloModeByDefault => always bypass permissions (--dangerously-skip-permissions)
   // allowYoloMode only => make the option available but not default (--allow-dangerously-skip-permissions)

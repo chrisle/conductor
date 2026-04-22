@@ -70,14 +70,22 @@ describe('useCodexSettings', () => {
 })
 
 describe('buildClaudeCommand with apiKey', () => {
+  const base = {
+    allowYoloMode: false,
+    yoloModeByDefault: false,
+    disableBackgroundTasks: false,
+    agentTeams: false,
+    effortLevelMax: false,
+    disableAdaptiveThinking: false,
+    maxThinkingTokens: 0,
+    disable1MContext: false,
+    disableTelemetry: false,
+  }
+
   it('adds ANTHROPIC_API_KEY env var when apiKey provided', async () => {
     vi.resetModules()
     const { buildClaudeCommand } = await import('../extensions/ai-cli/contexts/buildClaudeCommand')
-    const result = buildClaudeCommand('claude\n', {
-      allowYoloMode: false, yoloModeByDefault: false,
-      disableBackgroundTasks: false,
-      agentTeams: false,
-    }, 'sk-ant-test-key')
+    const result = buildClaudeCommand('claude\n', base, 'sk-ant-test-key')
     expect(result).toBe('export ANTHROPIC_API_KEY=sk-ant-test-key; claude\n')
   })
 
@@ -85,9 +93,10 @@ describe('buildClaudeCommand with apiKey', () => {
     vi.resetModules()
     const { buildClaudeCommand } = await import('../extensions/ai-cli/contexts/buildClaudeCommand')
     const result = buildClaudeCommand('claude\n', {
-      allowYoloMode: true, yoloModeByDefault: true,
+      ...base,
+      allowYoloMode: true,
+      yoloModeByDefault: true,
       disableBackgroundTasks: true,
-      agentTeams: false,
     }, 'sk-key')
     expect(result).toBe('export ANTHROPIC_API_KEY=sk-key; export CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1; claude --dangerously-skip-permissions\n')
   })
@@ -95,11 +104,7 @@ describe('buildClaudeCommand with apiKey', () => {
   it('does not add ANTHROPIC_API_KEY when apiKey is undefined', async () => {
     vi.resetModules()
     const { buildClaudeCommand } = await import('../extensions/ai-cli/contexts/buildClaudeCommand')
-    const result = buildClaudeCommand('claude\n', {
-      allowYoloMode: false, yoloModeByDefault: false,
-      disableBackgroundTasks: false,
-      agentTeams: false,
-    })
+    const result = buildClaudeCommand('claude\n', base)
     expect(result).toBe('claude\n')
   })
 })

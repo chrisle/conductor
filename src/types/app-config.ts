@@ -86,6 +86,12 @@ export interface AppConfig {
       autoPilotScanMs: number
       disableBackgroundTasks: boolean
       agentTeams: boolean
+      effortLevelMax: boolean
+      disableAdaptiveThinking: boolean
+      /** When > 0, sets MAX_THINKING_TOKENS env var. 0 disables. */
+      maxThinkingTokens: number
+      disable1MContext: boolean
+      disableTelemetry: boolean
       startWorkPromptTemplate: string
     }
     codex: {
@@ -173,6 +179,11 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
       autoPilotScanMs: 250,
       disableBackgroundTasks: true,
       agentTeams: false,
+      effortLevelMax: false,
+      disableAdaptiveThinking: false,
+      maxThinkingTokens: 63999,
+      disable1MContext: false,
+      disableTelemetry: false,
       startWorkPromptTemplate: DEFAULT_START_WORK_PROMPT_TEMPLATE,
     },
     codex: {

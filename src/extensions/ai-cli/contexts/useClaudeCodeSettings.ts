@@ -8,6 +8,11 @@ export interface ClaudeCodeSettings {
   autoPilotScanMs: number
   disableBackgroundTasks: boolean
   agentTeams: boolean
+  effortLevelMax: boolean
+  disableAdaptiveThinking: boolean
+  maxThinkingTokens: number
+  disable1MContext: boolean
+  disableTelemetry: boolean
   startWorkPromptTemplate: string
 }
 
@@ -17,6 +22,11 @@ const defaults: ClaudeCodeSettings = {
   autoPilotScanMs: 250,
   disableBackgroundTasks: true,
   agentTeams: false,
+  effortLevelMax: false,
+  disableAdaptiveThinking: false,
+  maxThinkingTokens: 63999,
+  disable1MContext: false,
+  disableTelemetry: false,
   startWorkPromptTemplate: DEFAULT_START_WORK_PROMPT_TEMPLATE,
 }
 

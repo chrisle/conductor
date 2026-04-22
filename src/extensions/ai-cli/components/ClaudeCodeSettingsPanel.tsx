@@ -188,6 +188,79 @@ export default function ClaudeCodeSettingsPanel(): React.ReactElement {
             onCheckedChange={(v) => claudeCode.update({ agentTeams: v })}
           />
         </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-ui-base font-medium text-zinc-200">Max effort level</div>
+            <div className="text-ui-sm text-zinc-500 mt-0.5">
+              Sets CLAUDE_CODE_EFFORT_LEVEL=max
+            </div>
+          </div>
+          <Switch
+            checked={claudeCode.effortLevelMax}
+            onCheckedChange={(v) => claudeCode.update({ effortLevelMax: v })}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-ui-base font-medium text-zinc-200">Disable adaptive thinking</div>
+            <div className="text-ui-sm text-zinc-500 mt-0.5">
+              Sets CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING=1
+            </div>
+          </div>
+          <Switch
+            checked={claudeCode.disableAdaptiveThinking}
+            onCheckedChange={(v) => claudeCode.update({ disableAdaptiveThinking: v })}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-ui-base font-medium text-zinc-200">Max thinking tokens</div>
+            <div className="text-ui-sm text-zinc-500 mt-0.5">
+              Sets MAX_THINKING_TOKENS. Use 0 to leave unset.
+            </div>
+          </div>
+          <input
+            type="number"
+            min={0}
+            max={200000}
+            step={1000}
+            value={claudeCode.maxThinkingTokens}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10)
+              if (!isNaN(v) && v >= 0) claudeCode.update({ maxThinkingTokens: v })
+            }}
+            className="w-24 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-ui-base text-zinc-200 text-right focus:outline-none focus:border-zinc-500"
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-ui-base font-medium text-zinc-200">Disable 1M context</div>
+            <div className="text-ui-sm text-zinc-500 mt-0.5">
+              Sets CLAUDE_CODE_DISABLE_1M_CONTEXT=1
+            </div>
+          </div>
+          <Switch
+            checked={claudeCode.disable1MContext}
+            onCheckedChange={(v) => claudeCode.update({ disable1MContext: v })}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-ui-base font-medium text-zinc-200">Disable telemetry</div>
+            <div className="text-ui-sm text-zinc-500 mt-0.5">
+              Sets DISABLE_TELEMETRY=1
+            </div>
+          </div>
+          <Switch
+            checked={claudeCode.disableTelemetry}
+            onCheckedChange={(v) => claudeCode.update({ disableTelemetry: v })}
+          />
+        </div>
       </div>
     </div>
   )
