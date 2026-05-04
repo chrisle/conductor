@@ -438,7 +438,7 @@ export default function FileTreeNode({ entry, depth, groupId, gitRef, gitRepoRoo
         <ContextMenuTrigger>
           <div
             className={cn(
-              'flex items-center gap-1 px-2 py-[3px] cursor-pointer select-none text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100 transition-colors group min-w-0',
+              'flex items-center gap-1 pl-2 pr-3 py-[3px] cursor-pointer select-none text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100 transition-colors group min-w-0',
               'text-ui-base',
               isSelected && 'bg-zinc-800 text-zinc-100',
               entry.name.startsWith('.') && 'opacity-50',
