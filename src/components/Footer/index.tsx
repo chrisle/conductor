@@ -254,7 +254,7 @@ export default function Footer(): React.ReactElement {
           window.electronAPI.conductordHealth(),
           window.electronAPI.conductordGetSessions(),
         ])
-        if (!cancelled) setConductord({ ok, sessions: sessionList.filter((s: { dead: boolean }) => !s.dead).length })
+        if (!cancelled) setConductord({ ok, sessions: sessionList.filter((s: { dead: boolean; id: string }) => !s.dead && !s.id.startsWith('__')).length })
       } catch {
         if (!cancelled) setConductord({ ok: false, sessions: 0 })
       }

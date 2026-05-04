@@ -332,11 +332,30 @@ async function scrapeOnce(): Promise<void> {
 }
 
 /**
+ * Kill any leftover scraper sessions from a previous run. Without this,
+ * a crash or hard quit during a scrape can leave hidden PTYs alive in
+ * conductord, inflating the session count shown in the footer.
+ */
+async function reapOrphanedScraperSessions(): Promise<void> {
+  try {
+    const list = await window.electronAPI.conductordGetSessions()
+    const orphans = list.filter(s => !s.dead && s.id.startsWith(SESSION_PREFIX))
+    await Promise.allSettled(orphans.map(s => termAPI.killTerminal(s.id)))
+  } catch {
+    // Best-effort cleanup
+  }
+}
+
+/**
  * Start the periodic usage scraper.
  * @param intervalMs How often to scrape (default: 5 minutes)
  */
 export function startUsageScraper(intervalMs = DEFAULT_INTERVAL_MS): void {
   if (intervalHandle !== null) return
+
+  // Reap any orphaned scraper sessions left over from a previous run
+  // (e.g. if the app was killed mid-scrape, the hidden PTY can survive).
+  reapOrphanedScraperSessions().catch(console.warn)
 
   // Hydrate from localStorage on start
   try {
