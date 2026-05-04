@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+#
+# Auto-bump the version in package.json on every commit.
+#
+# Behavior:
+#   - Defaults to a patch bump.
+#   - Override the bump with BUMP=patch|minor|major.
+#   - Skip with BUMP=skip or SKIP_VERSION_BUMP=1.
+#   - Skips automatically when only version-related files are staged
+#     (so a manual version bump commit isn't double-bumped).
+#   - Syncs manifest.json and package-lock.json if present.
+#
+set -euo pipefail
+
+BUMP="${BUMP:-patch}"
+
+if [ "${SKIP_VERSION_BUMP:-}" = "1" ] || [ "$BUMP" = "skip" ]; then
+  exit 0
+fi
+
+case "$BUMP" in
+  patch|minor|major) ;;
+  *)
+    echo "pre-commit: invalid BUMP='$BUMP' (expected patch|minor|major|skip)" >&2
+    exit 1
+    ;;
+esac
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+if [ ! -f package.json ]; then
+  exit 0
+fi
+
+STAGED="$(git diff --cached --name-only --diff-filter=ACMR)"
+if [ -z "$STAGED" ]; then
+  exit 0
+fi
+
+NON_VERSION_FILES="$(printf '%s\n' "$STAGED" \
+  | grep -vE '^(package\.json|package-lock\.json|manifest\.json|CHANGELOG\.md)$' \
+  || true)"
+if [ -z "$NON_VERSION_FILES" ]; then
+  echo "pre-commit: only version files staged, skipping auto-bump"
+  exit 0
+fi
+
+NEW_VERSION="$(BUMP="$BUMP" node <<'NODE'
+const fs = require('fs');
+const bump = process.env.BUMP;
+const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+const m = /^(\d+)\.(\d+)\.(\d+)(.*)$/.exec(pkg.version || '0.0.0');
+if (!m) {
+  console.error(`pre-commit: cannot parse version "${pkg.version}"`);
+  process.exit(1);
+}
+let [_, major, minor, patch] = m;
+[major, minor, patch] = [major, minor, patch].map(Number);
+let next;
+if (bump === 'major') next = `${major + 1}.0.0`;
+else if (bump === 'minor') next = `${major}.${minor + 1}.0`;
+else next = `${major}.${minor}.${patch + 1}`;
+const old = pkg.version;
+pkg.version = next;
+fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+console.error(`pre-commit: bumped ${pkg.name} ${old} -> ${next}`);
+process.stdout.write(next);
+NODE
+)"
+
+git add package.json
+
+if [ -f manifest.json ]; then
+  NEW_VERSION="$NEW_VERSION" node <<'NODE'
+const fs = require('fs');
+let m;
+try { m = JSON.parse(fs.readFileSync('manifest.json', 'utf8')); } catch { process.exit(0); }
+if (typeof m.version !== 'string') process.exit(0);
+m.version = process.env.NEW_VERSION;
+fs.writeFileSync('manifest.json', JSON.stringify(m, null, 2) + '\n');
+NODE
+  git add manifest.json
+fi
+
+if [ -f package-lock.json ]; then
+  NEW_VERSION="$NEW_VERSION" node <<'NODE'
+const fs = require('fs');
+let lock;
+try { lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8')); } catch { process.exit(0); }
+let changed = false;
+if (typeof lock.version === 'string') { lock.version = process.env.NEW_VERSION; changed = true; }
+if (lock.packages && lock.packages[''] && typeof lock.packages[''].version === 'string') {
+  lock.packages[''].version = process.env.NEW_VERSION;
+  changed = true;
+}
+if (changed) fs.writeFileSync('package-lock.json', JSON.stringify(lock, null, 2) + '\n');
+NODE
+  git add package-lock.json
+fi
+
+exit 0
