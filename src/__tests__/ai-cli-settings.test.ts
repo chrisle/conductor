@@ -80,6 +80,7 @@ describe('buildClaudeCommand with apiKey', () => {
     maxThinkingTokens: 0,
     disable1MContext: false,
     disableTelemetry: false,
+    remoteControl: false,
   }
 
   it('adds ANTHROPIC_API_KEY env var when apiKey provided', async () => {

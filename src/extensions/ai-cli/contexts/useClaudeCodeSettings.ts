@@ -13,6 +13,7 @@ export interface ClaudeCodeSettings {
   maxThinkingTokens: number
   disable1MContext: boolean
   disableTelemetry: boolean
+  remoteControl: boolean
   startWorkPromptTemplate: string
 }
 
@@ -27,6 +28,7 @@ const defaults: ClaudeCodeSettings = {
   maxThinkingTokens: 63999,
   disable1MContext: false,
   disableTelemetry: false,
+  remoteControl: false,
   startWorkPromptTemplate: DEFAULT_START_WORK_PROMPT_TEMPLATE,
 }
 

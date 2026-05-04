@@ -11,6 +11,7 @@ const base = {
   maxThinkingTokens: 0,
   disable1MContext: false,
   disableTelemetry: false,
+  remoteControl: false,
 }
 
 describe('buildClaudeCommand', () => {
@@ -116,6 +117,26 @@ describe('buildClaudeCommand', () => {
   it('adds DISABLE_TELEMETRY=1 when disableTelemetry is set', () => {
     const result = buildClaudeCommand('claude\n', { ...base, disableTelemetry: true })
     expect(result).toBe('export DISABLE_TELEMETRY=1; claude\n')
+  })
+
+  it('adds --remote-control when remoteControl is set', () => {
+    const result = buildClaudeCommand('claude\n', { ...base, remoteControl: true })
+    expect(result).toBe('claude --remote-control\n')
+  })
+
+  it('combines --remote-control with --dangerously-skip-permissions', () => {
+    const result = buildClaudeCommand('claude\n', {
+      ...base,
+      allowYoloMode: true,
+      yoloModeByDefault: true,
+      remoteControl: true,
+    })
+    expect(result).toBe('claude --dangerously-skip-permissions --remote-control\n')
+  })
+
+  it('preserves --remote-control before --resume', () => {
+    const result = buildClaudeCommand('claude --resume abc123\n', { ...base, remoteControl: true })
+    expect(result).toBe('claude --remote-control --resume abc123\n')
   })
 
   it('adds API key as export', () => {

@@ -26,6 +26,7 @@ export function buildClaudeCommand(
     | 'maxThinkingTokens'
     | 'disable1MContext'
     | 'disableTelemetry'
+    | 'remoteControl'
   >,
   apiKey?: string,
 ): string {
@@ -50,11 +51,12 @@ export function buildClaudeCommand(
 
   // yoloModeByDefault => always bypass permissions (--dangerously-skip-permissions)
   // allowYoloMode only => make the option available but not default (--allow-dangerously-skip-permissions)
-  const flags = settings.yoloModeByDefault
+  let flags = settings.yoloModeByDefault
     ? ' --dangerously-skip-permissions'
     : settings.allowYoloMode
       ? ' --allow-dangerously-skip-permissions'
       : ''
+  if (settings.remoteControl) flags += ' --remote-control'
 
   // Replace the `claude` invocation, leaving anything before/after it intact.
   let result = command.replace(/\bclaude\b/, `claude${flags}`)

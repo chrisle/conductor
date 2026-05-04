@@ -253,12 +253,25 @@ export default function ClaudeCodeSettingsPanel(): React.ReactElement {
           <div>
             <div className="text-ui-base font-medium text-zinc-200">Disable telemetry</div>
             <div className="text-ui-sm text-zinc-500 mt-0.5">
-              Sets DISABLE_TELEMETRY=1
+              Sets DISABLE_TELEMETRY=1. Cannot be enabled while Remote control is on.
             </div>
           </div>
           <Switch
             checked={claudeCode.disableTelemetry}
-            onCheckedChange={(v) => claudeCode.update({ disableTelemetry: v })}
+            onCheckedChange={(v) => claudeCode.update({ disableTelemetry: v, remoteControl: v ? false : claudeCode.remoteControl })}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-ui-base font-medium text-zinc-200">Remote control</div>
+            <div className="text-ui-sm text-zinc-500 mt-0.5">
+              Passes --remote-control. Cannot be enabled while Disable telemetry is on.
+            </div>
+          </div>
+          <Switch
+            checked={claudeCode.remoteControl}
+            onCheckedChange={(v) => claudeCode.update({ remoteControl: v, disableTelemetry: v ? false : claudeCode.disableTelemetry })}
           />
         </div>
       </div>

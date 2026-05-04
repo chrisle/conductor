@@ -92,6 +92,7 @@ export interface AppConfig {
       maxThinkingTokens: number
       disable1MContext: boolean
       disableTelemetry: boolean
+      remoteControl: boolean
       startWorkPromptTemplate: string
     }
     codex: {
@@ -184,6 +185,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
       maxThinkingTokens: 63999,
       disable1MContext: false,
       disableTelemetry: false,
+      remoteControl: false,
       startWorkPromptTemplate: DEFAULT_START_WORK_PROMPT_TEMPLATE,
     },
     codex: {
