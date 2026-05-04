@@ -70,6 +70,28 @@ describe('parseUsageOutput', () => {
     expect(result.tiers[0].resets).toBe('Resets Apr 10 at 7am')
     expect(result.tiers[0].resetsAt).not.toBeNull()
   })
+
+  it('parses 4-tier output (session + 2 weekly + extra usage)', () => {
+    const raw = [
+      'Current session ██▌ 15% used  Resets 11:50am (America/Los_Angeles)',
+      'Current week (all models) ██████████▌ 53% used Resets Sat 5pm (America/Los_Angeles)',
+      'Current week (Sonnet only) █████████▌ 48% used Resets Sat 5pm (America/Los_Angeles)',
+      'Extra usage  0% used $0 / $40.00 spent · Resets Jul 28 (America/Los_Angeles)',
+    ].join('\n')
+
+    const result = parseUsageOutput(raw)
+    expect(result.tiers).toHaveLength(4)
+    expect(result.sessionPercent).toBe(15)
+    expect(result.percentUsed).toBe(53)
+    expect(result.tiers[0].label).toBe('Session')
+    expect(result.tiers[0].percent).toBe(15)
+    expect(result.tiers[1].label).toBe('All models')
+    expect(result.tiers[1].percent).toBe(53)
+    expect(result.tiers[2].label).toBe('Sonnet only')
+    expect(result.tiers[2].percent).toBe(48)
+    expect(result.tiers[3].label).toBe('Extra usage')
+    expect(result.tiers[3].percent).toBe(0)
+  })
 })
 
 describe('parseResetToISO', () => {

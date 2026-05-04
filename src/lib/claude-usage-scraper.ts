@@ -258,14 +258,20 @@ async function scrapeOnce(): Promise<void> {
           return
         }
 
-        // Check for usage data: require both a percentage AND a "Resets" line
-        // to be present before resolving. Without this, the scraper can fire
-        // on the first "13% used" chunk before the reset info has arrived.
-        if (/\d+(\.\d+)?\s*%\s*used/i.test(stripped) && /Resets\s/i.test(stripped)) {
+        // Check for usage data. The `/usage` output streams multiple tiers
+        // (Session, Current week all models, Current week Sonnet only, Extra
+        // usage). Resolving on just one "% used" + "Resets" match captures
+        // only the first tier. Wait for either:
+        //   - "Extra usage" marker (last tier in /usage output)
+        //   - 3+ "% used" occurrences (covers Session + 2 weekly tiers)
+        const percentMatches = stripped.match(/\d+(?:\.\d+)?\s*%\s*used/gi) || []
+        const hasResets = /Resets\s/i.test(stripped)
+        const hasExtraUsage = /Extra\s+usage/i.test(stripped)
+        if (hasResets && (hasExtraUsage || percentMatches.length >= 3)) {
           resolved = true
           clearTimeout(timeout)
           clearInterval(checkInterval)
-          setTimeout(() => resolve(dataBuffer), 1000)
+          setTimeout(() => resolve(dataBuffer), 1500)
           return
         }
 
