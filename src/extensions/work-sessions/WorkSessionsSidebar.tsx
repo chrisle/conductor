@@ -25,7 +25,6 @@ import { useConfigStore } from '@/store/config'
 import { useLayoutStore, type LayoutNode, type LayoutChild } from '@/store/layout'
 import { buildTileLayout, type TileMode } from '@/lib/tile-layout'
 import { useProjectStore, type SessionFolder } from '@/store/project'
-import { useSidebarStore } from '@/store/sidebar'
 import type { WorkSession } from '@/types/work-session'
 import { useSessionInfoRegistry, type SessionInfoContext } from './session-info-registry'
 import TerminalPreview from './TerminalPreview'
@@ -91,7 +90,6 @@ function useConductorSessions(intervalMs = 5_000) {
   const [sessions, setSessions] = useState<ConductorSession[]>([])
   const workSessions = useWorkSessionsStore(s => s.sessions)
   const groups = useTabsStore(s => s.groups)
-  const rootPath = useSidebarStore(s => s.rootPath)
 
   const refresh = useCallback(async () => {
     try {
@@ -149,23 +147,12 @@ function useConductorSessions(intervalMs = 5_000) {
     if (ws.sessionId) wsMap.set(ws.sessionId, ws)
   }
 
-  const allEnriched: EnrichedSession[] = sessions.map(s => ({
+  const enriched: EnrichedSession[] = sessions.map(s => ({
     session: s,
     workSession: wsMap.get(s.name) ?? null,
     ticketKey: ticketKeyFromSessionName(s.name),
     hasOpenTab: openTabIds.has(s.name),
   }))
-
-  // Filter to sessions belonging to the current project
-  const enriched = rootPath
-    ? allEnriched.filter(s => {
-        const cwd = s.session.cwd
-        if (cwd === rootPath || cwd.startsWith(rootPath + '/')) return true
-        const projectPath = s.workSession?.projectPath
-        if (projectPath && (projectPath === rootPath || projectPath.startsWith(rootPath + '/'))) return true
-        return false
-      })
-    : allEnriched
 
   return { enriched, refresh }
 }
