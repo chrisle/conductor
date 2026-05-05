@@ -1,12 +1,16 @@
 # Triggered on every push to main.
 #
 # The deploy skill bumps the version locally before pushing, so this
-# workflow only builds and publishes — no version bump in CI.
+# workflow only builds, publishes, and tags — no version bump in CI.
 #
 # 1. Builds the Mac (DMG) and Windows (NSIS) installers in parallel
 #    on GitHub-hosted runners.
 # 2. Publishes installers + latest.yml/latest-mac.yml to GitHub Releases.
 #    electron-updater reads from the same release for in-app updates.
+# 3. Pushes a git tag `v<version>` (from package.json) after both
+#    platform builds succeed, so the released commit is permanently
+#    tagged in the repo (electron-builder's draft release alone does
+#    not create the underlying git tag until manually published).
 #
 # Apple signing credentials are loaded at runtime from 1Password via the
 # load-secrets-action.  The only GitHub secret needed is:
@@ -98,3 +102,31 @@ jobs:
         run: |
           npx electron-vite build
           npx electron-builder --win --publish always
+
+  # ── Tag the released commit ─────────────────────────────────────────────
+  # Runs once after both platform builds succeed. Reads the version from
+  # package.json and pushes `v<version>` to origin. Idempotent — if the
+  # tag already exists (re-run on the same commit), it skips.
+  tag:
+    name: Tag release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push v<version> tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          tag="v$version"
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists; nothing to do."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "Release $tag"
+          git push origin "$tag"
