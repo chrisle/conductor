@@ -16,6 +16,7 @@ import { useConfigStore } from './store/config'
 import { useWorkSessionsStore } from './store/work-sessions'
 import { initializeDefaultProject, createDefaultProject, saveProject, autosaveLayout, openProject } from './lib/project-io'
 import { startUsageScraper, stopUsageScraper } from './lib/claude-usage-scraper'
+import { reapOrphanTerminalSessions } from './lib/reap-orphan-sessions'
 import { initHomeDir } from './lib/terminal-cwd'
 import { loadExtensionsFromDevPaths } from './extensions/loader'
 import { getSkillsNeedingInstall, installSkills } from './lib/skill-installer'
@@ -63,11 +64,12 @@ function App(): React.ReactElement {
   // Initialize project: new windows get a fresh project, otherwise restore last session
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (params.get('newWindow') === '1') {
-      createDefaultProject()
-    } else {
-      initializeDefaultProject()
-    }
+    const init = params.get('newWindow') === '1'
+      ? Promise.resolve(createDefaultProject())
+      : initializeDefaultProject()
+    // After tabs are restored, reap any conductord sessions that no longer
+    // map to a tab (orphans left behind by soft-close).
+    init.then(() => reapOrphanTerminalSessions())
   }, [])
 
   // Auto-save when tabs or layout change (debounced)
