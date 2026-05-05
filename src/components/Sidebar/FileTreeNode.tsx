@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useSidebarStore, type FileEntry } from '@/store/sidebar'
+import { useSidebarStore, fsCache, type FileEntry } from '@/store/sidebar'
 import { useTabsStore } from '@/store/tabs'
 import { useLayoutStore } from '@/store/layout'
 import { extensionRegistry } from '@/extensions'
@@ -167,7 +167,10 @@ function getLanguageFromExtension(filename: string): string {
 type CreatingType = 'file' | 'folder' | null
 
 export default function FileTreeNode({ entry, depth, groupId, gitRef, gitRepoRoot }: FileTreeNodeProps): React.ReactElement {
-  const [children, setChildren] = useState<FileEntry[]>([])
+  const cacheKey = gitRef && gitRepoRoot
+    ? `git:${gitRepoRoot}@${gitRef}:${entry.path}`
+    : entry.path
+  const [children, setChildren] = useState<FileEntry[]>(() => fsCache.get(cacheKey) ?? [])
   const [isLoading, setIsLoading] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(entry.name)
@@ -220,29 +223,33 @@ export default function FileTreeNode({ entry, depth, groupId, gitRef, gitRepoRoo
   }, [])
 
   useEffect(() => {
-    if (expanded && entry.isDirectory && children.length === 0) {
-      loadChildren()
+    if (!expanded || !entry.isDirectory) return
+    if (fsCache.has(cacheKey)) {
+      // Warm cache — children already rendered from cache; refresh silently
+      // so polling-style updates pick up changes without blanking the UI.
+      fetchChildren(false)
+    } else {
+      // Cold cache — show skeleton
+      fetchChildren(true)
     }
   }, [expanded])
 
-  async function loadChildren() {
-    setIsLoading(true)
+  async function fetchChildren(showSkeleton: boolean) {
+    if (showSkeleton) setIsLoading(true)
     const result = gitRef && gitRepoRoot
       ? await window.electronAPI.gitLsTree(gitRepoRoot, gitRef, entry.path)
       : await window.electronAPI.readDir(entry.path)
+    fsCache.set(cacheKey, result)
     setChildren(result)
-    setIsLoading(false)
+    if (showSkeleton) setIsLoading(false)
+  }
+
+  async function loadChildren() {
+    return fetchChildren(true)
   }
 
   async function refreshChildren() {
-    if (expanded && entry.isDirectory) {
-      setIsLoading(true)
-      const result = gitRef && gitRepoRoot
-        ? await window.electronAPI.gitLsTree(gitRepoRoot, gitRef, entry.path)
-        : await window.electronAPI.readDir(entry.path)
-      setChildren(result)
-      setIsLoading(false)
-    }
+    if (expanded && entry.isDirectory) await fetchChildren(true)
   }
 
   function handleClick() {

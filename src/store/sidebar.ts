@@ -7,6 +7,14 @@ export interface FileEntry {
   isFile: boolean
 }
 
+/**
+ * Process-wide cache of directory listings keyed by absolute path.
+ * Lets the file tree render instantly when the user switches between tabs
+ * whose cwds were already loaded earlier. Polling/refresh writes back so
+ * cache stays current while the app runs.
+ */
+export const fsCache = new Map<string, FileEntry[]>()
+
 export interface SidebarState {
   width: number
   isVisible: boolean

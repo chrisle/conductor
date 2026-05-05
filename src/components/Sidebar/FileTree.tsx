@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import FileTreeNode from './FileTreeNode'
-import { useSidebarStore, type FileEntry } from '@/store/sidebar'
+import { useSidebarStore, fsCache, type FileEntry } from '@/store/sidebar'
 
 interface FileTreeProps {
   groupId: string
@@ -10,13 +10,18 @@ interface FileTreeProps {
 
 type CreatingType = 'file' | 'folder' | null
 
+function virtualCacheKey(repoRoot: string, ref: string, subPath: string): string {
+  return `git:${repoRoot}@${ref}:${subPath}`
+}
+
 export default function FileTree({ groupId }: FileTreeProps): React.ReactElement {
-  const [rootEntries, setRootEntries] = useState<FileEntry[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const { rootPath, setRootPath, gitRef, gitRepoRoot, virtualPath, setVirtualPath, exitVirtualMode } = useSidebarStore()
+  const cacheKey = gitRef && gitRepoRoot ? virtualCacheKey(gitRepoRoot, gitRef, virtualPath) : rootPath
+  const [rootEntries, setRootEntries] = useState<FileEntry[]>(() => (cacheKey && fsCache.get(cacheKey)) || [])
+  const [isLoading, setIsLoading] = useState(() => !(cacheKey && fsCache.has(cacheKey)))
   const [creating, setCreating] = useState<CreatingType>(null)
   const [newName, setNewName] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
-  const { rootPath, setRootPath, gitRef, gitRepoRoot, virtualPath, setVirtualPath, exitVirtualMode } = useSidebarStore()
 
   useEffect(() => {
     async function init() {
@@ -29,6 +34,14 @@ export default function FileTree({ groupId }: FileTreeProps): React.ReactElement
   }, [])
 
   useEffect(() => {
+    // Hydrate immediately from cache so tab switches feel instant.
+    if (cacheKey && fsCache.has(cacheKey)) {
+      setRootEntries(fsCache.get(cacheKey)!)
+      setIsLoading(false)
+    } else if (cacheKey) {
+      setRootEntries([])
+      setIsLoading(true)
+    }
     if (gitRef && gitRepoRoot) {
       loadVirtualRoot()
     } else if (rootPath) {
@@ -50,6 +63,7 @@ export default function FileTree({ groupId }: FileTreeProps): React.ReactElement
     if (gitRef || !rootPath) return
     const id = setInterval(async () => {
       const entries = await window.electronAPI.readDir(rootPath)
+      fsCache.set(rootPath, entries)
       setRootEntries(entries)
     }, 2000)
     return () => clearInterval(id)
@@ -92,16 +106,20 @@ export default function FileTree({ groupId }: FileTreeProps): React.ReactElement
 
   async function loadRoot() {
     if (!rootPath) return
-    setIsLoading(true)
+    // Skip the skeleton when we already showed cached entries.
+    if (!fsCache.has(rootPath)) setIsLoading(true)
     const entries = await window.electronAPI.readDir(rootPath)
+    fsCache.set(rootPath, entries)
     setRootEntries(entries)
     setIsLoading(false)
   }
 
   async function loadVirtualRoot() {
     if (!gitRepoRoot || !gitRef) return
-    setIsLoading(true)
+    const key = virtualCacheKey(gitRepoRoot, gitRef, virtualPath)
+    if (!fsCache.has(key)) setIsLoading(true)
     const entries = await window.electronAPI.gitLsTree(gitRepoRoot, gitRef, virtualPath)
+    fsCache.set(key, entries)
     setRootEntries(entries)
     setIsLoading(false)
   }
