@@ -1036,7 +1036,10 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
                   />
                 ) : (
                   <span
-                    className="text-ui-base truncate flex-1"
+                    className={cn(
+                      'text-ui-base truncate flex-1',
+                      tab.isThinking && tab.id !== group.activeTabId && 'text-shimmer'
+                    )}
                     onDoubleClick={e => { e.stopPropagation(); startRename(tab) }}
                   >
                     {tab.title}{tab.isDirty ? '*' : ''}
