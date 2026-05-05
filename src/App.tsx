@@ -100,6 +100,37 @@ function App(): React.ReactElement {
     }
   }, [])
 
+  // Sync the file explorer's rootPath to the focused tab's cwd. Each terminal-like
+  // tab (claude-code/codex/terminal) carries its working directory in `tab.filePath`;
+  // switching tabs should make the file tree follow. Skip while in git virtual mode
+  // so that browsing a ref isn't disrupted by tab activations.
+  // Only re-sync on actual tab switches — not on every tab-store mutation (thinking
+  // state, drag, etc.) — so manual sidebar navigation isn't overridden mid-session.
+  useEffect(() => {
+    let lastKey: string | null = null
+    const syncRootPath = () => {
+      if (useSidebarStore.getState().gitRef) return
+      const focusedGroupId = useLayoutStore.getState().focusedGroupId
+      if (!focusedGroupId) return
+      const group = useTabsStore.getState().groups[focusedGroupId]
+      if (!group || !group.activeTabId) return
+      const activeTab = group.tabs.find(t => t.id === group.activeTabId)
+      if (!activeTab || !activeTab.filePath) return
+      if (!['claude-code', 'codex', 'terminal'].includes(activeTab.type)) return
+      const key = `${focusedGroupId}:${activeTab.id}:${activeTab.filePath}`
+      if (key === lastKey) return
+      lastKey = key
+      const current = useSidebarStore.getState().rootPath
+      if (current !== activeTab.filePath) {
+        useSidebarStore.getState().setRootPath(activeTab.filePath)
+      }
+    }
+    syncRootPath()
+    const unsubLayout = useLayoutStore.subscribe(syncRootPath)
+    const unsubTabs = useTabsStore.subscribe(syncRootPath)
+    return () => { unsubLayout(); unsubTabs() }
+  }, [])
+
   // Listen for Cmd+W routed from the Electron menu as "close tab" instead of "close window".
   // Closes the active tab in the focused group; if no tabs remain, closes the window.
   // Guard against duplicate IPC events within a short window (macOS can fire twice).
