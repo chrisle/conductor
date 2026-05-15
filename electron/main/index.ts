@@ -1,9 +1,10 @@
-import { app, BrowserWindow, Menu, shell, screen } from 'electron'
+import { app, BrowserWindow, Menu, shell, screen, powerMonitor } from 'electron'
 import { join } from 'path'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { spawn } from 'child_process'
 import { autoUpdater } from 'electron-updater'
 import { registerIpcHandlers } from './ipc'
+import { reconnectAllTerminals } from './terminal-bridge'
 import { conductordHealthCheck, CONDUCTORD_SOCKET, CONDUCTORD_TCP_PORT } from './conductord-client'
 import { initLogger } from './logger'
 import { installCrashReporter } from './crash-reporter'
@@ -333,6 +334,22 @@ app.whenReady().then(async () => {
   }
   registerIpcHandlers()
   buildAppMenu()
+
+  // Reattach terminal WebSockets when the system wakes from sleep or the
+  // user unlocks the screen — the OS silently severs the connection during
+  // suspend, leaving the renderer pointed at a dead socket.
+  powerMonitor.on('resume', () => {
+    console.log('[main] powerMonitor: resume — reconnecting terminals')
+    reconnectAllTerminals().catch((err) => {
+      console.error('[main] reconnectAllTerminals failed:', err)
+    })
+  })
+  powerMonitor.on('unlock-screen', () => {
+    console.log('[main] powerMonitor: unlock-screen — reconnecting terminals')
+    reconnectAllTerminals().catch((err) => {
+      console.error('[main] reconnectAllTerminals failed:', err)
+    })
+  })
 
   // Windows/Linux: check if a .conductor file was passed on the command line
   if (process.platform !== 'darwin' && !pendingOpenFile) {

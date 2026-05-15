@@ -228,11 +228,60 @@ function TerminalTabInner({
       term.writeln("\r\n\x1b[90m[Process exited]\x1b[0m");
     };
 
+    // System resumed from sleep — main process is reopening the WebSocket.
+    // Reset xterm and start buffering live data so the auto-replayed
+    // scrollback doesn't render on top of the existing screen.
+    const handleTerminalReconnecting = (_event: any, id: string) => {
+      if (id !== tabId || disposed) return;
+      const term = terminalRef.current;
+      if (!term) return;
+      console.debug(`[terminal] ${tabId}: reconnecting after system resume`);
+      hydratingRef.current = true;
+      pendingDataRef.current = [];
+      try { term.reset(); } catch {}
+    };
+
+    // New WebSocket is up. Re-request authoritative scrollback from
+    // conductord (same path the initial reattach uses) so the visible
+    // buffer matches the daemon-side ring buffer exactly.
+    const handleTerminalReconnected = async (_event: any, id: string, _info: { isNew: boolean }) => {
+      if (id !== tabId || disposed) return;
+      const term = terminalRef.current;
+      if (!term) return;
+      console.debug(`[terminal] ${tabId}: reconnected, requesting scrollback`);
+
+      const scrollback = await termAPI.captureScrollback(tabId);
+      if (disposed || !terminalRef.current) return;
+      // Discard auto-replayed bytes that arrived during the capture round-trip
+      // — the captured snapshot already includes them.
+      pendingDataRef.current = [];
+
+      const finish = () => {
+        hydratingRef.current = false;
+        flushPendingData();
+        setTimeout(() => doFit(), 50);
+      };
+
+      if (scrollback) {
+        term.write(scrollback, () => {
+          if (disposed) return;
+          term.scrollToBottom();
+          finish();
+        });
+      } else {
+        finish();
+      }
+    };
+
     termAPI.onTerminalData(handleTerminalData);
     termAPI.onTerminalExit(handleTerminalExit);
+    termAPI.onTerminalReconnecting(handleTerminalReconnecting);
+    termAPI.onTerminalReconnected(handleTerminalReconnected);
     cleanupRef.current = () => {
       termAPI.offTerminalData(handleTerminalData);
       termAPI.offTerminalExit(handleTerminalExit);
+      termAPI.offTerminalReconnecting(handleTerminalReconnecting);
+      termAPI.offTerminalReconnected(handleTerminalReconnected);
       clearContainer();
     };
 
@@ -437,6 +486,8 @@ function TerminalTabInner({
         window.removeEventListener("resize", onWindowResize);
         termAPI.offTerminalData(handleTerminalData);
         termAPI.offTerminalExit(handleTerminalExit);
+        termAPI.offTerminalReconnecting(handleTerminalReconnecting);
+        termAPI.offTerminalReconnected(handleTerminalReconnected);
         el?.removeEventListener("wheel", onWheel, { capture: true });
         resizeObserver.disconnect();
         watchLastMatchRef.current.clear();
@@ -459,6 +510,8 @@ function TerminalTabInner({
     }).catch((err) => {
       termAPI.offTerminalData(handleTerminalData);
       termAPI.offTerminalExit(handleTerminalExit);
+      termAPI.offTerminalReconnecting(handleTerminalReconnecting);
+      termAPI.offTerminalReconnected(handleTerminalReconnected);
       clearContainer();
       console.error(`[terminal] failed to initialize renderer for ${tabId}:`, err);
       setConnectionStatus('error');

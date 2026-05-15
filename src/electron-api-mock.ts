@@ -149,6 +149,11 @@ const mock: typeof window.electronAPI = {
   offTerminalData: (cb: Parameters<typeof window.electronAPI.offTerminalData>[0]) => { terminalListeners.data.delete(cb) },
   onTerminalExit: (cb: Parameters<typeof window.electronAPI.onTerminalExit>[0]) => { terminalListeners.exit.add(cb) },
   offTerminalExit: (cb: Parameters<typeof window.electronAPI.offTerminalExit>[0]) => { terminalListeners.exit.delete(cb) },
+  // Web mode has no powerMonitor — these are no-ops.
+  onTerminalReconnecting: () => {},
+  offTerminalReconnecting: () => {},
+  onTerminalReconnected: () => {},
+  offTerminalReconnected: () => {},
 
   // Git
   worktreeList: async () => [],

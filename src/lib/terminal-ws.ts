@@ -13,6 +13,8 @@
 const activeSessions = new Set<string>()
 const dataListeners = new Set<(event: any, id: string, data: string) => void>()
 const exitListeners = new Set<(event: any, id: string) => void>()
+const reconnectingListeners = new Set<(event: any, id: string) => void>()
+const reconnectedListeners = new Set<(event: any, id: string, info: { isNew: boolean }) => void>()
 
 // Bridge IPC events to local listener sets.
 // Registered once — the handlers filter by whether we're tracking the session.
@@ -34,6 +36,20 @@ function ensureIpcListeners(): void {
     activeSessions.delete(id)
     for (const cb of exitListeners) {
       cb(null, id)
+    }
+  })
+
+  window.electronAPI.onTerminalReconnecting((_event, id) => {
+    if (!activeSessions.has(id)) return
+    for (const cb of reconnectingListeners) {
+      cb(null, id)
+    }
+  })
+
+  window.electronAPI.onTerminalReconnected((_event, id, info) => {
+    if (!activeSessions.has(id)) return
+    for (const cb of reconnectedListeners) {
+      cb(null, id, info)
     }
   })
 }
@@ -100,4 +116,22 @@ export function onTerminalExit(cb: (event: any, id: string) => void): void {
 
 export function offTerminalExit(cb: (event: any, id: string) => void): void {
   exitListeners.delete(cb)
+}
+
+export function onTerminalReconnecting(cb: (event: any, id: string) => void): void {
+  ensureIpcListeners()
+  reconnectingListeners.add(cb)
+}
+
+export function offTerminalReconnecting(cb: (event: any, id: string) => void): void {
+  reconnectingListeners.delete(cb)
+}
+
+export function onTerminalReconnected(cb: (event: any, id: string, info: { isNew: boolean }) => void): void {
+  ensureIpcListeners()
+  reconnectedListeners.add(cb)
+}
+
+export function offTerminalReconnected(cb: (event: any, id: string, info: { isNew: boolean }) => void): void {
+  reconnectedListeners.delete(cb)
 }

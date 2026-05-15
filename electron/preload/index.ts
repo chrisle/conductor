@@ -82,6 +82,14 @@ const electronAPI = {
     ipcRenderer.on('terminal:exit', callback),
   offTerminalExit: (callback: (event: IpcRendererEvent, id: string) => void) =>
     ipcRenderer.removeListener('terminal:exit', callback),
+  onTerminalReconnecting: (callback: (event: IpcRendererEvent, id: string) => void) =>
+    ipcRenderer.on('terminal:reconnecting', callback),
+  offTerminalReconnecting: (callback: (event: IpcRendererEvent, id: string) => void) =>
+    ipcRenderer.removeListener('terminal:reconnecting', callback),
+  onTerminalReconnected: (callback: (event: IpcRendererEvent, id: string, info: { isNew: boolean }) => void) =>
+    ipcRenderer.on('terminal:reconnected', callback),
+  offTerminalReconnected: (callback: (event: IpcRendererEvent, id: string, info: { isNew: boolean }) => void) =>
+    ipcRenderer.removeListener('terminal:reconnected', callback),
   onAutopilotMatch: (callback: (event: IpcRendererEvent, id: string, response: string) => void) =>
     ipcRenderer.on('terminal:autopilot_match', callback),
   offAutopilotMatch: (callback: (event: IpcRendererEvent, id: string, response: string) => void) =>

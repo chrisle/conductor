@@ -81,6 +81,10 @@ interface ElectronAPI {
   offTerminalData: (callback: (event: IpcRendererEvent, id: string, data: string) => void) => void
   onTerminalExit: (callback: (event: IpcRendererEvent, id: string) => void) => void
   offTerminalExit: (callback: (event: IpcRendererEvent, id: string) => void) => void
+  onTerminalReconnecting: (callback: (event: IpcRendererEvent, id: string) => void) => void
+  offTerminalReconnecting: (callback: (event: IpcRendererEvent, id: string) => void) => void
+  onTerminalReconnected: (callback: (event: IpcRendererEvent, id: string, info: { isNew: boolean }) => void) => void
+  offTerminalReconnected: (callback: (event: IpcRendererEvent, id: string, info: { isNew: boolean }) => void) => void
 
   // Git
   worktreeList: (repoPath: string) => Promise<Array<{ path: string; branch: string; bare: boolean; head: string }>>

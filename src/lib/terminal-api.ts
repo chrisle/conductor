@@ -17,4 +17,8 @@ export {
   offTerminalData,
   onTerminalExit,
   offTerminalExit,
+  onTerminalReconnecting,
+  offTerminalReconnecting,
+  onTerminalReconnected,
+  offTerminalReconnected,
 } from './terminal-ws'
