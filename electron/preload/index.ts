@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 
 const electronAPI = {
@@ -177,6 +177,10 @@ const electronAPI = {
   // Shell
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
   showItemInFolder: (fullPath: string) => ipcRenderer.invoke('shell:showItemInFolder', fullPath),
+
+  // Resolve a dropped File object to its absolute path on disk.
+  // file.path was removed in Electron 32; webUtils.getPathForFile is the supported replacement.
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
 
   // Webview GPU throttling
   suspendWebview: (webContentsId: number) => ipcRenderer.invoke('webview:suspend', webContentsId),

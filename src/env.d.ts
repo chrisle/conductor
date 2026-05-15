@@ -170,6 +170,9 @@ interface ElectronAPI {
   openExternal: (url: string) => Promise<void>
   showItemInFolder: (fullPath: string) => Promise<void>
 
+  // Resolve a dropped File to its absolute filesystem path.
+  getPathForFile: (file: File) => string
+
   // Webview GPU throttling
   suspendWebview: (webContentsId: number) => Promise<void>
   resumeWebview: (webContentsId: number) => Promise<void>

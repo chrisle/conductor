@@ -176,6 +176,21 @@ function App(): React.ReactElement {
     return () => window.electronAPI.offOpenFile(handler)
   }, [])
 
+  // Prevent Electron from navigating to file:// when an OS file drop misses
+  // every in-app drop target (terminal, tab bar). Specific drop handlers still
+  // run first because these listeners sit at the window level.
+  useEffect(() => {
+    const block = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes('Files')) e.preventDefault()
+    }
+    window.addEventListener('dragover', block)
+    window.addEventListener('drop', block)
+    return () => {
+      window.removeEventListener('dragover', block)
+      window.removeEventListener('drop', block)
+    }
+  }, [])
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     const shortcuts = useConfigStore.getState().config.customization.keyboardShortcuts
     const getKeys = (id: string) => {

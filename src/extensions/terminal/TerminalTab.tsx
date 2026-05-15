@@ -5,6 +5,7 @@ import type { TerminalTabExtraProps } from "./types";
 import SearchBar from "./SearchBar";
 import * as termAPI from "@/lib/terminal-api";
 import { useTabsStore } from "@/store/tabs";
+import { getDroppedFilePaths, hasFileDrag, shellQuotePath } from "@/lib/dropped-files";
 import { createXtermTerminal, attachWebgl, detachWebgl, getTerminalCustomization } from "./xterm-init";
 import type { Terminal, SerializeAddon } from "./xterm-init";
 import { terminalConfig } from "./theme";
@@ -643,6 +644,21 @@ function TerminalTabInner({
       ref={wrapperRef}
       className="relative m-3 min-w-0"
       style={{ width: 'calc(100% - 1.5rem)', height: 'calc(100% - 1.5rem)' }}
+      onDragOver={(e) => {
+        if (!hasFileDrag(e.dataTransfer)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'copy';
+      }}
+      onDrop={(e) => {
+        if (!hasFileDrag(e.dataTransfer)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const paths = getDroppedFilePaths(e.dataTransfer);
+        if (paths.length === 0) return;
+        terminalRef.current?.focus();
+        termAPI.writeTerminal(tabId, paths.map(shellQuotePath).join(' ') + ' ');
+      }}
       onKeyDownCapture={(e) => {
         if ((e.metaKey || e.ctrlKey) && e.key === "f") {
           e.preventDefault();

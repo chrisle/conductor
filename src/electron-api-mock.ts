@@ -246,6 +246,7 @@ const mock: typeof window.electronAPI = {
   logDebug: noop,
   openExternal: noopAsync,
   showItemInFolder: noopAsync,
+  getPathForFile: () => '',
 
   // Webview GPU throttling
   suspendWebview: noopAsync,

@@ -11,6 +11,7 @@ import { useLayoutStore } from '@/store/layout'
 import { useSidebarStore } from '@/store/sidebar'
 import { extensionRegistry } from '@/extensions'
 import { openProjectDialog, openProject, createDefaultProject } from '@/lib/project-io'
+import { getDroppedFilePaths, hasFileDrag } from '@/lib/dropped-files'
 import { useProjectStore } from '@/store/project'
 import { useConfigStore } from '@/store/config'
 import { resolveTerminalCwd, saveTerminalCwd } from '@/lib/terminal-cwd'
@@ -333,6 +334,12 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   function handleTabDragOver(e: React.DragEvent, index: number) {
     e.preventDefault()
     e.stopPropagation()
+    // OS file drops always append, so don't draw the between-tabs insert line —
+    // it would suggest a position that won't be honored.
+    if (hasFileDrag(e.dataTransfer)) {
+      e.dataTransfer.dropEffect = 'copy'
+      return
+    }
     setDragOverTabIndex(prev => prev === index ? prev : index)
   }
 
@@ -344,7 +351,23 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
     setDragOverTabIndex(null)
     setIsDraggingTab(false)
 
-    if (!tabId) return
+    if (!tabId) {
+      // OS / file-tree file drop onto the tab bar — open each as a new tab.
+      const paths = getDroppedFilePaths(e.dataTransfer)
+      if (paths.length === 0) return
+      let lastId: string | null = null
+      for (const p of paths) {
+        const name = p.split('/').pop() || p
+        lastId = addTab(groupId, {
+          type: extensionRegistry.getTabTypeForFile(name),
+          title: name,
+          filePath: p,
+        })
+      }
+      if (lastId) setActiveTab(groupId, lastId)
+      setFocusedGroup(groupId)
+      return
+    }
 
     if (sourceGroupId === groupId) {
       const sourceIndex = group.tabs.findIndex(t => t.id === tabId)
@@ -381,6 +404,10 @@ export default function TabGroup({ groupId }: TabGroupProps): React.ReactElement
   }
 
   function handleContentDragOver(e: React.DragEvent) {
+    // External file drops are handled by per-tab content (e.g. the terminal)
+    // or by the tab bar — never as a split-screen drop.
+    if (hasFileDrag(e.dataTransfer)) return
+
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
 
