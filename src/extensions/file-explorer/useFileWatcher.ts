@@ -1,6 +1,20 @@
 import { useEffect, useRef } from 'react'
 import type { IpcRendererEvent } from 'electron'
 
+type WatcherCallback = (changedPath: string) => void
+
+const watchers = new Map<string, WatcherCallback>()
+let listenerInstalled = false
+
+function ensureListener(): void {
+  if (listenerInstalled) return
+  listenerInstalled = true
+  window.electronAPI.onFileChanged((_event: IpcRendererEvent, watchId: string, changedPath: string) => {
+    const cb = watchers.get(watchId)
+    if (cb) cb(changedPath)
+  })
+}
+
 /**
  * Watches a file for external changes and calls `onChanged` when the file is
  * modified on disk. Automatically sets up / tears down the watcher when the
@@ -11,7 +25,6 @@ export function useFileWatcher(
   isDirty: boolean | undefined,
   onChanged: () => void,
 ): void {
-  const watchIdRef = useRef<string | null>(null)
   const onChangedRef = useRef(onChanged)
   onChangedRef.current = onChanged
 
@@ -22,30 +35,29 @@ export function useFileWatcher(
     if (!filePath) return
 
     let cancelled = false
+    let watchId: string | null = null
 
-    const handler = (_event: IpcRendererEvent, _watchId: string, changedPath: string) => {
-      if (cancelled) return
-      if (changedPath !== filePath) return
-      if (isDirtyRef.current) return
-      onChangedRef.current()
-    }
-
-    window.electronAPI.onFileChanged(handler)
+    ensureListener()
 
     window.electronAPI.watchFile(filePath).then(id => {
       if (cancelled) {
         window.electronAPI.unwatchFile(id)
-      } else {
-        watchIdRef.current = id
+        return
       }
+      watchId = id
+      watchers.set(id, (changedPath) => {
+        if (changedPath !== filePath) return
+        if (isDirtyRef.current) return
+        onChangedRef.current()
+      })
     })
 
     return () => {
       cancelled = true
-      window.electronAPI.offFileChanged(handler)
-      if (watchIdRef.current) {
-        window.electronAPI.unwatchFile(watchIdRef.current)
-        watchIdRef.current = null
+      if (watchId) {
+        watchers.delete(watchId)
+        window.electronAPI.unwatchFile(watchId)
+        watchId = null
       }
     }
   }, [filePath])
