@@ -1,6 +1,6 @@
 {
   "name": "conductor",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -113,6 +113,7 @@
     },
     "win": {
       "target": "nsis",
+      "artifactName": "${productName}-Setup-${version}.${ext}",
       "fileAssociations": [
         {
           "ext": "conductor",

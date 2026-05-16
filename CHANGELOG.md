@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Windows auto-updates reliably download the installer — the published `.exe` asset name is now stable and matches the update manifest.
+
 ## [0.1.18] - 2026-05-16
 
 ### Fixed
