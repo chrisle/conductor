@@ -3,21 +3,25 @@
 # The deploy skill bumps the version locally before pushing, so this
 # workflow only builds, publishes, and tags — no version bump in CI.
 #
-# 1. Builds the Mac (DMG) and Windows (NSIS) installers in parallel
-#    on GitHub-hosted runners.
-# 2. Publishes installers + latest.yml/latest-mac.yml to GitHub Releases.
-#    electron-updater reads from the same release for in-app updates.
-# 3. Pushes a git tag `v<version>` (from package.json) after both
-#    platform builds succeed, so the released commit is permanently
-#    tagged in the repo (electron-builder's draft release alone does
-#    not create the underlying git tag until manually published).
+# 1. Builds the Mac (DMG) and Windows (NSIS) installers in parallel on
+#    GitHub-hosted runners. Each build job ONLY produces installers — it
+#    uploads them as workflow artifacts and never touches GitHub Releases.
+# 2. A single `publish` job runs after BOTH builds succeed: it creates the
+#    GitHub Release `v<version>` once, tags the released commit, and uploads
+#    every installer plus latest.yml / latest-mac.yml. electron-updater
+#    reads from that release for in-app updates.
+#
+# Publishing is isolated to one job on purpose. Previously each
+# electron-builder run published directly, so the parallel Mac and Windows
+# jobs raced to create the same release — the loser failed with HTTP 422
+# "tag_name already_exists" and shipped a half release.
 #
 # Apple signing credentials are loaded at runtime from 1Password via the
 # load-secrets-action.  The only GitHub secret needed is:
 #   OP_SERVICE_ACCOUNT_TOKEN       1Password service account token
 #
-# GITHUB_TOKEN is provided automatically and used by electron-builder
-# (via GH_TOKEN) to create the release.
+# GITHUB_TOKEN is provided automatically and used to create the release,
+# upload its assets, and tag the commit.
 
 name: Release
 
@@ -82,51 +86,74 @@ jobs:
         shell: bash
         run: go build -o conductord .
 
-      # ── macOS: sign, notarize, publish ────────────────────────────────────
-      # Apple credentials (CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, etc.)
-      # are already exported by the 1Password step above.
-      - name: Build and publish (macOS)
+      # ── macOS: build, sign, notarize — do NOT publish ─────────────────────
+      # Apple credentials (CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, etc.) are
+      # already exported by the 1Password step above. `--publish never` still
+      # writes latest-mac.yml to dist/; only the upload to GitHub is skipped.
+      - name: Build installer (macOS)
         if: matrix.platform == 'mac'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npx electron-vite build
-          npx electron-builder --mac --publish always
+          npx electron-builder --mac --publish never
 
-      # ── Windows: publish ──────────────────────────────────────────────────
-      - name: Build and publish (Windows)
+      # ── Windows: build — do NOT publish ───────────────────────────────────
+      - name: Build installer (Windows)
         if: matrix.platform == 'win'
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npx electron-vite build
-          npx electron-builder --win --publish always
+          npx electron-builder --win --publish never
 
-  # ── Tag the released commit ─────────────────────────────────────────────
-  # Runs once after both platform builds succeed. Reads the version from
-  # package.json and pushes `v<version>` to origin. Idempotent — if the
-  # tag already exists (re-run on the same commit), it skips.
-  tag:
-    name: Tag release
+      # Hand the installers + update manifests to the publish job. Globs are
+      # specific so builder-debug.yml / builder-effective-config.yaml stay
+      # behind — only latest*.yml belongs on the release.
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.platform }}
+          path: |
+            dist/*.dmg
+            dist/*.dmg.blockmap
+            dist/*.zip
+            dist/*.exe
+            dist/*.exe.blockmap
+            dist/latest*.yml
+          if-no-files-found: error
+
+  # ── Publish + tag ───────────────────────────────────────────────────────
+  # Runs once, only after BOTH platform builds succeed. Creating the release
+  # from a single job — instead of from each electron-builder run — is what
+  # removes the publish race.
+  publish:
+    name: Publish release
     needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Push v<version> tag
+      - name: Download installer artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish to GitHub Releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version=$(node -p "require('./package.json').version")
           tag="v$version"
-          if git rev-parse "$tag" >/dev/null 2>&1; then
-            echo "Tag $tag already exists; nothing to do."
-            exit 0
+
+          # Create the release + tag once. Idempotent: a re-run on the same
+          # version reuses the existing release instead of failing.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists — reusing it."
+          else
+            gh release create "$tag" \
+              --target "$GITHUB_SHA" \
+              --title "$version" \
+              --notes "Release $tag"
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$tag" -m "Release $tag"
-          git push origin "$tag"
+
+          # Upload every installer + update manifest. --clobber overwrites
+          # assets from an earlier attempt, so re-running the job is safe.
+          gh release upload "$tag" artifacts/installer-*/* --clobber
